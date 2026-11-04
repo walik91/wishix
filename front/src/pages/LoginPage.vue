@@ -31,7 +31,12 @@ async function submit() {
   await nextTick()
   if (emailError.value) return emailField.value.focus()
   if (passwordError.value) return passwordField.value.focus()
-  await run(async () => { await login({ email: email.value, password: password.value }); password.value = ''; window.location.assign('/my') })
+  await run(async () => {
+    await login({ email: email.value, password: password.value })
+    submitted.value = false
+    password.value = ''
+    window.location.assign('/my')
+  })
 }
 watchEffect(() => { document.title = `${t('login.submit')} · ${t('appName')}` })
 </script>
