@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"wishix/server/internal/models"
@@ -80,6 +81,10 @@ func (c *Lists) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/public/lists/view", c.public(c.shared))
 	mux.HandleFunc("POST /api/public/lists/image", c.public(c.sharedImage))
 	mux.HandleFunc("GET /api/public/profiles/{username}", c.profile)
+	mux.HandleFunc("GET /api/public/profiles/{username}/wishes", c.collection)
+	mux.HandleFunc("GET /api/public/profiles/{username}/wishes/{wishID}/image", c.collectionImage)
+	mux.HandleFunc("GET /api/profile/collection", c.authorized(c.collectionSetting))
+	mux.HandleFunc("PUT /api/profile/collection", c.authorized(c.setCollectionSetting))
 	mux.HandleFunc("GET /{username}/wishlist/shared", c.sharePage)
 	mux.HandleFunc("GET /{username}/wishlist/shared/{$}", c.sharePage)
 }
@@ -358,6 +363,11 @@ func (c *Lists) shared(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	result := publicWishes(wishes)
+	c.auth.write(w, 200, map[string]any{"list": publicList(list, false), "username": username, "wishes": result})
+	return nil
+}
+func publicWishes(wishes []models.Wish) []publicWishResponse {
 	result := make([]publicWishResponse, 0, len(wishes))
 	for _, wish := range wishes {
 		links := make([]string, 0, len(wish.ShopLinks))
@@ -366,8 +376,7 @@ func (c *Lists) shared(w http.ResponseWriter, r *http.Request) error {
 		}
 		result = append(result, publicWishResponse{ID: wish.ID, Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, ShopLinks: links, HasImage: wish.ImageVersion != ""})
 	}
-	c.auth.write(w, 200, map[string]any{"list": publicList(list, false), "username": username, "wishes": result})
-	return nil
+	return result
 }
 func (c *Lists) sharedImage(w http.ResponseWriter, r *http.Request) error {
 	var input struct {
@@ -389,7 +398,7 @@ func (c *Lists) sharedImage(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 func (c *Lists) profile(w http.ResponseWriter, r *http.Request) {
-	username, lists, err := c.service.PublicProfile(r.Context(), r.PathValue("username"))
+	username, enabled, lists, err := c.service.PublicProfile(r.Context(), r.PathValue("username"))
 	if err != nil {
 		c.failure(w, err)
 		return
@@ -398,5 +407,50 @@ func (c *Lists) profile(w http.ResponseWriter, r *http.Request) {
 	for i := range lists {
 		result = append(result, publicList(&lists[i], true))
 	}
-	c.auth.write(w, 200, map[string]any{"username": username, "lists": result})
+	c.auth.write(w, 200, map[string]any{"username": username, "show_all_wishes": enabled, "lists": result})
+}
+
+func (c *Lists) collectionSetting(w http.ResponseWriter, r *http.Request, owner string) error {
+	enabled, err := c.service.CollectionSetting(r.Context(), owner)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]bool{"show_all_wishes": enabled})
+	return nil
+}
+func (c *Lists) setCollectionSetting(w http.ResponseWriter, r *http.Request, owner string) error {
+	var input struct {
+		Show *bool `json:"show_all_wishes"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	if input.Show == nil {
+		return services.ErrInvalidInput
+	}
+	if err := c.service.SetCollectionSetting(r.Context(), owner, *input.Show); err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]bool{"show_all_wishes": *input.Show})
+	return nil
+}
+func (c *Lists) collection(w http.ResponseWriter, r *http.Request) {
+	wishes, err := c.service.PublicCollection(r.Context(), r.PathValue("username"))
+	if err != nil {
+		c.failure(w, err)
+		return
+	}
+	c.auth.write(w, 200, map[string]any{"username": strings.ToLower(r.PathValue("username")), "wishes": publicWishes(wishes)})
+}
+func (c *Lists) collectionImage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	image, err := c.service.PublicCollectionImage(r.Context(), r.PathValue("username"), r.PathValue("wishID"))
+	if err != nil {
+		c.failure(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(len(image.Data)))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(image.Data)
 }

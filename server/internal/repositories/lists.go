@@ -170,13 +170,39 @@ func (r *Lists) SharedImage(ctx context.Context, token, wishID string) (*models.
 	}
 	return &images[0], nil
 }
-func (r *Lists) PublicProfile(ctx context.Context, username string) (string, []models.Wishlist, error) {
+func (r *Lists) PublicProfile(ctx context.Context, username string) (string, bool, []models.Wishlist, error) {
 	var users []models.User
-	err := r.Ctx(ctx).Select("id, username").Where("username = ?", username).Limit(1).Find(&users).Error
+	err := r.Ctx(ctx).Select("id, username, show_all_wishes").Where("username = ?", username).Limit(1).Find(&users).Error
 	if err != nil || len(users) == 0 {
-		return "", nil, err
+		return "", false, nil, err
 	}
 	lists := make([]models.Wishlist, 0)
 	err = r.Ctx(ctx).Select(listColumns).Where("owner_id = ? AND visibility = 'public'", users[0].ID).Order("created_at DESC, id DESC").Find(&lists).Error
-	return users[0].Username, lists, err
+	return users[0].Username, users[0].ShowAllWishes, lists, err
+}
+
+func (r *Lists) CollectionSetting(ctx context.Context, owner string) (bool, error) {
+	var user models.User
+	err := r.Ctx(ctx).Select("show_all_wishes").Where("id = ?", owner).Take(&user).Error
+	return user.ShowAllWishes, err
+}
+func (r *Lists) SetCollectionSetting(ctx context.Context, owner string, enabled bool) error {
+	return r.Ctx(ctx).Model(&models.User{}).Where("id = ?", owner).Update("show_all_wishes", enabled).Error
+}
+func (r *Lists) PublicCollection(ctx context.Context, username string) (bool, []models.Wish, error) {
+	var count int64
+	if err := r.Ctx(ctx).Model(&models.User{}).Where("username = ? AND show_all_wishes = true", username).Count(&count).Error; err != nil || count == 0 {
+		return false, nil, err
+	}
+	wishes := make([]models.Wish, 0)
+	err := r.Ctx(ctx).Select(wishColumns).Joins("JOIN users ON users.id = wishes.owner_id").Where("users.username = ? AND users.show_all_wishes = true", username).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	return true, wishes, err
+}
+func (r *Lists) PublicCollectionImage(ctx context.Context, username, wishID string) (*models.WishImage, error) {
+	var images []models.WishImage
+	err := r.Ctx(ctx).Model(&models.WishImage{}).Select("wish_images.*").Joins("JOIN wishes ON wishes.id = wish_images.wish_id").Joins("JOIN users ON users.id = wishes.owner_id").Where("users.username = ? AND users.show_all_wishes = true AND wishes.id = ?", username, wishID).Limit(1).Find(&images).Error
+	if err != nil || len(images) == 0 {
+		return nil, err
+	}
+	return &images[0], nil
 }

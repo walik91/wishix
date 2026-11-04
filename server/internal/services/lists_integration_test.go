@@ -317,3 +317,59 @@ func TestIntegrationListInputAndCSRF(t *testing.T) {
 		t.Fatal("trailing JSON accepted")
 	}
 }
+
+func TestIntegrationPublicCollectionPrivacy(t *testing.T) {
+	f := newAuthFixture(t)
+	owner := f.account(t, "collection@example.test", "collection_user")
+	other := f.account(t, "other_collection@example.test", "other_collection")
+	private := f.newList(t, owner, "Private list", "private")
+	wish := f.newWish(t, owner, "Private list wish", private["id"].(string))
+	id := wish["id"].(string)
+	foreign := f.newWish(t, other, "Other user wish")["id"].(string)
+	if err := f.database.Create(&models.WishImage{WishID: id, Version: "00000000-0000-4000-8000-000000000001", Data: []byte{255, 216, 255, 217}}).Error; err != nil {
+		t.Fatal(err)
+	}
+	image := func(username, wishID string) int {
+		w := httptest.NewRecorder()
+		f.handler.ServeHTTP(w, httptest.NewRequest("GET", "/api/public/profiles/"+username+"/wishes/"+wishID+"/image", nil))
+		if w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatal("image can be cached")
+		}
+		return w.Code
+	}
+	profile := f.listCall(t, "GET", "/api/public/profiles/collection_user", nil, nil, 200)
+	if profile["show_all_wishes"] != false || profile["email"] != nil {
+		t.Fatal("default profile privacy", profile)
+	}
+	f.listCall(t, "GET", "/api/public/profiles/collection_user/wishes", nil, nil, 404)
+	if image("collection_user", id) != 404 {
+		t.Fatal("closed collection image exposed")
+	}
+	f.listCall(t, "PUT", "/api/profile/collection", map[string]bool{"show_all_wishes": true}, nil, 401)
+	if status, _ := f.wishRequest(t, "PUT", "/api/profile/collection", `{"show_all_wishes":true}`, owner, "https://attacker.test"); status != 403 {
+		t.Fatal("cross-site setting accepted")
+	}
+	f.listCall(t, "PUT", "/api/profile/collection", map[string]bool{"show_all_wishes": true}, owner, 200)
+	profile = f.listCall(t, "GET", "/api/public/profiles/collection_user", nil, nil, 200)
+	if profile["show_all_wishes"] != true || len(profile["lists"].([]any)) != 0 {
+		t.Fatal("private list exposed", profile)
+	}
+	collection := f.listCall(t, "GET", "/api/public/profiles/collection_user/wishes", nil, nil, 200)
+	wishes := collection["wishes"].([]any)
+	if len(wishes) != 1 || wishes[0].(map[string]any)["id"] != id {
+		t.Fatal("wrong public collection", collection)
+	}
+	for _, key := range []string{"owner_id", "email", "image_url", "lists_version"} {
+		if _, ok := wishes[0].(map[string]any)[key]; ok {
+			t.Fatal("private field exposed", key)
+		}
+	}
+	if image("collection_user", id) != 200 || image("collection_user", foreign) != 404 {
+		t.Fatal("collection image owner not checked")
+	}
+	f.listCall(t, "PUT", "/api/profile/collection", map[string]bool{"show_all_wishes": false}, owner, 200)
+	f.listCall(t, "GET", "/api/public/profiles/collection_user/wishes", nil, nil, 404)
+	if image("collection_user", id) != 404 {
+		t.Fatal("revoked image remains accessible")
+	}
+}

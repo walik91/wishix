@@ -54,7 +54,11 @@ type ListRepository interface {
 	Shared(context.Context, string) (*models.Wishlist, string, error)
 	SharedWishes(context.Context, string) ([]models.Wish, error)
 	SharedImage(context.Context, string, string) (*models.WishImage, error)
-	PublicProfile(context.Context, string) (string, []models.Wishlist, error)
+	PublicProfile(context.Context, string) (string, bool, []models.Wishlist, error)
+	CollectionSetting(context.Context, string) (bool, error)
+	SetCollectionSetting(context.Context, string, bool) error
+	PublicCollection(context.Context, string) (bool, []models.Wish, error)
+	PublicCollectionImage(context.Context, string, string) (*models.WishImage, error)
 }
 
 type Lists struct {
@@ -424,15 +428,15 @@ func (s *Lists) SharedImage(ctx context.Context, token, wishID string) (*models.
 	}
 	return image, err
 }
-func (s *Lists) PublicProfile(ctx context.Context, username string) (string, []models.Wishlist, error) {
+func (s *Lists) PublicProfile(ctx context.Context, username string) (string, bool, []models.Wishlist, error) {
 	if !regexp.MustCompile(`^[A-Za-z0-9_]{3,30}$`).MatchString(username) {
-		return "", nil, ErrListNotFound
+		return "", false, nil, ErrListNotFound
 	}
-	name, lists, err := s.repo.PublicProfile(ctx, strings.ToLower(username))
+	name, enabled, lists, err := s.repo.PublicProfile(ctx, strings.ToLower(username))
 	if err == nil && name == "" {
 		err = ErrListNotFound
 	}
-	return name, lists, err
+	return name, enabled, lists, err
 }
 func ListErrorCode(err error) string {
 	var listError ListError
@@ -440,4 +444,39 @@ func ListErrorCode(err error) string {
 		return string(listError)
 	}
 	return WishErrorCode(err)
+}
+
+func (s *Lists) CollectionSetting(ctx context.Context, owner string) (bool, error) {
+	return s.repo.CollectionSetting(ctx, owner)
+}
+func (s *Lists) SetCollectionSetting(ctx context.Context, owner string, enabled bool) error {
+	return s.repo.SetCollectionSetting(ctx, owner, enabled)
+}
+func (s *Lists) PublicCollection(ctx context.Context, username string) ([]models.Wish, error) {
+	if !regexp.MustCompile("^[A-Za-z0-9_]{3,30}$").MatchString(username) {
+		return nil, ErrListNotFound
+	}
+	var wishes []models.Wish
+	err := s.tx.WithTransaction(ctx, func(ctx context.Context) error {
+		found, result, err := s.repo.PublicCollection(ctx, strings.ToLower(username))
+		if err != nil {
+			return err
+		}
+		if !found {
+			return ErrListNotFound
+		}
+		wishes = result
+		return nil
+	})
+	return wishes, err
+}
+func (s *Lists) PublicCollectionImage(ctx context.Context, username, wishID string) (*models.WishImage, error) {
+	if !regexp.MustCompile("^[A-Za-z0-9_]{3,30}$").MatchString(username) || !wishIDPattern.MatchString(wishID) {
+		return nil, ErrListNotFound
+	}
+	image, err := s.repo.PublicCollectionImage(ctx, strings.ToLower(username), wishID)
+	if err == nil && image == nil {
+		err = ErrListNotFound
+	}
+	return image, err
 }

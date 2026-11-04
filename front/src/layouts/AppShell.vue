@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { t } from '../i18n.js'
+import { getCollectionSetting, setCollectionSetting } from '../api/lists.js'
 import { useSession } from '../composables/useSession.js'
 import { authError } from '../composables/useAuthForm.js'
 import AppNavigation from '../components/navigation/AppNavigation.vue'
@@ -16,6 +17,21 @@ const account = computed(() => !checking.value && !unavailable.value ? user.valu
 const profileOpen = ref(false)
 const signingOut = ref(false)
 const error = ref('')
+const collectionEnabled = ref(false), collectionLoading = ref(false), collectionReady = ref(false), collectionError = ref('')
+watch(profileOpen, async open => {
+  if (!open) return
+  collectionLoading.value = true; collectionReady.value = false; collectionError.value = ''
+  try { collectionEnabled.value = (await getCollectionSetting()).show_all_wishes; collectionReady.value = true }
+  catch { collectionError.value = t('profile.settingsError') }
+  finally { collectionLoading.value = false }
+})
+async function changeCollection(event) {
+  const next = event.target.checked
+  collectionLoading.value = true; collectionError.value = ''
+  try { collectionEnabled.value = (await setCollectionSetting(next)).show_all_wishes }
+  catch { collectionReady.value = false; collectionError.value = t('profile.settingsError'); event.target.checked = collectionEnabled.value }
+  finally { collectionLoading.value = false }
+}
 async function logout() {
   if (signingOut.value) return
   signingOut.value = true
@@ -88,6 +104,11 @@ async function logout() {
           <dt>{{ t('login.email') }}</dt>
           <dd>{{ account.email }}</dd>
         </dl>
+        <div class="collection-setting">
+          <label><input type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
+          <p>{{ t('profile.showAllWarning') }}</p>
+          <p v-if="collectionError" class="auth-error" role="alert">{{ collectionError }}</p>
+        </div>
         <p class="profile-note">{{ t('my.profileSoon') }}</p>
         <UiButton class="profile-public-link" variant="secondary" :href="`/u/${encodeURIComponent(account.username)}`">{{ t('lists.publicProfile') }}</UiButton>
         <UiButton class="logout-button" variant="secondary" :loading="signingOut" @click="logout">
@@ -123,6 +144,7 @@ dt { margin-bottom: var(--wx-space-1); color: var(--wx-text-muted); font-size: v
 dd { margin: 0; line-height: 1.5; }
 dd + dt { margin-top: var(--wx-space-4); }
 .profile-note { margin-block: var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.6; }
+.collection-setting { margin-block: var(--wx-space-5); }.collection-setting label { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; }.collection-setting input { width: 20px; height: 20px; accent-color: var(--wx-primary); }.collection-setting p { margin: var(--wx-space-1) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
 .logout-button { width: 100%; }
 .profile-public-link { width: 100%; margin-bottom: var(--wx-space-3); }
 @media (min-width: 48rem) {

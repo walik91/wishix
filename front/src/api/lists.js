@@ -16,6 +16,14 @@ export const getWishLists = id => requestJSON(`/wishes/${encodeURIComponent(id)}
 export const setWishLists = (id, list_ids, version) => mutate(`/wishes/${encodeURIComponent(id)}/lists`, 'PUT', { list_ids, version })
 export const viewSharedList = token => mutate('/public/lists/view', 'POST', { token })
 export const publicProfile = username => requestJSON(`/public/profiles/${encodeURIComponent(username)}`)
+export const getCollectionSetting = () => requestJSON('/profile/collection')
+export const setCollectionSetting = show_all_wishes => mutate('/profile/collection', 'PUT', { show_all_wishes })
+export const publicCollection = username => requestJSON(`/public/profiles/${encodeURIComponent(username)}/wishes`)
+export async function publicCollectionImage(username, wishID, signal) {
+  const response = await fetch(`/api/public/profiles/${encodeURIComponent(username)}/wishes/${encodeURIComponent(wishID)}/image`, { credentials: 'omit', signal })
+  if (!response.ok || response.headers.get('content-type') !== 'image/jpeg') throw new Error('Image unavailable')
+  return response.blob()
+}
 export async function sharedWishImage(token, wish_id, signal) {
   const response = await fetch('/api/public/lists/image', { method: 'POST', headers, body: JSON.stringify({ token, wish_id }), credentials: 'omit', signal })
   if (!response.ok || response.headers.get('content-type') !== 'image/jpeg') throw new Error('Image unavailable')

@@ -321,5 +321,9 @@
   "dashboard.allWishes": "Все желания",
   "dashboard.listsDescription": "Ваши списки для особенных моментов.",
   "dashboard.wishesPreview": "Ваши последние желания",
-  "dashboard.createListTile": "Новый список"
+  "dashboard.createListTile": "Новый список",
+  "profile.allWishes": "Все желания",
+  "profile.showAll": "Показывать все желания в публичном профиле",
+  "profile.showAllWarning": "Если включить эту настройку, все смогут увидеть каждое желание из коллекции, в том числе из личных списков.",
+  "profile.settingsError": "Не удалось загрузить или сохранить настройку. Закройте и откройте профиль, чтобы попробовать снова."
 }

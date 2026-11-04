@@ -321,5 +321,9 @@
   "dashboard.allWishes": "View all wishes",
   "dashboard.listsDescription": "Your lists for the moments that matter.",
   "dashboard.wishesPreview": "Your latest wishes",
-  "dashboard.createListTile": "New list"
+  "dashboard.createListTile": "New list",
+  "profile.allWishes": "All wishes",
+  "profile.showAll": "Show all wishes in my public profile",
+  "profile.showAllWarning": "Everyone can see every wish in your collection, including wishes in private lists, when this is enabled.",
+  "profile.settingsError": "Could not load or save the setting. Close and reopen the profile to try again."
 }

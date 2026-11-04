@@ -17,6 +17,7 @@ import NewListPage from './pages/NewListPage.vue'
 import ListPage from './pages/ListPage.vue'
 import SharedListPage from './pages/SharedListPage.vue'
 import PublicProfilePage from './pages/PublicProfilePage.vue'
+import PublicCollectionPage from './pages/PublicCollectionPage.vue'
 import { useSession } from './composables/useSession.js'
 import { isNamedSharedListPath } from './sharedListPath.js'
 
@@ -26,6 +27,7 @@ const aliases = { '/sign-in': '/login', '/sign-up': '/register' }
 const page = aliases[path] || path
 const listMatch = page.match(/^\/my\/lists\/([^/]+)$/)
 const profileMatch = page.match(/^\/u\/([A-Za-z0-9_]{3,30})$/)
+const collectionMatch = page.match(/^\/u\/([A-Za-z0-9_]{3,30})\/wishes$/)
 const privatePage = page === '/my' || page === '/my/wishes' || page === '/my/wishes/new' || page === '/my/lists' || !!listMatch
 
 if (aliases[path]) {
@@ -52,6 +54,7 @@ onMounted(async () => {
     <NewListPage v-else-if="page === '/my/lists/new'" />
     <ListPage v-else-if="listMatch" :id="listMatch[1]" />
     <SharedListPage v-else-if="isNamedSharedListPath(page)" />
+    <PublicCollectionPage v-else-if="collectionMatch" :username="collectionMatch[1]" />
     <PublicProfilePage v-else-if="profileMatch" :username="profileMatch[1]" />
     <StartPage v-else-if="page === '/status'" />
     <section v-else class="not-found">

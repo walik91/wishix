@@ -321,5 +321,9 @@
   "dashboard.allWishes": "Toate dorințele",
   "dashboard.listsDescription": "Listele tale pentru momente speciale.",
   "dashboard.wishesPreview": "Cele mai recente dorințe",
-  "dashboard.createListTile": "Listă nouă"
+  "dashboard.createListTile": "Listă nouă",
+  "profile.allWishes": "Toate dorințele",
+  "profile.showAll": "Arată toate dorințele în profilul meu public",
+  "profile.showAllWarning": "Dacă activezi această opțiune, oricine poate vedea toate dorințele din colecție, inclusiv cele din listele private.",
+  "profile.settingsError": "Setarea nu a putut fi încărcată sau salvată. Închide și redeschide profilul pentru a încerca din nou."
 }
