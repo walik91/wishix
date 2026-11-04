@@ -49,7 +49,6 @@ async function retry() {
         <UiCard v-else-if="!lists.length" class="list-empty"><EmptyState icon="list" :title="t('lists.emptyTitle')" :description="t('lists.emptyDescription')"><UiButton href="/my/lists/new"><AppIcon name="plus" />{{ t('lists.create') }}</UiButton></EmptyState></UiCard>
         <div v-else class="list-grid"><ListCard v-for="list in lists.slice(0, 2)" :key="list.id" :list="list" /><a class="create-list" href="/my/lists/new"><span><AppIcon name="plus" /></span>{{ t('dashboard.createListTile') }}</a></div>
       </section>
-      <p class="privacy-note"><AppIcon name="lock" />{{ t('my.privacyNote') }}</p>
     </template>
   </div>
 </template>
@@ -73,7 +72,6 @@ async function retry() {
 .create-list:hover { background: var(--wx-lavender); }.create-list span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--wx-lavender); }
 .wishes-empty, .dashboard-error { padding: var(--wx-space-8) var(--wx-space-5); }
 .wish-preview-grid { display: grid; gap: var(--wx-space-4); }.wish-preview { display: flex; align-items: center; gap: var(--wx-space-3); min-width: 0; min-height: 90px; padding: var(--wx-space-3); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-card); background: var(--wx-surface); color: var(--wx-text); text-decoration: none; font-size: var(--wx-text-sm); font-weight: 600; box-shadow: var(--wx-shadow-card); }.wish-preview:hover { border-color: var(--wx-secondary); }.wish-preview > span:nth-child(2) { flex: 1; min-width: 0; }.wish-preview > .icon { color: var(--wx-primary); }.wish-image { display: grid; place-items: center; flex: 0 0 58px; height: 58px; overflow: hidden; border-radius: var(--wx-radius-sm); color: var(--wx-primary); background: var(--wx-lavender); }.wish-image img { width: 100%; height: 100%; object-fit: contain; background: var(--wx-surface); }
-.privacy-note { display: flex; align-items: center; justify-content: center; gap: var(--wx-space-2); margin: var(--wx-space-8) 0 0; color: var(--wx-text-muted); text-align: center; font-size: var(--wx-text-xs); }.privacy-note .icon { width: 16px; height: 16px; }
 .dashboard-loading { display: grid; gap: var(--wx-space-5); }.loading-title { width: 60%; height: 32px; }.loading-hero { height: 220px; border-radius: var(--wx-radius-card); }.wish-skeleton { height: 90px; border-radius: var(--wx-radius-card); }
 @media (min-width: 48rem) { .greeting h1 { font-size: var(--wx-text-2xl); }.hero { min-height: 250px; padding: var(--wx-space-8); }.hero-copy { max-width: 60%; }.hero img { display: block; position: absolute; right: var(--wx-space-5); bottom: 0; width: 32%; max-width: 300px; height: auto; }.wish-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 75rem) { .wish-preview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
