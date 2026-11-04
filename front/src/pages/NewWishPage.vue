@@ -103,6 +103,14 @@ async function submit() {
         <form ref="form" novalidate :aria-busy="saving || saved" @submit.prevent="submit">
           <fieldset :disabled="saving || saved">
             <legend class="sr-only">{{ t('my.addWish') }}</legend>
+            <section class="links-section" aria-labelledby="links-title">
+              <h2 id="links-title">{{ t('wishes.shopLinks') }}</h2><p class="links-hint">{{ t('wishes.linksHint') }}</p>
+              <div v-for="(link, index) in links" :key="link.id" class="link-row">
+                <TextField :id="`wish-link-${link.id}`" v-model="link.value" :label="`${t('wishes.shopLink')} ${index + 1}`" :error="errors[`link-${link.id}`] ? t('wishes.error.wish_links_invalid') : ''" type="url" placeholder="https://" maxlength="2048" autocomplete="off" />
+                <button v-if="links.length > 1" class="remove-link" type="button" :aria-label="`${t('wishes.removeLink')} ${index + 1}`" @click="removeLink(link.id)"><AppIcon name="close" /></button>
+              </div>
+              <UiButton variant="secondary" :disabled="links.length >= 10" @click="addLink"><AppIcon name="plus" />{{ t('wishes.addLink') }}</UiButton>
+            </section>
             <TextField id="wish-title" v-model="title" :label="t('wishes.titleLabel')" :placeholder="t('wishes.titlePlaceholder')" :hint="t('wishes.titleHint')" :error="errors.title ? t(`wishes.error.${errors.title}`) : ''" required maxlength="400" autocomplete="off" />
             <WishImageInput id="wish-image" v-model="image" :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" />
             <TextField id="wish-description" v-model="description" multiline rows="4" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" maxlength="10000" />
@@ -116,14 +124,6 @@ async function submit() {
               <select id="wish-priority" v-model="priority" :aria-invalid="errors.priority ? 'true' : undefined" :aria-describedby="errors.priority ? 'priority-error' : undefined"><option v-for="value in ['low', 'medium', 'high']" :key="value" :value="value">{{ t(`wishes.priority.${value}`) }}</option></select>
               <p v-if="errors.priority" id="priority-error" class="field-error">{{ t(`wishes.error.${errors.priority}`) }}</p>
             </div>
-            <section class="links-section" aria-labelledby="links-title">
-              <h2 id="links-title">{{ t('wishes.shopLinks') }}</h2><p class="links-hint">{{ t('wishes.linksHint') }}</p>
-              <div v-for="(link, index) in links" :key="link.id" class="link-row">
-                <TextField :id="`wish-link-${link.id}`" v-model="link.value" :label="`${t('wishes.shopLink')} ${index + 1}`" :error="errors[`link-${link.id}`] ? t('wishes.error.wish_links_invalid') : ''" type="url" placeholder="https://" maxlength="2048" autocomplete="off" />
-                <button v-if="links.length > 1" class="remove-link" type="button" :aria-label="`${t('wishes.removeLink')} ${index + 1}`" @click="removeLink(link.id)"><AppIcon name="close" /></button>
-              </div>
-              <UiButton variant="secondary" :disabled="links.length >= 10" @click="addLink"><AppIcon name="plus" />{{ t('wishes.addLink') }}</UiButton>
-            </section>
           </fieldset>
           <p v-if="failure" class="operation-error" role="alert" tabindex="-1">{{ t(`wishes.error.${failure}`) }}</p>
           <div class="form-actions"><UiButton type="submit" :loading="saving || saved">{{ t('wishes.save') }}</UiButton><UiButton href="/my" variant="secondary" :disabled="saving || saved">{{ t('wishes.cancel') }}</UiButton></div>
@@ -145,7 +145,7 @@ fieldset { display: grid; gap: var(--wx-space-6); min-width: 0; margin: 0; paddi
 label, h2 { margin: 0; font-size: var(--wx-text-sm); font-weight: 600; line-height: 1.5; }
 select { width: 100%; min-width: 0; min-height: 48px; padding: var(--wx-space-3); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-text); background: var(--wx-surface); font-size: var(--wx-text-md); }
 select:hover { border-color: var(--wx-secondary); }
-.links-section { min-width: 0; padding-top: var(--wx-space-6); border-top: 1px solid var(--wx-border); }.links-hint { margin: var(--wx-space-2) 0 var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }
+.links-section { min-width: 0; padding-bottom: var(--wx-space-6); border-bottom: 1px solid var(--wx-border); }.links-hint { margin: var(--wx-space-2) 0 var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }
 .link-row { display: flex; align-items: flex-start; gap: var(--wx-space-2); margin-bottom: var(--wx-space-4); }.link-row > .field { flex: 1; }
 .remove-link { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; min-height: 48px; margin-top: 29px; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-text-muted); background: var(--wx-surface); cursor: pointer; }.remove-link:hover { color: var(--wx-error); background: var(--wx-background); }.remove-link:disabled { cursor: wait; }
 .form-actions { display: flex; flex-direction: column; gap: var(--wx-space-3); margin-top: var(--wx-space-8); padding-top: var(--wx-space-6); border-top: 1px solid var(--wx-border); }

@@ -20,6 +20,7 @@
 | `design/preview/new-wish-390.png`, `new-wish-1440.png` | PNG | отдельная форма добавления, 04.11.2026 | визуальная приёмка EN/RU/RO и адаптивности |
 | `design/preview/wish-images-390.png`, `wish-images-1440.png` | PNG | коллекция с загруженным изображением, 04.11.2026 | тестовые запись и файл только из изолированной среды |
 | `design/preview/wish-image-form-390.png`, `wish-image-form-1440.png` | PNG | выбор файла и предпросмотр, 04.11.2026 | визуальная приёмка EN/RU/RO и адаптивности |
+| `design/preview/wish-form-links-first-390.png`, `wish-form-links-first-1440.png` | PNG | актуальная форма: ссылки первым блоком, 04.11.2026 | адаптивность, порядок клавиатурной навигации и ручное добавление без ссылки |
 
 ## Что осталось для production
 
