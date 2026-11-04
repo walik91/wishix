@@ -12,6 +12,7 @@ import (
 
 	security "wishix/server/internal/auth"
 	"wishix/server/internal/models"
+	"wishix/server/internal/wishimage"
 )
 
 type WishError string
@@ -34,21 +35,27 @@ type WishInput struct {
 	Currency    string   `json:"currency"`
 	Priority    string   `json:"priority"`
 	ShopLinks   []string `json:"shop_links"`
+	Image       []byte   `json:"-"`
 }
 
 type WishRepository interface {
 	List(context.Context, string) ([]models.Wish, error)
 	Create(context.Context, *models.Wish) error
 	Delete(context.Context, string, string) (bool, error)
+	Image(context.Context, string, string) (*models.WishImage, error)
+	SaveImage(context.Context, string, *models.WishImage) (bool, error)
+	DeleteImage(context.Context, string, string) (bool, error)
+	Owns(context.Context, string, string) (bool, error)
 }
 
 type Wishes struct {
-	repo WishRepository
-	tx   Transactor
+	repo   WishRepository
+	tx     Transactor
+	images *wishimage.Processor
 }
 
 func NewWishes(repo WishRepository, tx Transactor) *Wishes {
-	return &Wishes{repo: repo, tx: tx}
+	return &Wishes{repo: repo, tx: tx, images: wishimage.New()}
 }
 
 var wishPricePattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,9})(\.[0-9]{1,2})?$`)
@@ -121,11 +128,23 @@ func (s *Wishes) Create(ctx context.Context, ownerID string, input WishInput) (*
 	if err != nil {
 		return nil, err
 	}
+	var data []byte
+	if input.Image != nil {
+		data, err = s.images.Process(ctx, input.Image)
+		if err != nil {
+			return nil, err
+		}
+	}
+	version := security.UUID()
 	id, createdAt := security.UUID(), time.Now().UTC()
 	var result *models.Wish
 	err = s.tx.WithTransaction(ctx, func(txCtx context.Context) error {
 		// Fresh model and associations on every CockroachDB retry.
 		wish := &models.Wish{ID: id, OwnerID: ownerID, Title: input.Title, Description: input.Description, Price: input.Price, Currency: input.Currency, Priority: input.Priority, CreatedAt: createdAt}
+		if data != nil {
+			wish.ImageVersion = version
+			wish.Image = &models.WishImage{WishID: id, Version: version, Data: data}
+		}
 		for position, link := range input.ShopLinks {
 			wish.ShopLinks = append(wish.ShopLinks, models.WishShopLink{WishID: id, Position: position, URL: link})
 		}
@@ -159,9 +178,82 @@ func (s *Wishes) Delete(ctx context.Context, ownerID, id string) error {
 }
 
 func WishErrorCode(err error) string {
+	var imageError wishimage.Error
+	if errors.As(err, &imageError) {
+		return string(imageError)
+	}
 	var wishError WishError
 	if errors.As(err, &wishError) {
 		return string(wishError)
 	}
 	return ErrorCode(err)
+}
+
+func (s *Wishes) Image(ctx context.Context, ownerID, id string) (*models.WishImage, error) {
+	if ownerID == "" {
+		return nil, ErrSession
+	}
+	if !wishIDPattern.MatchString(id) {
+		return nil, ErrWishNotFound
+	}
+	image, err := s.repo.Image(ctx, ownerID, id)
+	if err != nil {
+		return nil, err
+	}
+	if image == nil {
+		return nil, ErrWishNotFound
+	}
+	return image, nil
+}
+
+func (s *Wishes) SaveImage(ctx context.Context, ownerID, id string, raw []byte) (string, error) {
+	// Check access before decoding a potentially expensive image.
+	if ownerID == "" {
+		return "", ErrSession
+	}
+	if !wishIDPattern.MatchString(id) {
+		return "", ErrWishNotFound
+	}
+	owned, err := s.repo.Owns(ctx, ownerID, id)
+	if err != nil {
+		return "", err
+	}
+	if !owned {
+		return "", ErrWishNotFound
+	}
+	data, err := s.images.Process(ctx, raw)
+	if err != nil {
+		return "", err
+	}
+	version := security.UUID()
+	err = s.tx.WithTransaction(ctx, func(txCtx context.Context) error {
+		written, err := s.repo.SaveImage(txCtx, ownerID, &models.WishImage{WishID: id, Version: version, Data: data})
+		if err != nil {
+			return err
+		}
+		if !written {
+			return ErrWishNotFound
+		}
+		return nil
+	})
+	return version, err
+}
+
+func (s *Wishes) DeleteImage(ctx context.Context, ownerID, id string) error {
+	if ownerID == "" {
+		return ErrSession
+	}
+	if !wishIDPattern.MatchString(id) {
+		return ErrWishNotFound
+	}
+	return s.tx.WithTransaction(ctx, func(txCtx context.Context) error {
+		deleted, err := s.repo.DeleteImage(txCtx, ownerID, id)
+		if err != nil {
+			return err
+		}
+		if !deleted {
+			return ErrWishNotFound
+		}
+		return nil
+	})
 }

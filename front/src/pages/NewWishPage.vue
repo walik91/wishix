@@ -9,6 +9,7 @@ import UiSkeleton from '../components/ui/UiSkeleton.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import TextField from '../components/ui/TextField.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
+import WishImageInput from '../components/wishes/WishImageInput.vue'
 
 const { user, checking, unavailable, refresh } = useSession()
 const title = ref('')
@@ -16,6 +17,8 @@ const description = ref('')
 const price = ref('')
 const currency = ref('')
 const priority = ref('medium')
+const image = ref(null)
+const imageInvalid = ref('')
 let nextLinkID = 1
 const links = ref([{ id: nextLinkID++, value: '' }])
 const errors = ref({})
@@ -61,6 +64,7 @@ async function submit() {
     if (link.value.trim() && !validLink(link.value.trim())) invalid[`link-${link.id}`] = 'wish_links_invalid'
   }
   errors.value = invalid
+  if (imageInvalid.value) invalid.image = imageInvalid.value
   failure.value = ''
   if (Object.keys(invalid).length) {
     await nextTick()
@@ -73,13 +77,14 @@ async function submit() {
       title: title.value.trim(), description: description.value.trim(),
       price: normalizedPrice || null, currency: normalizedPrice ? currency.value.trim().toUpperCase() : '',
       priority: priority.value, shop_links: links.value.map(link => link.value.trim()).filter(Boolean),
-    })
+    }, image.value)
     saved.value = true
     window.location.assign('/my?notice=wish-added')
   } catch (error) {
     if (error.status === 401) { window.location.replace('/login'); return }
     const fields = { wish_title_invalid: 'title', wish_description_invalid: 'description', wish_price_invalid: 'price', wish_priority_invalid: 'priority' }
     if (fields[error.code]) errors.value = { [fields[error.code]]: error.code }
+    else if (['wish_image_invalid', 'wish_image_too_large', 'wish_image_dimensions', 'wish_image_busy'].includes(error.code)) errors.value = { image: error.code }
     else failure.value = error.code === 'wish_links_invalid' ? error.code : 'save_failed'
     await nextTick()
     form.value.querySelector('[aria-invalid="true"], [role="alert"]')?.focus()
@@ -99,6 +104,7 @@ async function submit() {
           <fieldset :disabled="saving || saved">
             <legend class="sr-only">{{ t('my.addWish') }}</legend>
             <TextField id="wish-title" v-model="title" :label="t('wishes.titleLabel')" :placeholder="t('wishes.titlePlaceholder')" :hint="t('wishes.titleHint')" :error="errors.title ? t(`wishes.error.${errors.title}`) : ''" required maxlength="400" autocomplete="off" />
+            <WishImageInput id="wish-image" v-model="image" :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" />
             <TextField id="wish-description" v-model="description" multiline rows="4" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" maxlength="10000" />
             <div class="price-fields">
               <TextField id="wish-price" v-model="price" :label="t('wishes.priceLabel')" :hint="t('wishes.priceHint')" :error="errors.price ? t(`wishes.error.${errors.price}`) : ''" inputmode="decimal" placeholder="0.00" maxlength="13" />

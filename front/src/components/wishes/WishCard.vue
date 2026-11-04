@@ -6,7 +6,7 @@ import UiCard from '../ui/UiCard.vue'
 import UiBadge from '../ui/UiBadge.vue'
 
 const props = defineProps({ wish: { type: Object, required: true } })
-defineEmits(['delete'])
+defineEmits(['delete', 'image'])
 const price = computed(() => {
   if (props.wish.price === null) return ''
   try {
@@ -19,7 +19,7 @@ function shopHost(link) { try { return new URL(link).hostname } catch { return l
 <template>
   <UiCard class="wish-card" :data-wish-id="wish.id">
     <div class="wish-heading">
-      <span class="wish-image" aria-hidden="true"><AppIcon name="heart" /></span>
+      <button class="wish-image" type="button" :aria-label="`${t(wish.image_url ? 'wishes.replaceImage' : 'wishes.chooseImage')}: ${wish.title}`" @click="$emit('image', wish)"><img v-if="wish.image_url" :src="wish.image_url" :alt="wish.title" loading="lazy" decoding="async" /><AppIcon v-else name="image" /></button>
       <div class="wish-summary">
         <h2>{{ wish.title }}</h2>
         <p v-if="price" class="wish-price"><span aria-hidden="true">≈ </span><span class="sr-only">{{ t('wishes.approximate') }} </span>{{ price }}</p>
@@ -37,7 +37,9 @@ function shopHost(link) { try { return new URL(link).hostname } catch { return l
 <style scoped>
 .wish-card { min-width: 0; padding: var(--wx-space-4); overflow-wrap: anywhere; }
 .wish-heading { display: flex; align-items: flex-start; gap: var(--wx-space-3); }
-.wish-image { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 56px; height: 64px; border-radius: var(--wx-radius-sm); color: var(--wx-primary); background: linear-gradient(140deg, var(--wx-background), var(--wx-lavender)); }
+.wish-image { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 56px; height: 64px; padding: 0; overflow: hidden; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-sm); color: var(--wx-primary); background: linear-gradient(140deg, var(--wx-background), var(--wx-lavender)); cursor: pointer; }
+.wish-image:hover { border-color: var(--wx-secondary); }.wish-image:active { background: var(--wx-lavender); }
+.wish-image img { width: 100%; height: 100%; object-fit: contain; background: var(--wx-surface); }
 .wish-image .icon { width: 26px; height: 26px; }
 .wish-summary { flex: 1; min-width: 0; padding-top: var(--wx-space-1); }
 h2 { margin: 0; font-size: var(--wx-text-md); line-height: 1.5; font-weight: 650; }

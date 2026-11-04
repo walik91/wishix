@@ -11,6 +11,7 @@ import UiToast from '../components/ui/UiToast.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
 import WishCard from '../components/wishes/WishCard.vue'
+import WishImageDialog from '../components/wishes/WishImageDialog.vue'
 import gift from '../assets/brand/gift-hero.svg'
 
 const { user, checking, unavailable, refresh } = useSession()
@@ -20,6 +21,8 @@ const selected = ref(null)
 const deleting = ref(false)
 const deleteError = ref(false)
 const addButton = ref(null)
+const imageOpen = ref(false)
+const imageWish = ref(null)
 const notice = ref(new URLSearchParams(window.location.search).get('notice') === 'wish-added' ? 'added' : '')
 if (notice.value) window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`)
 
@@ -36,6 +39,12 @@ function confirmDelete(wish) {
   selected.value = wish
   deleteError.value = false
   deleteOpen.value = true
+}
+function editImage(wish) { imageWish.value = wish; imageOpen.value = true }
+function imageUpdated(id, url) {
+  const wish = wishes.value.find(wish => wish.id === id)
+  if (wish) wish.image_url = url
+  notice.value = 'imageUpdated'
 }
 async function removeSelected() {
   if (deleting.value) return
@@ -77,9 +86,10 @@ async function removeSelected() {
         <img :src="gift" alt="" width="220" height="180" aria-hidden="true" />
         <EmptyState :title="t('my.emptyWishesTitle')" :description="t('wishes.emptyDescription')"><UiButton href="/my/wishes/new"><AppIcon name="plus" />{{ t('wishes.firstWish') }}</UiButton></EmptyState>
       </UiCard>
-      <div v-else class="wish-grid"><WishCard v-for="wish in wishes" :key="wish.id" :wish="wish" @delete="confirmDelete" /></div>
+      <div v-else class="wish-grid"><WishCard v-for="wish in wishes" :key="wish.id" :wish="wish" @delete="confirmDelete" @image="editImage" /></div>
       <p class="privacy-note"><AppIcon name="lock" /><span>{{ t('wishes.privateNote') }}</span></p>
     </template>
+    <WishImageDialog v-model:open="imageOpen" :wish="imageWish" @updated="imageUpdated" />
     <UiDialog v-model:open="deleteOpen" :busy="deleting" :title="t('wishes.deleteTitle')">
       <p class="delete-title">{{ selected?.title }}</p>
       <p class="delete-description">{{ t('wishes.deleteDescription') }}</p>

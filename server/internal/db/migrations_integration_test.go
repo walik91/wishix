@@ -57,7 +57,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("version: got %d, want %d; %v", version, want, err)
 		}
 	}
-	assertVersion(2)
+	assertVersion(3)
 	if _, err := pool.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'migration_test', 'migration@example.test', 'test-hash', now(), now())`); err != nil {
 		t.Fatal(err)
 	}
@@ -78,11 +78,18 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 		t.Fatal("repeated up lost wishes or shop links")
 	}
 	statuses, err := migrator.Status(ctx)
-	if err != nil || len(statuses) != 2 || statuses[0].State != goose.StateApplied || statuses[1].State != goose.StateApplied {
+	if err != nil || len(statuses) != 3 || statuses[0].State != goose.StateApplied || statuses[1].State != goose.StateApplied || statuses[2].State != goose.StateApplied {
 		t.Fatal("incorrect Goose status:", err)
 	}
 	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("down:", err)
+	}
+	assertVersion(2)
+	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM wishes").Scan(&count); err != nil || count != 1 {
+		t.Fatal("image rollback removed existing wishes")
+	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("wishes down:", err)
 	}
 	assertVersion(1)
 	if err := pool.QueryRowContext(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema = $1 AND table_name IN ('wishes', 'wish_shop_links')`, schema).Scan(&count); err != nil || count != 0 {
@@ -145,7 +152,7 @@ func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 		t.Fatal("legacy history was changed")
 	}
 	version, err := fresh.GetDBVersion(ctx)
-	if err != nil || version != 2 {
+	if err != nil || version != 3 {
 		t.Fatal("Goose did not record the adopted version")
 	}
 }
