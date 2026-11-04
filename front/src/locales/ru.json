@@ -109,7 +109,6 @@
   "auth.resetSuccess": "Пароль обновлён. Войдите с новым паролем.",
   "auth.my": "Моё",
   "auth.welcome": "Добро пожаловать",
-  "auth.accountReady": "Email подтверждён, аккаунт готов к работе. Желания и списки появятся на следующем этапе.",
   "auth.logout": "Выйти",
   "auth.checkingSession": "Проверяем сессию…",
   "auth.error.invalid_input": "Проверьте введённые данные.",

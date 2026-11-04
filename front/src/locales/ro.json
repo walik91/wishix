@@ -109,7 +109,6 @@
   "auth.resetSuccess": "Parola a fost actualizată. Autentificați-vă cu parola nouă.",
   "auth.my": "Spațiul meu",
   "auth.welcome": "Bine ai venit",
-  "auth.accountReady": "Emailul este confirmat, iar contul este pregătit. Dorințele și listele vor fi disponibile la etapa următoare.",
   "auth.logout": "Deconectare",
   "auth.checkingSession": "Verificăm sesiunea…",
   "auth.error.invalid_input": "Verificați datele introduse.",

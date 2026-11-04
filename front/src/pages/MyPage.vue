@@ -26,7 +26,6 @@ async function retry() {
       <h1>{{ t('auth.my') }}</h1>
       <p class="welcome">{{ t('auth.welcome') }}, <strong>{{ user.username }}</strong>!</p>
       <dl><dt>{{ t('login.email') }}</dt><dd>{{ user.email }}</dd><dt>{{ t('register.username') }}</dt><dd>{{ user.username }}</dd></dl>
-      <p class="auth-notice">{{ t('auth.accountReady') }}</p>
       <UiButton variant="secondary" :loading="busy" @click="run(signOut)">{{ t('auth.logout') }}</UiButton>
       <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
     </template>
