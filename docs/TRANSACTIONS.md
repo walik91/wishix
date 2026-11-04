@@ -28,9 +28,25 @@ return s.tx.WithTransaction(ctx, func(txCtx context.Context) error {
 
 `Create` и `AddWish` здесь только иллюстрируют вызовы; этих методов и продуктовых таблиц пока нет. Проверки доступа и другие проверки, зависящие от данных БД, тоже должны выполняться в этой транзакции.
 
-## Репозиторий использует общий Executor
+## Репозиторий использует общий Base
 
-Репозиторий получает `*db.Executor` через Fx. Каждый запрос начинается с `executor.DB(ctx)`:
+Каждый прикладной репозиторий встраивает `repositories.Base` и инициализирует его через `NewBase(executor)` в своём конструкторе. Общий `*db.Executor` по-прежнему приходит через Fx; доступ к нему скрыт внутри базового типа. Пример существующего Auth-репозитория:
+
+```go
+type Auth struct{ Base }
+
+func NewAuth(executor *db.Executor) *Auth {
+    return &Auth{Base: NewBase(executor)}
+}
+
+func (r *Auth) UserByEmail(ctx context.Context, email string) (*models.User, error) {
+    var user models.User
+    err := r.Ctx(ctx).Where("email = ?", email).Take(&user).Error
+    return userResult(&user, err)
+}
+```
+
+Каждый запрос начинается с `r.Ctx(ctx)`. Этот метод возвращает новую `*gorm.DB`-сессию, делегируя выбор соединения `db.Executor.DB(ctx)`:
 
 - Без активной транзакции возвращается сессия общего пула.
 - Внутри callback возвращается сессия того же `tx`, который видят остальные репозитории.

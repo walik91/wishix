@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"wishix/server/internal/db"
+	"wishix/server/internal/repositories"
 )
 
 type integrationLifecycle struct{ hooks []fx.Hook }
@@ -68,12 +69,12 @@ func liveTransactions(t *testing.T) (*gorm.DB, *db.Executor, *db.TransactionMana
 }
 
 type probeRepository struct {
-	executor *db.Executor
-	table    string
+	repositories.Base
+	table string
 }
 
 func (repo probeRepository) insert(ctx context.Context, id string) error {
-	return repo.executor.DB(ctx).Exec("INSERT INTO "+repo.table+" (id) VALUES (?)", id).Error
+	return repo.Ctx(ctx).Exec("INSERT INTO "+repo.table+" (id) VALUES (?)", id).Error
 }
 
 func assertRows(t *testing.T, database *gorm.DB, table string, expected int64) {
@@ -89,8 +90,8 @@ func assertRows(t *testing.T, database *gorm.DB, table string, expected int64) {
 
 func TestIntegrationAtomicCommitAndRollbackAcrossRepositories(t *testing.T) {
 	database, executor, manager, table := liveTransactions(t)
-	first := probeRepository{executor, table}
-	second := probeRepository{executor, table}
+	first := probeRepository{Base: repositories.NewBase(executor), table: table}
+	second := probeRepository{Base: repositories.NewBase(executor), table: table}
 	err := manager.WithTransaction(context.Background(), func(ctx context.Context) error {
 		var isolation string
 		if err := executor.DB(ctx).Raw("SHOW transaction_isolation").Scan(&isolation).Error; err != nil {
@@ -182,7 +183,7 @@ func TestIntegrationRetriesRealCockroachConflict(t *testing.T) {
 
 func TestIntegrationCancellationRollsBack(t *testing.T) {
 	database, executor, manager, table := liveTransactions(t)
-	repo := probeRepository{executor, table}
+	repo := probeRepository{Base: repositories.NewBase(executor), table: table}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	err := manager.WithTransaction(ctx, func(txCtx context.Context) error {

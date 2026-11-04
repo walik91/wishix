@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"wishix/server/internal/db"
+	"wishix/server/internal/repositories"
 )
 
 func mockTransactions(t *testing.T) (*db.Executor, *db.TransactionManager, sqlmock.Sqlmock) {
@@ -63,16 +64,17 @@ func TestTransactionCommitsAndJoinsNestedCalls(t *testing.T) {
 	mock.ExpectExec("INSERT INTO probe").WithArgs(1).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("INSERT INTO probe").WithArgs(2).WillReturnResult(sqlmock.NewResult(0, 1))
 	commit(mock)
-	otherRepository := executor
+	first := repositories.NewAuth(executor)
+	second := repositories.NewAuth(executor)
 	err := manager.WithTransaction(context.Background(), func(ctx context.Context) error {
-		if err := executor.DB(ctx).Exec("INSERT INTO probe (id) VALUES (?)", 1).Error; err != nil {
+		if err := first.Ctx(ctx).Exec("INSERT INTO probe (id) VALUES (?)", 1).Error; err != nil {
 			return err
 		}
 		return manager.WithTransaction(ctx, func(nestedCtx context.Context) error {
-			if executor.DB(ctx).Statement.ConnPool != otherRepository.DB(nestedCtx).Statement.ConnPool {
+			if first.Ctx(ctx).Statement.ConnPool != second.Ctx(nestedCtx).Statement.ConnPool {
 				t.Fatal("nested call did not join the same SQL transaction")
 			}
-			return otherRepository.DB(nestedCtx).Exec("INSERT INTO probe (id) VALUES (?)", 2).Error
+			return second.Ctx(nestedCtx).Exec("INSERT INTO probe (id) VALUES (?)", 2).Error
 		})
 	})
 	if err != nil {
