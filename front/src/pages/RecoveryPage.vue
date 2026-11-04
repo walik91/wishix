@@ -33,7 +33,7 @@ async function requestCode() {
 }
 
 async function reset(code) {
-  passwordError.value = Array.from(password.value).length < 15 || Array.from(password.value).length > 128 ? t('auth.error.password_invalid') : ''
+  passwordError.value = Array.from(password.value).length < 4 || Array.from(password.value).length > 128 ? t('auth.error.password_invalid') : ''
   if (passwordError.value) { await nextTick(); return passwordField.value.focus() }
   return run(async () => {
     await resetPassword({ challenge: challenge.value, code, password: password.value })

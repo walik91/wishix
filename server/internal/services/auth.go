@@ -83,7 +83,7 @@ func normalizeEmail(email string) (string, error) {
 }
 
 func validatePassword(password string) error {
-	if !utf8.ValidString(password) || utf8.RuneCountInString(password) < 15 || utf8.RuneCountInString(password) > 128 || len(password) > 512 {
+	if !utf8.ValidString(password) || utf8.RuneCountInString(password) < 4 || utf8.RuneCountInString(password) > 128 || len(password) > 512 {
 		return ErrPasswordInvalid
 	}
 	return nil

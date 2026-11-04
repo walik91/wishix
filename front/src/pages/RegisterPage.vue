@@ -31,7 +31,7 @@ const emailError = computed(() => {
   if (!email.value.trim()) return t('login.emailRequired')
   return form.value?.elements.email.validity.typeMismatch ? t('login.emailInvalid') : ''
 })
-const passwordError = computed(() => submitted.value && (Array.from(password.value).length < 15 || Array.from(password.value).length > 128) ? t('auth.error.password_invalid') : '')
+const passwordError = computed(() => submitted.value && (Array.from(password.value).length < 4 || Array.from(password.value).length > 128) ? t('auth.error.password_invalid') : '')
 
 async function submit() {
   if (busy.value) return

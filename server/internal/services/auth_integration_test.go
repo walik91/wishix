@@ -151,7 +151,7 @@ func (f *authFixture) request(t *testing.T, action string, body map[string]strin
 	return result.Code, response, result.Result().Cookies()
 }
 
-const initialPassword = "a sufficiently long password"
+const initialPassword = "1234"
 
 func (f *authFixture) registration(t *testing.T, email, username string) string {
 	t.Helper()
@@ -294,7 +294,11 @@ func TestIntegrationPasswordResetRevokesSessionsAndCodes(t *testing.T) {
 	if status != 400 {
 		t.Fatal("reset code used to register")
 	}
-	newPassword := "a completely new long passphrase"
+	newPassword := "5678"
+	status, _, _ = f.request(t, "reset-password", map[string]string{"challenge": token, "code": code, "password": "abc"}, nil)
+	if status != 400 {
+		t.Fatal("three-character reset password accepted")
+	}
 	status, _, _ = f.request(t, "reset-password", map[string]string{"challenge": token, "code": code, "password": newPassword}, nil)
 	if status != 200 {
 		t.Fatal("password reset failed")
@@ -480,7 +484,7 @@ func TestIntegrationAuthValidationAndEmailFailure(t *testing.T) {
 	for _, body := range []map[string]string{
 		{"email": "Display <a@example.test>", "username": "valid_user", "password": initialPassword},
 		{"email": "a@example.test", "username": "a", "password": initialPassword},
-		{"email": "a@example.test", "username": "valid_user", "password": "short"},
+		{"email": "a@example.test", "username": "valid_user", "password": "abc"},
 	} {
 		status, _, _ := f.request(t, "register", body, nil)
 		if status != 400 {
