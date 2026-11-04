@@ -51,7 +51,7 @@ onMounted(async () => {
     <ListsPage v-else-if="page === '/my/lists'" />
     <NewListPage v-else-if="page === '/my/lists/new'" />
     <ListPage v-else-if="listMatch" :id="listMatch[1]" />
-    <SharedListPage v-else-if="page === '/shared-list' || isNamedSharedListPath(page)" />
+    <SharedListPage v-else-if="isNamedSharedListPath(page)" />
     <PublicProfilePage v-else-if="profileMatch" :username="profileMatch[1]" />
     <StartPage v-else-if="page === '/status'" />
     <section v-else class="not-found">

@@ -5,6 +5,8 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -43,7 +45,7 @@ func listDate(date *time.Time) *string {
 func privateList(list *models.Wishlist) listResponse {
 	path := ""
 	if list.Visibility != "private" {
-		path = "/shared-list#" + list.ShareToken
+		path = "?token=" + list.ShareToken
 	}
 	return listResponse{ID: list.ID, Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), Visibility: list.Visibility, SharePath: path, Revision: list.Revision, WishCount: list.WishCount, CreatedAt: list.CreatedAt}
 }
@@ -78,6 +80,47 @@ func (c *Lists) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/public/lists/view", c.public(c.shared))
 	mux.HandleFunc("POST /api/public/lists/image", c.public(c.sharedImage))
 	mux.HandleFunc("GET /api/public/profiles/{username}", c.profile)
+	mux.HandleFunc("GET /{username}/wishlist/shared", c.sharePage)
+	mux.HandleFunc("GET /{username}/wishlist/shared/{$}", c.sharePage)
+}
+
+var shareUsername = regexp.MustCompile(`^[A-Za-z0-9_]{3,30}$`)
+
+// The front proxy serves the SPA when this returns X-Accel-Redirect.
+// Do not log the request URL: it contains a bearer capability.
+func (c *Lists) sharePage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+	if !shareUsername.MatchString(r.PathValue("username")) {
+		http.NotFound(w, r)
+		return
+	}
+	values := r.URL.Query()["token"]
+	if len(values) != 1 {
+		w.Header().Set("X-Accel-Redirect", "/_shared_index")
+		return
+	}
+	list, username, err := c.service.ResolveShare(r.Context(), values[0])
+	if err != nil {
+		if services.ListErrorCode(err) != "list_not_found" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("X-Accel-Redirect", "/_shared_index")
+		return
+	}
+	if list.Visibility == "public" {
+		w.Header().Del("X-Robots-Tag")
+	}
+	query := url.Values{"token": {values[0]}}.Encode()
+	if r.PathValue("username") != username || r.URL.Path != "/"+username+"/wishlist/shared" || r.URL.RawQuery != query {
+		location := "/" + url.PathEscape(username) + "/wishlist/shared?" + query
+		w.Header().Set("Location", location)
+		w.WriteHeader(http.StatusMovedPermanently)
+		return
+	}
+	w.Header().Set("X-Accel-Redirect", "/_shared_index")
 }
 func readListJSON(r *http.Request, input any) error {
 	d := json.NewDecoder(r.Body)
@@ -275,7 +318,7 @@ type publicListResponse struct {
 func publicList(list *models.Wishlist, link bool) publicListResponse {
 	result := publicListResponse{Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), Visibility: list.Visibility, WishCount: list.WishCount}
 	if link && list.Visibility == "public" {
-		result.SharePath = "/shared-list#" + list.ShareToken
+		result.SharePath = "?token=" + list.ShareToken
 	}
 	return result
 }

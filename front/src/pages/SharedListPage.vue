@@ -2,7 +2,6 @@
 import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import { locale, t } from '../i18n.js'
 import { viewSharedList } from '../api/lists.js'
-import { isNamedSharedListPath, sharedListPath } from '../sharedListPath.js'
 import SharedWishCard from '../components/lists/SharedWishCard.vue'
 import UiSkeleton from '../components/ui/UiSkeleton.vue'
 import UiCard from '../components/ui/UiCard.vue'
@@ -10,31 +9,28 @@ import UiButton from '../components/ui/UiButton.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 const list = ref(null), wishes = ref([]), username = ref(''), token = ref(''), loading = ref(true), error = ref('')
 let version = 0
-const robots = document.createElement('meta'); robots.name = 'robots'; robots.content = 'noindex, nofollow, noarchive'; document.head.append(robots)
+const robots = document.createElement('meta'); robots.name = 'robots'; document.head.append(robots)
 watchEffect(() => { document.title = `${list.value?.title || t('lists.sharedTitle')} · ${t('appName')}` })
 async function load() {
-  const current = ++version; token.value = window.location.hash.slice(1); list.value = null; wishes.value = []; username.value = ''; error.value = ''; loading.value = true; robots.content = 'noindex, nofollow, noarchive'
+  const current = ++version
+  const queryToken = new URLSearchParams(window.location.search).get('token')
+  token.value = queryToken ?? ''
+  list.value = null; wishes.value = []; username.value = ''; error.value = ''; loading.value = true
+  // The server sends noindex for link-only/invalid URLs before rendering.
+  robots.content = queryToken ? 'index, follow' : 'noindex, nofollow, noarchive'
   try {
     if (!/^[A-Za-z0-9_-]{43}$/.test(token.value)) { error.value = 'list_not_found'; return }
     const data = await viewSharedList(token.value)
     if (current !== version) return
     list.value = data.list; wishes.value = data.wishes; username.value = data.username
     robots.content = data.list.visibility === 'public' ? 'index, follow' : 'noindex, nofollow, noarchive'
-    // Username is informative: the capability stays valid after a future rename.
-    if (isNamedSharedListPath(window.location.pathname)) {
-      const canonical = sharedListPath(data.username, `/shared-list#${token.value}`)
-      if (canonical) {
-        const [pathname, hash] = canonical.split('#')
-        window.history.replaceState(null, '', `${pathname}${window.location.search}#${hash}`)
-      }
-    }
   }
   catch (failure) { if (current === version) error.value = failure.status === 404 ? 'list_not_found' : 'unavailable' }
   finally { if (current === version) loading.value = false }
 }
 function date(value) { return new Intl.DateTimeFormat(locale.value, { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`)) }
-onMounted(() => { load(); window.addEventListener('hashchange', load) })
-onBeforeUnmount(() => { version++; window.removeEventListener('hashchange', load); robots.remove() })
+onMounted(load)
+onBeforeUnmount(() => { version++; robots.remove() })
 </script>
 <template>
   <div class="lists-page shared-list-page" :aria-busy="loading"><UiSkeleton v-if="loading" class="list-form-skeleton" />

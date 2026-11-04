@@ -53,7 +53,7 @@ func TestIntegrationListLifecycleAndSharedWishIdentity(t *testing.T) {
 	aID := a["id"].(string)
 	b := f.newList(t, owner, "Ideas", "private")
 	bID := b["id"].(string)
-	if a["visibility"] != "link" || !strings.HasPrefix(a["share_path"].(string), "/shared-list#") || b["share_path"] != "" {
+	if a["visibility"] != "link" || !strings.HasPrefix(a["share_path"].(string), "?token=") || b["share_path"] != "" {
 		t.Fatal("incorrect default sharing")
 	}
 	one := f.newWish(t, owner, "Shared gift", aID, bID)
@@ -195,7 +195,7 @@ func TestIntegrationListSharingAndPrivateData(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	token := strings.TrimPrefix(link["share_path"].(string), "/shared-list#")
+	token := strings.TrimPrefix(link["share_path"].(string), "?token=")
 	view := f.listCall(t, "POST", "/api/public/lists/view", map[string]string{"token": token}, nil, 200)
 	if view["username"] != "sharing" || len(view["wishes"].([]any)) != 1 || view["wishes"].([]any)[0].(map[string]any)["id"] != visibleID {
 		t.Fatal("shared list exposed unrelated wishes", view)
@@ -236,7 +236,7 @@ func TestIntegrationListSharingAndPrivateData(t *testing.T) {
 	f.listCall(t, "PUT", "/api/lists/"+linkID, map[string]any{"title": "Link again", "visibility": "link", "revision": rev(current)}, owner, 200)
 	current = f.currentList(t, owner, linkID)
 	rotated := f.listCall(t, "POST", "/api/lists/"+linkID+"/share-link", map[string]any{"revision": rev(current)}, owner, 200)["list"].(map[string]any)
-	newToken := strings.TrimPrefix(rotated["share_path"].(string), "/shared-list#")
+	newToken := strings.TrimPrefix(rotated["share_path"].(string), "?token=")
 	f.listCall(t, "POST", "/api/public/lists/view", map[string]string{"token": token}, nil, 404)
 	f.listCall(t, "POST", "/api/public/lists/view", map[string]string{"token": newToken}, nil, 200)
 	var stored models.Wishlist
@@ -256,6 +256,51 @@ func TestIntegrationListSharingAndPrivateData(t *testing.T) {
 	f.listCall(t, "DELETE", "/api/lists/"+publicID, map[string]any{"revision": rev(current)}, owner, 200)
 	if len(f.listCall(t, "GET", "/api/public/profiles/sharing", nil, nil, 200)["lists"].([]any)) != 0 {
 		t.Fatal("deleted list remains public")
+	}
+}
+
+func TestIntegrationSharePageRedirectAndPrivacy(t *testing.T) {
+	f := newAuthFixture(t)
+	owner := f.account(t, "canonical@example.test", "canonical")
+	link := f.newList(t, owner, "Link list", "link")
+	public := f.newList(t, owner, "Public list", "public")
+	private := f.newList(t, owner, "Private list", "private")
+	linkToken := strings.TrimPrefix(link["share_path"].(string), "?token=")
+	publicToken := strings.TrimPrefix(public["share_path"].(string), "?token=")
+	request := func(path string) *httptest.ResponseRecorder {
+		t.Helper()
+		w := httptest.NewRecorder()
+		f.handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		return w
+	}
+	old := request("/outdated/wishlist/shared?token=" + linkToken)
+	if old.Code != http.StatusMovedPermanently || old.Header().Get("Location") != "/canonical/wishlist/shared?token="+linkToken || !strings.Contains(old.Header().Get("X-Robots-Tag"), "noindex") {
+		t.Fatal("link-only canonical redirect is incorrect")
+	}
+	current := request("/canonical/wishlist/shared?token=" + linkToken)
+	if current.Code != 200 || current.Header().Get("X-Accel-Redirect") != "/_shared_index" || !strings.Contains(current.Header().Get("X-Robots-Tag"), "noindex") || current.Header().Get("Referrer-Policy") != "no-referrer" {
+		t.Fatal("link-only response lacks required headers")
+	}
+	publicRedirect := request("/outdated/wishlist/shared?token=" + publicToken)
+	if publicRedirect.Code != http.StatusMovedPermanently || publicRedirect.Header().Get("X-Robots-Tag") != "" {
+		t.Fatal("public redirect should be indexable")
+	}
+	var stored models.Wishlist
+	if err := f.database.Where("id = ?", private["id"]).First(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []string{stored.ShareToken, "not-a-token", strings.Repeat("x", 43)} {
+		w := request("/outdated/wishlist/shared?token=" + invalid)
+		if w.Code != 200 || w.Header().Get("Location") != "" || !strings.Contains(w.Header().Get("X-Robots-Tag"), "noindex") {
+			t.Fatal("private or invalid token exposed a redirect")
+		}
+	}
+	if err := f.database.Model(&models.User{}).Where("username = ?", "canonical").Update("username", "renamed").Error; err != nil {
+		t.Fatal(err)
+	}
+	changed := request("/canonical/wishlist/shared?token=" + linkToken)
+	if changed.Code != http.StatusMovedPermanently || changed.Header().Get("Location") != "/renamed/wishlist/shared?token="+linkToken {
+		t.Fatal("username change did not produce a permanent redirect")
 	}
 }
 

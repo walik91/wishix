@@ -381,6 +381,18 @@ func (s *Lists) SetMemberships(ctx context.Context, owner, wishID string, ids []
 
 var sharePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
 
+// ResolveShare checks visibility before exposing a canonical owner in a redirect.
+func (s *Lists) ResolveShare(ctx context.Context, token string) (*models.Wishlist, string, error) {
+	if !sharePattern.MatchString(token) {
+		return nil, "", ErrListNotFound
+	}
+	list, username, err := s.repo.Shared(ctx, token)
+	if err == nil && list == nil {
+		return nil, "", ErrListNotFound
+	}
+	return list, username, err
+}
+
 func (s *Lists) Shared(ctx context.Context, token string) (*models.Wishlist, string, []models.Wish, error) {
 	if !sharePattern.MatchString(token) {
 		return nil, "", nil, ErrListNotFound

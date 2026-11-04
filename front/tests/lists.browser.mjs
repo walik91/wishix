@@ -89,16 +89,20 @@ try {
   await page.getByRole('heading', { name: 'Birthday edited', exact: true }).waitFor()
   await button(page, 'lists.share')
   const share = page.getByRole('dialog', { name: tx('lists.share'), exact: true })
-  const oldURL = await share.locator('#list-share-url').inputValue(), oldToken = new URL(oldURL).hash.slice(1)
+  const oldURL = await share.locator('#list-share-url').inputValue(), oldToken = new URL(oldURL).searchParams.get('token')
   assert.equal(new URL(oldURL).pathname, `/${username}/wishlist/shared`)
+  const staleURL = oldURL.replace(`/${username}/`, '/old_username/')
+  const redirect = await context.request.get(staleURL, { maxRedirects: 0 })
+  assert.equal(redirect.status(), 301)
+  assert.equal(new URL(redirect.headers().location, origin).href, oldURL)
+  assert.equal(redirect.headers()['x-robots-tag'], undefined)
+  assert.equal(redirect.headers()['referrer-policy'], 'no-referrer')
   await share.getByRole('button', { name: tx('lists.copyLink'), exact: true }).click()
   assert.equal(await page.evaluate(() => window.testClipboard), oldURL)
   const guest = await browser.newContext({ locale: 'en' }), guestPage = await guest.newPage(); observe(guestPage)
-  await guestPage.goto(oldURL)
-  await guestPage.getByRole('heading', { name: 'Birthday edited', exact: true }).waitFor()
-  await guestPage.goto(`${origin}/shared-list#${oldToken}`)
-  await guestPage.getByRole('heading', { name: 'Birthday edited', exact: true }).waitFor()
-  await guestPage.goto(oldURL)
+  const publicPage = await guestPage.goto(oldURL)
+  assert.equal(publicPage.headers()['x-robots-tag'], undefined)
+  assert.equal(publicPage.headers()['referrer-policy'], 'no-referrer')
   await guestPage.getByRole('heading', { name: 'Birthday edited', exact: true }).waitFor()
   await guestPage.locator(`[data-wish-id="${gift.id}"] img`).waitFor()
   await guestPage.locator(`[data-wish-id="${gift.id}"] img`).evaluate(img => img.decode())
@@ -112,7 +116,7 @@ try {
   await guestPage.goto(oldURL); await guestPage.getByRole('heading', { name: tx('lists.sharedUnavailable') }).waitFor()
   await button(page, 'lists.share'); const newURL = await page.locator('#list-share-url').inputValue(); assert.notEqual(newURL, oldURL)
   await guestPage.goto(newURL); await guestPage.getByRole('heading', { name: 'Birthday edited', exact: true }).waitFor()
-  assert.equal(traffic.some(url => url.includes(oldToken) || url.includes(new URL(newURL).hash.slice(1))), false, 'capability leaked into a network URL')
+  assert.equal(traffic.filter(url => url.includes(oldToken) || url.includes(new URL(newURL).searchParams.get('token'))).every(url => new URL(url).pathname.endsWith('/wishlist/shared')), true, 'capability appeared in an unexpected network URL')
   await share.getByRole('button', { name: tx('my.close'), exact: true }).click()
   await manage(page, 'lists.copy'); await page.locator('#list-copy-title').fill('Next year'); await confirm(page, 'lists.copy'); await page.waitForURL(url => /\/my\/lists\/[a-f0-9-]{36}/.test(url.pathname) && !url.pathname.includes(firstID)); await waitList(page)
   const copyID = page.url().match(/\/my\/lists\/([a-f0-9-]{36})/)[1]; assert.notEqual(copyID, firstID)
@@ -149,6 +153,30 @@ try {
 
   const fixtures = []
   for (const visibility of ['link', 'public', 'private']) fixtures.push((await call('POST', '/lists', { title: `${visibility}: ${'Long list name '.repeat(6)}`, description: 'A'.repeat(200), event_date: '2027-08-31', visibility }, 201)).list)
+  if (process.env.WISHIX_PRODUCTION_TEST_ORIGIN) {
+    const production = process.env.WISHIX_PRODUCTION_TEST_ORIGIN
+    if (!/^http:\/\/(localhost|127\.0\.0\.1):5175$/.test(production)) throw new Error('Production proxy checks require the isolated port 5175')
+    for (const [index, visibility] of ['link', 'public'].entries()) {
+      const canonical = `${production}/${username}/wishlist/shared${fixtures[index].share_path}`
+      const stale = canonical.replace(`/${username}/`, '/old_username/')
+      const moved = await context.request.get(stale, { maxRedirects: 0 })
+      assert.equal(moved.status(), 301)
+      assert.equal(new URL(moved.headers().location, production).href, canonical)
+      assert.equal(moved.headers()['referrer-policy'], 'no-referrer')
+      const loaded = await context.request.get(canonical)
+      assert.equal(loaded.status(), 200)
+      assert.match(loaded.headers()['content-type'], /text\/html/)
+      assert.equal(loaded.headers()['referrer-policy'], 'no-referrer')
+      if (visibility === 'link') {
+        assert.match(moved.headers()['x-robots-tag'], /noindex/)
+        assert.match(loaded.headers()['x-robots-tag'], /noindex/)
+      } else {
+        assert.equal(moved.headers()['x-robots-tag'], undefined)
+        assert.equal(loaded.headers()['x-robots-tag'], undefined)
+      }
+    }
+    results.push('production Nginx: 301 and HTML response headers for public and link-only lists')
+  }
   await call('POST', `/lists/${fixtures[0].id}/wishes`, { wish_ids: [gift.id, another.id] })
   const state = await context.storageState(); state.cookies = state.cookies.filter(cookie => cookie.name !== 'wishix_locale')
   await mkdir(new URL('../../.cache/list-screens/', import.meta.url), { recursive: true })
@@ -165,7 +193,7 @@ try {
     await view.locator('dialog[open]').getByRole('button', { name: texts[lang]['wishes.cancel'], exact: true }).click()
     await view.waitForFunction(() => document.activeElement?.closest('.list-toolbar') !== null)
     if (lang === 'ru' && [390, 1440].includes(width)) await view.screenshot({ path: new URL(`../../.cache/list-screens/detail-${width}.png`, import.meta.url).pathname.replace(/^\/(\w:)/, '$1'), fullPage: true })
-    await view.goto(`${origin}${fixtures[0].share_path}`); await view.getByRole('heading', { name: fixtures[0].title, exact: true }).waitFor(); await geometry(view, `${lang}/${width}/guest`)
+    await view.goto(`${origin}/${username}/wishlist/shared${fixtures[0].share_path}`); await view.getByRole('heading', { name: fixtures[0].title, exact: true }).waitFor(); await geometry(view, `${lang}/${width}/guest`)
     layouts += 6; await responsive.close()
   }
   results.push(`${layouts} layout states: EN/RU/RO × 320/390/768/1024/1440, without overflow or undersized touch targets`)
