@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import { locale, t } from '../i18n.js'
 import { viewSharedList } from '../api/lists.js'
+import { isNamedSharedListPath, sharedListPath } from '../sharedListPath.js'
 import SharedWishCard from '../components/lists/SharedWishCard.vue'
 import UiSkeleton from '../components/ui/UiSkeleton.vue'
 import UiCard from '../components/ui/UiCard.vue'
@@ -13,7 +14,21 @@ const robots = document.createElement('meta'); robots.name = 'robots'; robots.co
 watchEffect(() => { document.title = `${list.value?.title || t('lists.sharedTitle')} · ${t('appName')}` })
 async function load() {
   const current = ++version; token.value = window.location.hash.slice(1); list.value = null; wishes.value = []; username.value = ''; error.value = ''; loading.value = true; robots.content = 'noindex, nofollow, noarchive'
-  try { if (!/^[A-Za-z0-9_-]{43}$/.test(token.value)) { error.value = 'list_not_found'; return }; const data = await viewSharedList(token.value); if (current !== version) return; list.value = data.list; wishes.value = data.wishes; username.value = data.username; robots.content = data.list.visibility === 'public' ? 'index, follow' : 'noindex, nofollow, noarchive' }
+  try {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token.value)) { error.value = 'list_not_found'; return }
+    const data = await viewSharedList(token.value)
+    if (current !== version) return
+    list.value = data.list; wishes.value = data.wishes; username.value = data.username
+    robots.content = data.list.visibility === 'public' ? 'index, follow' : 'noindex, nofollow, noarchive'
+    // Username is informative: the capability stays valid after a future rename.
+    if (isNamedSharedListPath(window.location.pathname)) {
+      const canonical = sharedListPath(data.username, `/shared-list#${token.value}`)
+      if (canonical) {
+        const [pathname, hash] = canonical.split('#')
+        window.history.replaceState(null, '', `${pathname}${window.location.search}#${hash}`)
+      }
+    }
+  }
   catch (failure) { if (current === version) error.value = failure.status === 404 ? 'list_not_found' : 'unavailable' }
   finally { if (current === version) loading.value = false }
 }

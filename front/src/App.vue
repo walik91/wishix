@@ -18,6 +18,7 @@ import ListPage from './pages/ListPage.vue'
 import SharedListPage from './pages/SharedListPage.vue'
 import PublicProfilePage from './pages/PublicProfilePage.vue'
 import { useSession } from './composables/useSession.js'
+import { isNamedSharedListPath } from './sharedListPath.js'
 
 // Full document navigation keeps the small auth flow independent of a router.
 const path = window.location.pathname.replace(/\/+$/, '') || '/'
@@ -50,7 +51,7 @@ onMounted(async () => {
     <ListsPage v-else-if="page === '/my/lists'" />
     <NewListPage v-else-if="page === '/my/lists/new'" />
     <ListPage v-else-if="listMatch" :id="listMatch[1]" />
-    <SharedListPage v-else-if="page === '/shared-list'" />
+    <SharedListPage v-else-if="page === '/shared-list' || isNamedSharedListPath(page)" />
     <PublicProfilePage v-else-if="profileMatch" :username="profileMatch[1]" />
     <StartPage v-else-if="page === '/status'" />
     <section v-else class="not-found">

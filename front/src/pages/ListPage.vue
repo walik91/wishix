@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch, watchEffect } from 'vue'
 import { locale, t } from '../i18n.js'
 import { useSession } from '../composables/useSession.js'
 import { listFailure, useList } from '../composables/useLists.js'
+import { sharedListPath } from '../sharedListPath.js'
 import { updateList, deleteList, clearList, copyList, rotateListLink, removeListWish } from '../api/lists.js'
 import ListForm from '../components/lists/ListForm.vue'
 import WishPickerDialog from '../components/lists/WishPickerDialog.vue'
@@ -26,7 +27,10 @@ if (query.get('notice') === 'wish-added') notice.value = 'added'
 else if (validNotices.includes(query.get('notice'))) notice.value = query.get('notice')
 let initialAction = query.has('manage') ? 'manage' : query.has('edit') ? 'edit' : ''
 if (query.size) window.history.replaceState(null, '', window.location.pathname)
-const shareURL = computed(() => list.value?.share_path ? new URL(list.value.share_path, window.location.origin).href : '')
+const shareURL = computed(() => {
+  const path = sharedListPath(user.value?.username, list.value?.share_path)
+  return path ? new URL(path, window.location.origin).href : ''
+})
 const date = computed(() => list.value?.event_date ? new Intl.DateTimeFormat(locale.value, { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${list.value.event_date}T00:00:00Z`)) : '')
 watchEffect(() => { document.title = `${list.value?.title || t('lists.details')} · ${t('appName')}` })
 watch([user, checking, unavailable], async ([account, pending, failed]) => { if (account && !pending && !failed) { await load(); if (list.value && initialAction) { show(initialAction); initialAction = '' } } }, { immediate: true })
