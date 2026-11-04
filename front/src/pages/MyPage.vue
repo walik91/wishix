@@ -12,6 +12,7 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
 import WishCard from '../components/wishes/WishCard.vue'
 import WishImageDialog from '../components/wishes/WishImageDialog.vue'
+import WishListsDialog from '../components/lists/WishListsDialog.vue'
 import gift from '../assets/brand/gift-hero.svg'
 
 const { user, checking, unavailable, refresh } = useSession()
@@ -23,6 +24,7 @@ const deleteError = ref(false)
 const addButton = ref(null)
 const imageOpen = ref(false)
 const imageWish = ref(null)
+const listsOpen = ref(false), listsWish = ref(null)
 const notice = ref(new URLSearchParams(window.location.search).get('notice') === 'wish-added' ? 'added' : '')
 if (notice.value) window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`)
 
@@ -86,10 +88,11 @@ async function removeSelected() {
         <img :src="gift" alt="" width="220" height="180" aria-hidden="true" />
         <EmptyState :title="t('my.emptyWishesTitle')" :description="t('wishes.emptyDescription')"><UiButton href="/my/wishes/new"><AppIcon name="plus" />{{ t('wishes.firstWish') }}</UiButton></EmptyState>
       </UiCard>
-      <div v-else class="wish-grid"><WishCard v-for="wish in wishes" :key="wish.id" :wish="wish" @delete="confirmDelete" @image="editImage" /></div>
+      <div v-else class="wish-grid"><WishCard v-for="wish in wishes" :key="wish.id" :wish="wish" @delete="confirmDelete" @image="editImage"><template #actions><UiButton variant="secondary" @click="listsWish = wish; listsOpen = true"><AppIcon name="list" />{{ t('lists.wishLists') }}</UiButton></template></WishCard></div>
       <p class="privacy-note"><AppIcon name="lock" /><span>{{ t('wishes.privateNote') }}</span></p>
     </template>
     <WishImageDialog v-model:open="imageOpen" :wish="imageWish" @updated="imageUpdated" />
+    <WishListsDialog v-model:open="listsOpen" :wish="listsWish" @updated="notice = 'listsUpdated'" />
     <UiDialog v-model:open="deleteOpen" :busy="deleting" :title="t('wishes.deleteTitle')">
       <p class="delete-title">{{ selected?.title }}</p>
       <p class="delete-description">{{ t('wishes.deleteDescription') }}</p>

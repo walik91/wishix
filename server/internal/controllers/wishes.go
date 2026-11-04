@@ -261,9 +261,9 @@ func (c *Wishes) delete(w http.ResponseWriter, r *http.Request, ownerID string) 
 }
 
 func (c *Wishes) failure(w http.ResponseWriter, err error) {
-	code := services.WishErrorCode(err)
+	code := services.ListErrorCode(err)
 	status := http.StatusBadRequest
-	if code == "wish_not_found" {
+	if code == "wish_not_found" || code == "list_not_found" {
 		status = http.StatusNotFound
 	} else if code == "wish_image_too_large" {
 		status = http.StatusRequestEntityTooLarge

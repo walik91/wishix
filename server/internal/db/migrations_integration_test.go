@@ -57,7 +57,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("version: got %d, want %d; %v", version, want, err)
 		}
 	}
-	assertVersion(3)
+	assertVersion(4)
 	if _, err := pool.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'migration_test', 'migration@example.test', 'test-hash', now(), now())`); err != nil {
 		t.Fatal(err)
 	}
@@ -78,11 +78,18 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 		t.Fatal("repeated up lost wishes or shop links")
 	}
 	statuses, err := migrator.Status(ctx)
-	if err != nil || len(statuses) != 3 || statuses[0].State != goose.StateApplied || statuses[1].State != goose.StateApplied || statuses[2].State != goose.StateApplied {
+	if err != nil || len(statuses) != 4 || statuses[0].State != goose.StateApplied || statuses[1].State != goose.StateApplied || statuses[2].State != goose.StateApplied || statuses[3].State != goose.StateApplied {
 		t.Fatal("incorrect Goose status:", err)
 	}
 	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("down:", err)
+	}
+	assertVersion(3)
+	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM wishes").Scan(&count); err != nil || count != 1 {
+		t.Fatal("lists rollback removed existing wishes")
+	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("images down:", err)
 	}
 	assertVersion(2)
 	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM wishes").Scan(&count); err != nil || count != 1 {
@@ -119,6 +126,43 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 	assertVersion(1)
 }
 
+func TestIntegrationListsUpgradePreservesExistingCollection(t *testing.T) {
+	pool, migrator, _ := liveMigrator(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	if _, err := migrator.UpTo(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'existing_user', 'existing@example.test', 'test-hash', now(), now())`,
+		`INSERT INTO wishes (id, owner_id, title, price, currency, priority, created_at) VALUES ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001', 'Existing gift', 49.95, 'MDL', 'high', now())`,
+		`INSERT INTO wish_shop_links (wish_id, position, url) VALUES ('00000000-0000-4000-8000-000000000002', 0, 'https://example.test/product')`,
+		`INSERT INTO wish_images (wish_id, version, data) VALUES ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003', decode('ffd8ffd9', 'hex'))`,
+	} {
+		if _, err := pool.ExecContext(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := migrator.Apply(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	assertData := func() {
+		t.Helper()
+		if err := pool.QueryRowContext(ctx, `SELECT count(*) FROM wishes w JOIN wish_images i ON i.wish_id = w.id JOIN wish_shop_links s ON s.wish_id = w.id WHERE w.title = 'Existing gift' AND w.price = 49.95 AND w.currency = 'MDL' AND i.data = decode('ffd8ffd9', 'hex') AND s.url = 'https://example.test/product'`).Scan(&count); err != nil || count != 1 {
+			t.Fatal("lists migration modified existing data", err, count)
+		}
+	}
+	assertData()
+	if err := pool.QueryRowContext(ctx, `SELECT lists_version FROM wishes WHERE id = '00000000-0000-4000-8000-000000000002'`).Scan(&count); err != nil || count != 1 {
+		t.Fatal("existing wish membership version not initialized", err, count)
+	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("lists rollback", err)
+	}
+	assertData()
+}
+
 func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 	pool, migrator, _ := liveMigrator(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
@@ -152,7 +196,7 @@ func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 		t.Fatal("legacy history was changed")
 	}
 	version, err := fresh.GetDBVersion(ctx)
-	if err != nil || version != 3 {
+	if err != nil || version != 4 {
 		t.Fatal("Goose did not record the adopted version")
 	}
 }

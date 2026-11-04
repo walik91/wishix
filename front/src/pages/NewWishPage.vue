@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watchEffect } from 'vue'
+import { computed, nextTick, ref, watch, watchEffect } from 'vue'
 import { t } from '../i18n.js'
 import { useSession } from '../composables/useSession.js'
 import { createWish } from '../api/wishes.js'
@@ -11,6 +11,8 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import TextField from '../components/ui/TextField.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
 import WishImageInput from '../components/wishes/WishImageInput.vue'
+import ListCheckboxes from '../components/lists/ListCheckboxes.vue'
+import { listLists } from '../api/lists.js'
 
 const { user, checking, unavailable, refresh } = useSession()
 const title = ref('')
@@ -27,6 +29,21 @@ const saving = ref(false)
 const saved = ref(false)
 const failure = ref('')
 const form = ref(null)
+const availableLists = ref([]), selectedLists = ref([]), listsLoading = ref(true), listsError = ref(false)
+const contextList = ref(new URLSearchParams(window.location.search).get('list') || '')
+const contextMissing = computed(() => !!contextList.value && !listsLoading.value && !listsError.value && !availableLists.value.some(list => list.id === contextList.value))
+let listsInitialized = false
+async function loadLists() {
+  listsLoading.value = true; listsError.value = false
+  try {
+    availableLists.value = (await listLists()).lists
+    if (!listsInitialized && contextList.value && availableLists.value.some(list => list.id === contextList.value)) selectedLists.value = [contextList.value]
+    else selectedLists.value = selectedLists.value.filter(id => availableLists.value.some(list => list.id === id))
+    listsInitialized = true
+  } catch (error) { if (error.status === 401) window.location.replace('/login'); else listsError.value = true }
+  finally { listsLoading.value = false }
+}
+watch([user, checking, unavailable], ([account, pending, failed]) => { if (account && !pending && !failed) loadLists() }, { immediate: true })
 const firstLink = computed(() => links.value[0]?.value || '')
 const { status: importStatus, shopName, canImport, loading: importing, markDirty, cancel: cancelImport, run: importLink, firstLinkBlur } = useWishImport(firstLink, { title, price, currency, image }, applied => {
   for (const field of applied) delete errors.value[field]
@@ -56,6 +73,7 @@ function validLink(raw) {
 }
 async function submit() {
   if (saving.value || saved.value) return
+  if (contextList.value && (listsLoading.value || listsError.value || contextMissing.value)) return
   const invalid = {}
   const normalizedPrice = price.value.trim().replace(',', '.')
   if (!title.value.trim() || [...title.value.trim()].length > 200) invalid.title = 'wish_title_invalid'
@@ -80,15 +98,16 @@ async function submit() {
       title: title.value.trim(), description: description.value.trim(),
       price: normalizedPrice || null, currency: normalizedPrice ? currency.value.trim().toUpperCase() : '',
       priority: priority.value, shop_links: links.value.map(link => link.value.trim()).filter(Boolean),
+      list_ids: selectedLists.value,
     }, image.value)
     saved.value = true
-    window.location.assign('/my?notice=wish-added')
+    window.location.assign(contextList.value && selectedLists.value.includes(contextList.value) ? `/my/lists/${contextList.value}?notice=wish-added` : '/my?notice=wish-added')
   } catch (error) {
     if (error.status === 401) { window.location.replace('/login'); return }
     const fields = { wish_title_invalid: 'title', wish_description_invalid: 'description', wish_price_invalid: 'price', wish_priority_invalid: 'priority' }
     if (fields[error.code]) errors.value = { [fields[error.code]]: error.code }
     else if (['wish_image_invalid', 'wish_image_too_large', 'wish_image_dimensions', 'wish_image_busy'].includes(error.code)) errors.value = { image: error.code }
-    else failure.value = error.code === 'wish_links_invalid' ? error.code : 'save_failed'
+    else failure.value = ['wish_links_invalid', 'list_selection_invalid'].includes(error.code) ? error.code : 'save_failed'
     await nextTick()
     form.value.querySelector('[aria-invalid="true"], [role="alert"]')?.focus()
   } finally { saving.value = false }
@@ -129,9 +148,11 @@ async function submit() {
               <select id="wish-priority" v-model="priority" :aria-invalid="errors.priority ? 'true' : undefined" :aria-describedby="errors.priority ? 'priority-error' : undefined"><option v-for="value in ['low', 'medium', 'high']" :key="value" :value="value">{{ t(`wishes.priority.${value}`) }}</option></select>
               <p v-if="errors.priority" id="priority-error" class="field-error">{{ t(`wishes.error.${errors.priority}`) }}</p>
             </div>
+            <section aria-labelledby="wish-lists-title"><h2 id="wish-lists-title">{{ t('lists.wishLists') }}</h2><p class="list-muted">{{ t('lists.newWishHint') }}</p><p v-if="listsLoading" role="status">{{ t('lists.loading') }}</p><template v-else-if="listsError"><p class="list-error" role="alert">{{ t('lists.error.unavailable') }}</p><UiButton variant="secondary" @click="loadLists">{{ t('checkAgain') }}</UiButton></template><ListCheckboxes v-else-if="availableLists.length" v-model="selectedLists" :lists="availableLists" :disabled="saving || saved" /><p v-else class="list-muted">{{ t('lists.noLists') }}</p></section>
           </fieldset>
           <p v-if="failure" class="operation-error" role="alert" tabindex="-1">{{ t(`wishes.error.${failure}`) }}</p>
-          <div class="form-actions"><UiButton type="submit" :loading="saving || saved">{{ t('wishes.save') }}</UiButton><UiButton href="/my" variant="secondary" :disabled="saving || saved">{{ t('wishes.cancel') }}</UiButton></div>
+          <p v-if="contextMissing" class="list-error" role="alert">{{ t('lists.error.list_not_found') }}</p><UiButton v-if="contextList && (contextMissing || listsError)" variant="secondary" :disabled="saving || saved" @click="contextList = ''">{{ t('lists.continueInCollection') }}</UiButton><UiButton v-if="failure === 'list_selection_invalid'" variant="secondary" :disabled="saving || saved" @click="loadLists">{{ t('lists.reload') }}</UiButton>
+          <div class="form-actions"><UiButton type="submit" :loading="saving || saved" :disabled="!!contextList && (listsLoading || listsError || contextMissing)">{{ t('wishes.save') }}</UiButton><UiButton :href="contextList && !contextMissing ? `/my/lists/${contextList}` : '/my'" variant="secondary" :disabled="saving || saved">{{ t('wishes.cancel') }}</UiButton></div>
         </form>
       </UiCard>
       <p class="privacy-note"><AppIcon name="lock" /><span>{{ t('wishes.privateNote') }}</span></p>

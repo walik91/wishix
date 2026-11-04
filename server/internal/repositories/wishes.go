@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -31,9 +32,27 @@ func (r *Wishes) Create(ctx context.Context, wish *models.Wish) error {
 		}
 	}
 	if wish.Image != nil {
-		return r.Ctx(ctx).Create(wish.Image).Error
+		if err := r.Ctx(ctx).Create(wish.Image).Error; err != nil {
+			return err
+		}
+	}
+	if len(wish.Members) > 0 {
+		if err := r.Ctx(ctx).Create(&wish.Members).Error; err != nil {
+			return err
+		}
+		ids := make([]string, 0, len(wish.Members))
+		for _, member := range wish.Members {
+			ids = append(ids, member.ListID)
+		}
+		return r.Ctx(ctx).Model(&models.Wishlist{}).Where("owner_id = ? AND id IN ?", wish.OwnerID, ids).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": wish.CreatedAt}).Error
 	}
 	return nil
+}
+
+func (r *Wishes) ValidLists(ctx context.Context, owner string, ids []string) (bool, error) {
+	var count int64
+	err := r.Ctx(ctx).Model(&models.Wishlist{}).Where("owner_id = ? AND id IN ?", owner, ids).Count(&count).Error
+	return count == int64(len(ids)), err
 }
 
 func (r *Wishes) Image(ctx context.Context, ownerID, id string) (*models.WishImage, error) {
@@ -64,6 +83,9 @@ func (r *Wishes) DeleteImage(ctx context.Context, ownerID, id string) (bool, err
 }
 
 func (r *Wishes) Delete(ctx context.Context, ownerID, id string) (bool, error) {
+	if err := r.Ctx(ctx).Model(&models.Wishlist{}).Where("owner_id = ? AND id IN (SELECT list_id FROM wishlist_wishes WHERE wish_id = ? AND owner_id = ?)", ownerID, id, ownerID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now().UTC()}).Error; err != nil {
+		return false, err
+	}
 	result := r.Ctx(ctx).Where("id = ? AND owner_id = ?", id, ownerID).Delete(&models.Wish{})
 	return result.RowsAffected == 1, result.Error
 }

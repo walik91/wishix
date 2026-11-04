@@ -11,13 +11,20 @@ import AppShell from './layouts/AppShell.vue'
 import RecoveryPage from './pages/RecoveryPage.vue'
 import MyPage from './pages/MyPage.vue'
 import NewWishPage from './pages/NewWishPage.vue'
+import ListsPage from './pages/ListsPage.vue'
+import NewListPage from './pages/NewListPage.vue'
+import ListPage from './pages/ListPage.vue'
+import SharedListPage from './pages/SharedListPage.vue'
+import PublicProfilePage from './pages/PublicProfilePage.vue'
 import { useSession } from './composables/useSession.js'
 
 // Full document navigation keeps the small auth flow independent of a router.
 const path = window.location.pathname.replace(/\/+$/, '') || '/'
 const aliases = { '/sign-in': '/login', '/sign-up': '/register' }
 const page = aliases[path] || path
-const privatePage = page === '/my' || page === '/my/wishes/new'
+const listMatch = page.match(/^\/my\/lists\/([^/]+)$/)
+const profileMatch = page.match(/^\/u\/([A-Za-z0-9_]{3,30})$/)
+const privatePage = page === '/my' || page === '/my/wishes/new' || page === '/my/lists' || !!listMatch
 
 if (aliases[path]) {
   window.history.replaceState(null, '', `${page}${window.location.search}${window.location.hash}`)
@@ -38,6 +45,11 @@ onMounted(async () => {
     <RecoveryPage v-else-if="page === '/forgot-password'" />
     <MyPage v-else-if="page === '/my'" />
     <NewWishPage v-else-if="page === '/my/wishes/new'" />
+    <ListsPage v-else-if="page === '/my/lists'" />
+    <NewListPage v-else-if="page === '/my/lists/new'" />
+    <ListPage v-else-if="listMatch" :id="listMatch[1]" />
+    <SharedListPage v-else-if="page === '/shared-list'" />
+    <PublicProfilePage v-else-if="profileMatch" :username="profileMatch[1]" />
     <StartPage v-else-if="page === '/status'" />
     <section v-else class="not-found">
       <h1>{{ t('notFound.title') }}</h1>

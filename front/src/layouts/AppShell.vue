@@ -89,6 +89,7 @@ async function logout() {
           <dd>{{ account.email }}</dd>
         </dl>
         <p class="profile-note">{{ t('my.profileSoon') }}</p>
+        <UiButton class="profile-public-link" variant="secondary" :href="`/u/${encodeURIComponent(account.username)}`">{{ t('lists.publicProfile') }}</UiButton>
         <UiButton class="logout-button" variant="secondary" :loading="signingOut" @click="logout">
           <AppIcon name="logout" />{{ t('auth.logout') }}
         </UiButton>
@@ -123,6 +124,7 @@ dd { margin: 0; line-height: 1.5; }
 dd + dt { margin-top: var(--wx-space-4); }
 .profile-note { margin-block: var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.6; }
 .logout-button { width: 100%; }
+.profile-public-link { width: 100%; margin-bottom: var(--wx-space-3); }
 @media (min-width: 48rem) {
   .app-header { min-height: 88px; padding-inline: var(--wx-space-6); }
   .header-actions { gap: var(--wx-space-4); }

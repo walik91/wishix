@@ -1,0 +1,359 @@
+package controllers
+
+import (
+	"encoding/json"
+	"io"
+	"mime"
+	"net/http"
+	"strconv"
+	"time"
+
+	"wishix/server/internal/models"
+	"wishix/server/internal/services"
+)
+
+type Lists struct {
+	service *services.Lists
+	auth    *Auth
+}
+
+func NewLists(service *services.Lists, auth *Auth) *Lists {
+	return &Lists{service: service, auth: auth}
+}
+
+type listResponse struct {
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	EventDate   *string   `json:"event_date"`
+	Visibility  string    `json:"visibility"`
+	SharePath   string    `json:"share_path"`
+	Revision    int64     `json:"revision"`
+	WishCount   int64     `json:"wish_count"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func listDate(date *time.Time) *string {
+	if date == nil {
+		return nil
+	}
+	value := date.Format("2006-01-02")
+	return &value
+}
+func privateList(list *models.Wishlist) listResponse {
+	path := ""
+	if list.Visibility != "private" {
+		path = "/shared-list#" + list.ShareToken
+	}
+	return listResponse{ID: list.ID, Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), Visibility: list.Visibility, SharePath: path, Revision: list.Revision, WishCount: list.WishCount, CreatedAt: list.CreatedAt}
+}
+func privateLists(lists []models.Wishlist) []listResponse {
+	result := make([]listResponse, 0, len(lists))
+	for i := range lists {
+		result = append(result, privateList(&lists[i]))
+	}
+	return result
+}
+func privateWishes(wishes []models.Wish) []wishResponse {
+	result := make([]wishResponse, 0, len(wishes))
+	for i := range wishes {
+		result = append(result, privateWish(&wishes[i]))
+	}
+	return result
+}
+
+func (c *Lists) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/lists", c.authorized(c.list))
+	mux.HandleFunc("POST /api/lists", c.authorized(c.create))
+	mux.HandleFunc("GET /api/lists/{id}", c.authorized(c.get))
+	mux.HandleFunc("PUT /api/lists/{id}", c.authorized(c.update))
+	mux.HandleFunc("DELETE /api/lists/{id}", c.authorized(c.delete))
+	mux.HandleFunc("POST /api/lists/{id}/copy", c.authorized(c.copy))
+	mux.HandleFunc("POST /api/lists/{id}/share-link", c.authorized(c.rotate))
+	mux.HandleFunc("POST /api/lists/{id}/wishes", c.authorized(c.add))
+	mux.HandleFunc("DELETE /api/lists/{id}/wishes", c.authorized(c.clear))
+	mux.HandleFunc("DELETE /api/lists/{id}/wishes/{wishID}", c.authorized(c.remove))
+	mux.HandleFunc("GET /api/wishes/{id}/lists", c.authorized(c.memberships))
+	mux.HandleFunc("PUT /api/wishes/{id}/lists", c.authorized(c.setMemberships))
+	mux.HandleFunc("POST /api/public/lists/view", c.public(c.shared))
+	mux.HandleFunc("POST /api/public/lists/image", c.public(c.sharedImage))
+	mux.HandleFunc("GET /api/public/profiles/{username}", c.profile)
+}
+func readListJSON(r *http.Request, input any) error {
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if d.Decode(input) != nil || d.Decode(new(any)) != io.EOF {
+		return services.ErrInvalidInput
+	}
+	return nil
+}
+func (c *Lists) authorized(handler func(http.ResponseWriter, *http.Request, string) error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" && r.Method != "HEAD" {
+			if !c.mutationHeaders(w, r) {
+				return
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+		}
+		user, err := c.auth.service.Current(r.Context(), c.auth.token(r))
+		if err != nil {
+			c.auth.failure(w, err)
+			return
+		}
+		if err := handler(w, r, user.ID); err != nil {
+			c.failure(w, err)
+		}
+	}
+}
+func (c *Lists) mutationHeaders(w http.ResponseWriter, r *http.Request) bool {
+	if r.Header.Get("Origin") != c.auth.config.Origin || r.Header.Get("X-Wishix-Request") != "1" || r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		c.auth.write(w, 403, map[string]string{"error": "forbidden"})
+		return false
+	}
+	media, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if media != "application/json" {
+		c.auth.write(w, 415, map[string]string{"error": "invalid_input"})
+		return false
+	}
+	return true
+}
+func (c *Lists) list(w http.ResponseWriter, r *http.Request, owner string) error {
+	lists, err := c.service.List(r.Context(), owner)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]any{"lists": privateLists(lists)})
+	return nil
+}
+func (c *Lists) get(w http.ResponseWriter, r *http.Request, owner string) error {
+	list, wishes, err := c.service.Get(r.Context(), owner, r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]any{"list": privateList(list), "wishes": privateWishes(wishes)})
+	return nil
+}
+func (c *Lists) create(w http.ResponseWriter, r *http.Request, owner string) error {
+	var input services.ListInput
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	list, err := c.service.Create(r.Context(), owner, input)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 201, map[string]any{"list": privateList(list)})
+	return nil
+}
+func (c *Lists) update(w http.ResponseWriter, r *http.Request, owner string) error {
+	var input services.ListInput
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	list, err := c.service.Update(r.Context(), owner, r.PathValue("id"), input)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]any{"list": privateList(list)})
+	return nil
+}
+func (c *Lists) destroy(w http.ResponseWriter, r *http.Request, owner string, clear bool) error {
+	var input struct {
+		Revision int64 `json:"revision"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	if err := c.service.Destroy(r.Context(), owner, r.PathValue("id"), input.Revision, clear); err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]string{"status": "ok"})
+	return nil
+}
+func (c *Lists) delete(w http.ResponseWriter, r *http.Request, owner string) error {
+	return c.destroy(w, r, owner, false)
+}
+func (c *Lists) clear(w http.ResponseWriter, r *http.Request, owner string) error {
+	return c.destroy(w, r, owner, true)
+}
+func (c *Lists) copy(w http.ResponseWriter, r *http.Request, owner string) error {
+	var input struct {
+		Title string `json:"title"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	list, err := c.service.Copy(r.Context(), owner, r.PathValue("id"), input.Title)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 201, map[string]any{"list": privateList(list)})
+	return nil
+}
+func (c *Lists) rotate(w http.ResponseWriter, r *http.Request, owner string) error {
+	var input struct {
+		Revision int64 `json:"revision"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	list, err := c.service.Rotate(r.Context(), owner, r.PathValue("id"), input.Revision)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]any{"list": privateList(list)})
+	return nil
+}
+func (c *Lists) add(w http.ResponseWriter, r *http.Request, owner string) error {
+	var input struct {
+		WishIDs []string `json:"wish_ids"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	if err := c.service.Add(r.Context(), owner, r.PathValue("id"), input.WishIDs); err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]string{"status": "ok"})
+	return nil
+}
+func (c *Lists) remove(w http.ResponseWriter, r *http.Request, owner string) error {
+	if err := c.service.Remove(r.Context(), owner, r.PathValue("id"), r.PathValue("wishID")); err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]string{"status": "ok"})
+	return nil
+}
+func (c *Lists) memberships(w http.ResponseWriter, r *http.Request, owner string) error {
+	ids, version, err := c.service.Memberships(r.Context(), owner, r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]any{"list_ids": ids, "version": version})
+	return nil
+}
+func (c *Lists) setMemberships(w http.ResponseWriter, r *http.Request, owner string) error {
+	var input struct {
+		ListIDs []string `json:"list_ids"`
+		Version int64    `json:"version"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	if err := c.service.SetMemberships(r.Context(), owner, r.PathValue("id"), input.ListIDs, input.Version); err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]string{"status": "ok"})
+	return nil
+}
+func (c *Lists) failure(w http.ResponseWriter, err error) {
+	code := services.ListErrorCode(err)
+	status := 400
+	if code == "list_not_found" || code == "wish_not_found" {
+		status = 404
+	} else if code == "list_changed" {
+		status = 409
+	} else if code == "unauthorized" {
+		status = 401
+	} else if code == "unavailable" {
+		status = 503
+		c.auth.logger.Error("list operation unavailable")
+	}
+	c.auth.write(w, status, map[string]string{"error": code})
+}
+
+// Public DTOs deliberately omit owner IDs, sessions, email, revisions and private image URLs.
+type publicListResponse struct {
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	EventDate   *string `json:"event_date"`
+	Visibility  string  `json:"visibility"`
+	WishCount   int64   `json:"wish_count"`
+	SharePath   string  `json:"share_path,omitempty"`
+}
+
+func publicList(list *models.Wishlist, link bool) publicListResponse {
+	result := publicListResponse{Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), Visibility: list.Visibility, WishCount: list.WishCount}
+	if link && list.Visibility == "public" {
+		result.SharePath = "/shared-list#" + list.ShareToken
+	}
+	return result
+}
+
+type publicWishResponse struct {
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Price       *string  `json:"price"`
+	Currency    string   `json:"currency"`
+	Priority    string   `json:"priority"`
+	ShopLinks   []string `json:"shop_links"`
+	HasImage    bool     `json:"has_image"`
+}
+
+func (c *Lists) public(handler func(http.ResponseWriter, *http.Request) error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Robots-Tag", "noindex, noarchive")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		if !c.mutationHeaders(w, r) {
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 4096)
+		if err := handler(w, r); err != nil {
+			c.failure(w, err)
+		}
+	}
+}
+func (c *Lists) shared(w http.ResponseWriter, r *http.Request) error {
+	var input struct {
+		Token string `json:"token"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	list, username, wishes, err := c.service.Shared(r.Context(), input.Token)
+	if err != nil {
+		return err
+	}
+	result := make([]publicWishResponse, 0, len(wishes))
+	for _, wish := range wishes {
+		links := make([]string, 0, len(wish.ShopLinks))
+		for _, link := range wish.ShopLinks {
+			links = append(links, link.URL)
+		}
+		result = append(result, publicWishResponse{ID: wish.ID, Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, ShopLinks: links, HasImage: wish.ImageVersion != ""})
+	}
+	c.auth.write(w, 200, map[string]any{"list": publicList(list, false), "username": username, "wishes": result})
+	return nil
+}
+func (c *Lists) sharedImage(w http.ResponseWriter, r *http.Request) error {
+	var input struct {
+		Token  string `json:"token"`
+		WishID string `json:"wish_id"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	image, err := c.service.SharedImage(r.Context(), input.Token, input.WishID)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(len(image.Data)))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(image.Data)
+	return nil
+}
+func (c *Lists) profile(w http.ResponseWriter, r *http.Request) {
+	username, lists, err := c.service.PublicProfile(r.Context(), r.PathValue("username"))
+	if err != nil {
+		c.failure(w, err)
+		return
+	}
+	result := make([]publicListResponse, 0, len(lists))
+	for i := range lists {
+		result = append(result, publicList(&lists[i], true))
+	}
+	c.auth.write(w, 200, map[string]any{"username": username, "lists": result})
+}

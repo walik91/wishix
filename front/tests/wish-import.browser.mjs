@@ -14,6 +14,7 @@ async function setup(lang = 'en', width = 390) {
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => { if (message.text().includes('[Vue warn]')) errors.push(message.text()) })
   await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { id: 'test', username: 'tester', email: 'tester@example.test' } } }))
+  await page.route('**/api/lists', route => route.fulfill({ json: { lists: [] } }))
   await page.goto(`${origin}/my/wishes/new`)
   await page.locator('#wish-link-1').waitFor()
   const jpeg = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 40; c.height = 40; return c.toDataURL('image/jpeg').split(',')[1] })

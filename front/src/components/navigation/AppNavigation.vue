@@ -3,12 +3,13 @@ import { t } from '../../i18n.js'
 import AppIcon from '../ui/AppIcon.vue'
 defineProps({ profileAvailable: Boolean })
 defineEmits(['profile'])
+const inLists = window.location.pathname.startsWith('/my/lists')
 </script>
 
 <template>
   <nav class="app-navigation" :aria-label="t('my.navigation')">
-    <a class="nav-item active" href="/my" aria-current="page"><AppIcon name="home" /><span>{{ t('auth.my') }}</span></a>
-    <button class="nav-item" type="button" disabled :title="t('my.sectionSoon')"><AppIcon name="search" /><span>{{ t('my.search') }}</span><small>{{ t('my.soon') }}</small></button>
+    <a class="nav-item" :class="{ active: !inLists }" href="/my" :aria-current="!inLists ? 'page' : undefined"><AppIcon name="home" /><span>{{ t('auth.my') }}</span></a>
+    <a class="nav-item" :class="{ active: inLists }" href="/my/lists" :aria-current="inLists ? 'page' : undefined"><AppIcon name="list" /><span>{{ t('lists.nav') }}</span></a>
     <button class="nav-item" type="button" disabled :title="t('my.sectionSoon')"><AppIcon name="users" /><span>{{ t('my.following') }}</span><small>{{ t('my.soon') }}</small></button>
     <button class="nav-item" type="button" :disabled="!profileAvailable" @click="$emit('profile')"><AppIcon name="user" /><span>{{ t('my.profile') }}</span></button>
   </nav>

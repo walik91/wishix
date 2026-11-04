@@ -35,6 +35,7 @@ type WishInput struct {
 	Currency    string   `json:"currency"`
 	Priority    string   `json:"priority"`
 	ShopLinks   []string `json:"shop_links"`
+	ListIDs     []string `json:"list_ids"`
 	Image       []byte   `json:"-"`
 }
 
@@ -46,6 +47,7 @@ type WishRepository interface {
 	SaveImage(context.Context, string, *models.WishImage) (bool, error)
 	DeleteImage(context.Context, string, string) (bool, error)
 	Owns(context.Context, string, string) (bool, error)
+	ValidLists(context.Context, string, []string) (bool, error)
 }
 
 type Wishes struct {
@@ -110,6 +112,11 @@ func validateWish(input WishInput) (WishInput, error) {
 		links = append(links, raw)
 	}
 	input.ShopLinks = links
+	var err error
+	input.ListIDs, err = validIDs(input.ListIDs)
+	if err != nil {
+		return input, err
+	}
 	return input, nil
 }
 
@@ -139,6 +146,15 @@ func (s *Wishes) Create(ctx context.Context, ownerID string, input WishInput) (*
 	id, createdAt := security.UUID(), time.Now().UTC()
 	var result *models.Wish
 	err = s.tx.WithTransaction(ctx, func(txCtx context.Context) error {
+		if len(input.ListIDs) > 0 {
+			valid, err := s.repo.ValidLists(txCtx, ownerID, input.ListIDs)
+			if err != nil {
+				return err
+			}
+			if !valid {
+				return ErrListSelection
+			}
+		}
 		// Fresh model and associations on every CockroachDB retry.
 		wish := &models.Wish{ID: id, OwnerID: ownerID, Title: input.Title, Description: input.Description, Price: input.Price, Currency: input.Currency, Priority: input.Priority, CreatedAt: createdAt}
 		if data != nil {
@@ -147,6 +163,9 @@ func (s *Wishes) Create(ctx context.Context, ownerID string, input WishInput) (*
 		}
 		for position, link := range input.ShopLinks {
 			wish.ShopLinks = append(wish.ShopLinks, models.WishShopLink{WishID: id, Position: position, URL: link})
+		}
+		for _, listID := range input.ListIDs {
+			wish.Members = append(wish.Members, models.WishlistWish{ListID: listID, WishID: id, OwnerID: ownerID, AddedAt: createdAt})
 		}
 		if err := s.repo.Create(txCtx, wish); err != nil {
 			return err

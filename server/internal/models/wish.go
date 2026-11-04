@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// A wish belongs to the account's collection, independently of future lists.
+// A wish belongs to the account's collection; list memberships share its identity.
 type Wish struct {
 	ID           string
 	OwnerID      string
@@ -12,6 +12,8 @@ type Wish struct {
 	Currency     string
 	Priority     string
 	CreatedAt    time.Time
+	ListsVersion int64          `gorm:"default:1"`
+	Members      []WishlistWish `gorm:"-"`
 	ShopLinks    []WishShopLink `gorm:"foreignKey:WishID"`
 	ImageVersion string         `gorm:"->"`
 	Image        *WishImage     `gorm:"foreignKey:WishID"`
