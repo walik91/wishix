@@ -1,0 +1,44 @@
+name: wishix
+
+include:
+  - compose.db.yaml
+
+services:
+  server:
+    build:
+      context: ./server
+    restart: unless-stopped
+    environment:
+      DB_NAME: ${DB_NAME:?Укажите DB_NAME в .env}
+      DB_USER: ${DB_USER:?Укажите DB_USER в .env}
+      DB_PASSWORD: ${DB_PASSWORD:?Укажите DB_PASSWORD в .env}
+    volumes:
+      - db-client-ca:/db-certs:ro
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  front:
+    build:
+      context: ./front
+      target: production
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:?Укажите APP_PORT в .env}:8080"
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s

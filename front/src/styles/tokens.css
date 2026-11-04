@@ -1,0 +1,46 @@
+/* Wishix Design System v1.0 — same visual values as the approved design. */
+:root {
+  --wx-primary: #6B4EFF;
+  --wx-primary-hover: #5939E9;
+  --wx-primary-pressed: #492EC7;
+  --wx-secondary: #A78BFA;
+  --wx-lavender: #EDE9FE;
+  --wx-cream: #FFF7ED;
+  --wx-peach: #FF8FA3;
+  --wx-text: #1F1B3A;
+  --wx-text-muted: #5B5875;
+  --wx-border: #E9E6F4;
+  --wx-surface: #FFFFFF;
+  --wx-background: #FBFAFF;
+  --wx-focus: #4C2FC7;
+  --wx-error: #B42318;
+  --wx-success: #18794E;
+
+  --wx-font: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --wx-text-xs: 12px;
+  --wx-text-sm: 14px;
+  --wx-text-md: 16px;
+  --wx-text-lg: 20px;
+  --wx-text-xl: 24px;
+  --wx-text-2xl: 32px;
+
+  --wx-space-1: 4px;
+  --wx-space-2: 8px;
+  --wx-space-3: 12px;
+  --wx-space-4: 16px;
+  --wx-space-5: 20px;
+  --wx-space-6: 24px;
+  --wx-space-8: 32px;
+  --wx-space-10: 40px;
+
+  --wx-radius-sm: 10px;
+  --wx-radius-md: 14px;
+  --wx-radius-card: 18px;
+  --wx-radius-hero: 24px;
+  --wx-radius-pill: 9999px;
+  --wx-shadow-card: 0 4px 18px rgba(42,29,91,.06);
+  --wx-shadow-panel: 0 12px 28px rgba(42,29,91,.09);
+  --wx-focus-ring: 0 0 0 3px rgba(107,78,255,.25);
+  --wx-sidebar-width: 240px;
+  --wx-content-max: 1280px;
+}

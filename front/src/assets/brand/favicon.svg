@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="t d">
+  <title id="t">Wishix — подарочная коробка с сердцем</title>
+  <desc id="d">Фиолетовая подарочная коробка с белым сердцем, бантом и золотыми лучами. Векторная адаптация утверждённой иллюстрации.</desc>
+  <defs>
+    <linearGradient id="front" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c08cff"/><stop offset="0.5" stop-color="#9759f7"/><stop offset="1" stop-color="#6841ef"/></linearGradient>
+    <linearGradient id="back" x1="0" y1="0" x2="0.8" y2="1"><stop stop-color="#b57aff"/><stop offset="1" stop-color="#6740ed"/></linearGradient>
+    <linearGradient id="lid" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ce9dfd"/><stop offset="1" stop-color="#ac72fc"/></linearGradient>
+    <linearGradient id="bow" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#764aff"/><stop offset="1" stop-color="#5537d6"/></linearGradient>
+  </defs>
+  <g fill="none" stroke="#ffca32" stroke-width="6.6" stroke-linecap="round"><path d="M118 19 122 7M134 27 145 15M143 43 154 39"/></g>
+  <path d="M82 54C67 50 39 49 32 34c-7-17 11-23 27-12 13 9 20 24 23 32Z" fill="#fff9ff" stroke="url(#bow)" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M81 53c-3-18 1-37 16-43 15-6 24 9 17 22-6 12-21 17-33 21Z" fill="#fff9ff" stroke="url(#bow)" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M19 64 100 44q12-3 19 9l3 65q0 10-11 14l-66 15q-12 3-17-8L15 78q-3-11 4-14Z" fill="url(#back)"/>
+  <path d="M17 61 109 38q11-3 17 8l3 14-100 27q-12 3-15-8l-2-7q-2-7 5-11Z" fill="url(#lid)"/>
+  <path d="M52 66 130 46q15-4 19 10l7 58q2 14-12 18l-73 20q-16 4-20-11L39 85q-4-15 13-19Z" fill="url(#front)"/>
+  <path d="m40 84 11-3 13 59q2 9 9 12l-10 2q-11 1-14-13L37 91q-1-6 3-7Z" fill="#fff"/>
+  <path d="m39 83 12-4 88-24-2-11L47 66q-10 3-8 17Z" fill="#fff"/>
+  <path d="m60 73 75-20" stroke="#ffe9ff" stroke-width="2" opacity=".65"/>
+  <path d="M113 92c-5-7-13-7-17 0-5 8-1 14 8 21l12 7 11-14c7-11-3-23-12-18-1 1-2 2-2 4Z" fill="white"/>
+</svg>
