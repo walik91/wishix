@@ -1,9 +1,14 @@
 <script setup>
-import { watchEffect } from 'vue'
+import { computed, watchEffect } from 'vue'
 import { t } from '../i18n.js'
+import { useSession } from '../composables/useSession.js'
 import AppIcon from '../components/ui/AppIcon.vue'
 import UiButton from '../components/ui/UiButton.vue'
 import gift from '../assets/brand/gift-hero.svg'
+
+const { user, checking } = useSession()
+const startHref = computed(() => user.value ? '/my' : '/register')
+const startLabel = computed(() => t(checking.value ? 'auth.checkingSession' : user.value ? 'home.openMyWishes' : 'home.start'))
 
 const steps = [
   { key: 'collect', icon: 'list' },
@@ -25,7 +30,7 @@ watchEffect(() => {
         <h1 id="hero-title">{{ t('home.title') }} <span>{{ t('home.titleAccent') }}</span></h1>
         <p class="hero-description">{{ t('home.description') }}</p>
         <div class="hero-actions">
-          <UiButton href="/register">{{ t('home.start') }}<AppIcon name="arrow" /></UiButton>
+          <UiButton :href="startHref" :loading="checking">{{ startLabel }}<AppIcon name="arrow" /></UiButton>
           <a class="how-link" href="#how-it-works">{{ t('home.howItWorks') }}</a>
         </div>
         <p class="hero-note"><AppIcon name="check" />{{ t('home.freeNote') }}</p>
@@ -71,7 +76,7 @@ watchEffect(() => {
       <span class="closing-heart"><AppIcon name="heart" /></span>
       <h2 id="closing-title">{{ t('home.closingTitle') }}</h2>
       <p>{{ t('home.closingDescription') }}</p>
-      <UiButton href="/register">{{ t('home.start') }}<AppIcon name="arrow" /></UiButton>
+      <UiButton :href="startHref" :loading="checking">{{ startLabel }}<AppIcon name="arrow" /></UiButton>
     </section>
   </div>
 </template>

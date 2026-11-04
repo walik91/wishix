@@ -23,7 +23,7 @@ if (aliases[path]) {
 const { user, unavailable, initialize } = useSession()
 onMounted(async () => {
   await initialize()
-  if (user.value && (page === '/login' || page === '/register' || page === '/')) window.location.replace('/my')
+  if (user.value && (page === '/login' || page === '/register')) window.location.replace('/my')
   else if (!user.value && !unavailable.value && page === '/my') window.location.replace('/login')
 })
 </script>
