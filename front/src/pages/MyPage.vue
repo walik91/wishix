@@ -31,8 +31,8 @@ async function retry() {
     <UiCard v-else-if="unavailable" class="dashboard-error"><EmptyState icon="globe" :title="t('my.connectionTitle')" :description="t('auth.error.unavailable')"><UiButton @click="retry">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
     <template v-else-if="user">
       <header class="greeting"><h1>{{ t('my.hello') }} {{ user.username }}!</h1><p>{{ t('my.description') }}</p></header>
-      <section v-if="!listsLoading && !listsError && !lists.length" class="hero" aria-labelledby="dashboard-hero-title">
-        <div class="hero-copy"><h2 id="dashboard-hero-title">{{ t('my.heroTitle') }}</h2><p>{{ t('my.heroDescription') }}</p><UiButton href="/my/lists/new"><AppIcon name="plus" />{{ t('my.createList') }}</UiButton></div>
+      <section v-if="!wishesLoading && !wishesError && (!wishes.length || (!listsLoading && !listsError && !lists.length))" class="hero" aria-labelledby="dashboard-hero-title">
+        <div class="hero-copy"><h2 id="dashboard-hero-title">{{ t('my.heroTitle') }}</h2><p>{{ t('my.heroDescription') }}</p><UiButton :href="wishes.length ? '/my/lists/new' : '/my/wishes/new'"><AppIcon name="plus" />{{ t(wishes.length ? 'my.createList' : 'my.addWish') }}</UiButton></div>
         <img :src="gift" alt="" width="300" height="240" aria-hidden="true" />
       </section>
       <section class="dashboard-section" aria-labelledby="dashboard-lists-title">
