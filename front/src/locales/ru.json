@@ -311,7 +311,7 @@
   "lists.notice.imageUpdated": "Изображение обновлено во всех списках.",
   "lists.notice.linkUpdated": "Ссылка заменена. Прежняя ссылка больше не работает.",
   "lists.notice.copiedLink": "Ссылка скопирована.",
-  "lists.notice.selectLink": "Выделите и скопируйте ссылку ниже.",
+  "lists.notice.selectLink": "Скопируйте выделенную ссылку.",
   "lists.notice.deleted": "Список удалён. Желания сохранены.",
   "wishes.listsUpdated": "Списки желания обновлены.",
   "wishes.error.list_selection_invalid": "Некоторые выбранные желания или списки уже недоступны. Обновите данные и повторите выбор.",

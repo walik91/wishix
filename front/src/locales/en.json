@@ -311,7 +311,7 @@
   "lists.notice.imageUpdated": "Image updated in every list.",
   "lists.notice.linkUpdated": "Sharing link replaced. The previous link no longer works.",
   "lists.notice.copiedLink": "Link copied.",
-  "lists.notice.selectLink": "Select and copy the link below.",
+  "lists.notice.selectLink": "Copy the selected link.",
   "lists.notice.deleted": "List deleted. Your wishes have been kept.",
   "wishes.listsUpdated": "Wish lists updated.",
   "wishes.error.list_selection_invalid": "Some selected wishes or lists are no longer available. Reload and choose again.",

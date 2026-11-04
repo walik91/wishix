@@ -311,7 +311,7 @@
   "lists.notice.imageUpdated": "Imaginea a fost actualizată în toate listele.",
   "lists.notice.linkUpdated": "Linkul a fost înlocuit. Linkul vechi nu mai funcționează.",
   "lists.notice.copiedLink": "Linkul a fost copiat.",
-  "lists.notice.selectLink": "Selectează și copiază linkul de mai jos.",
+  "lists.notice.selectLink": "Copiază linkul selectat.",
   "lists.notice.deleted": "Lista a fost ștearsă. Dorințele au fost păstrate.",
   "wishes.listsUpdated": "Listele dorinței au fost actualizate.",
   "wishes.error.list_selection_invalid": "Unele dorințe sau liste selectate nu mai sunt disponibile. Reîncarcă și alege din nou.",

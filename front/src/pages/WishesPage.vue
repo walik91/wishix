@@ -26,6 +26,8 @@ const imageOpen = ref(false)
 const imageWish = ref(null)
 const listsOpen = ref(false), listsWish = ref(null)
 const notice = ref(new URLSearchParams(window.location.search).get('notice') === 'wish-added' ? 'added' : '')
+const noticeSequence = ref(0)
+function showNotice(value) { noticeSequence.value++; notice.value = value }
 if (notice.value) window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`)
 
 watchEffect(() => { document.title = `${t('my.allWishes')} · ${t('appName')}` })
@@ -46,7 +48,7 @@ function editImage(wish) { imageWish.value = wish; imageOpen.value = true }
 function imageUpdated(id, url) {
   const wish = wishes.value.find(wish => wish.id === id)
   if (wish) wish.image_url = url
-  notice.value = 'imageUpdated'
+  showNotice('imageUpdated')
 }
 async function removeSelected() {
   if (deleting.value) return
@@ -55,7 +57,7 @@ async function removeSelected() {
   try {
     await remove(selected.value.id)
     deleteOpen.value = false
-    notice.value = 'deleted'
+    showNotice('deleted')
     await nextTick()
     // The deleted card's trigger no longer exists, so restore focus explicitly.
     addButton.value?.$el.focus()
@@ -75,7 +77,7 @@ async function removeSelected() {
       <EmptyState icon="globe" :title="t('my.connectionTitle')" :description="t('auth.error.unavailable')"><UiButton @click="retry">{{ t('checkAgain') }}</UiButton></EmptyState>
     </UiCard>
     <template v-else-if="user">
-      <UiToast v-if="notice" @dismiss="notice = ''">{{ t(`wishes.${notice}`) }}</UiToast>
+      <UiToast v-if="notice" :key="noticeSequence" @dismiss="notice = ''">{{ t(`wishes.${notice}`) }}</UiToast>
       <header class="collection-heading">
         <div><p class="eyebrow">{{ t('auth.my') }}</p><h1>{{ t('my.allWishes') }}<span v-if="!loading && !error" class="wish-count">{{ wishes.length }}</span></h1><p>{{ t('my.wishesDescription') }}</p></div>
         <UiButton ref="addButton" href="/my/wishes/new"><AppIcon name="plus" />{{ t('my.addWish') }}</UiButton>
@@ -92,7 +94,7 @@ async function removeSelected() {
       <p class="privacy-note"><AppIcon name="lock" /><span>{{ t('wishes.privateNote') }}</span></p>
     </template>
     <WishImageDialog v-model:open="imageOpen" :wish="imageWish" @updated="imageUpdated" />
-    <WishListsDialog v-model:open="listsOpen" :wish="listsWish" @updated="notice = 'listsUpdated'" />
+    <WishListsDialog v-model:open="listsOpen" :wish="listsWish" @updated="showNotice('listsUpdated')" />
     <UiDialog v-model:open="deleteOpen" :busy="deleting" :title="t('wishes.deleteTitle')">
       <p class="delete-title">{{ selected?.title }}</p>
       <p class="delete-description">{{ t('wishes.deleteDescription') }}</p>

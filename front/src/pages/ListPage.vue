@@ -23,6 +23,8 @@ const { list, wishes, loading, error, load } = useList(props.id)
 const dialog = ref(''), busy = ref(false), operationError = ref(''), selected = ref(null), copyTitle = ref(''), pickerOpen = ref(false), imageOpen = ref(false), imageWish = ref(null), notice = ref(''), shareInput = ref(null), manageButton = ref(null)
 const validNotices = ['created', 'updated', 'copied', 'cleared', 'removed', 'added', 'imageUpdated', 'linkUpdated', 'copiedLink']
 const query = new URLSearchParams(window.location.search)
+const noticeSequence = ref(0)
+function showNotice(value) { noticeSequence.value++; notice.value = value }
 if (query.get('notice') === 'wish-added') notice.value = 'added'
 else if (validNotices.includes(query.get('notice'))) notice.value = query.get('notice')
 let initialAction = query.has('manage') ? 'manage' : query.has('edit') ? 'edit' : ''
@@ -39,10 +41,10 @@ async function restoreFocus() { await nextTick(); if (!dialog.value) manageButto
 watch(dialog, value => { if (!value) restoreFocus() })
 async function retry() { await refresh(); if (!user.value && !unavailable.value) window.location.replace('/login') }
 async function reload() { dialog.value = ''; operationError.value = ''; await load(); await restoreFocus() }
-async function updated() { notice.value = 'added'; await load(); await restoreFocus() }
+async function updated() { showNotice('added'); await load(); await restoreFocus() }
 async function save(input) {
   if (busy.value) return; busy.value = true; operationError.value = ''
-  try { await updateList(props.id, input); dialog.value = ''; notice.value = 'updated'; await load(); await restoreFocus() }
+  try { await updateList(props.id, input); dialog.value = ''; showNotice('updated'); await load(); await restoreFocus() }
   catch (failure) { operationError.value = listFailure(failure) }
   finally { busy.value = false }
 }
@@ -55,21 +57,21 @@ async function perform() {
     if (action === 'clear') await clearList(props.id, list.value.revision)
     if (action === 'remove') await removeListWish(props.id, selected.value.id)
     if (action === 'rotate') await rotateListLink(props.id, list.value.revision)
-    dialog.value = ''; notice.value = { clear: 'cleared', remove: 'removed', rotate: 'linkUpdated' }[action]
+    dialog.value = ''; showNotice({ clear: 'cleared', remove: 'removed', rotate: 'linkUpdated' }[action])
     await load(); if (action === 'rotate' && list.value) dialog.value = 'share'; await nextTick(); if (!dialog.value) manageButton.value?.$el.focus()
   } catch (failure) { operationError.value = listFailure(failure) }
   finally { busy.value = false }
 }
 async function copyLink() {
-  try { await navigator.clipboard.writeText(shareURL.value); notice.value = 'copiedLink' }
-  catch { shareInput.value?.focus(); shareInput.value?.select(); notice.value = 'selectLink' }
+  try { await navigator.clipboard.writeText(shareURL.value); showNotice('copiedLink') }
+  catch { shareInput.value?.focus(); shareInput.value?.select(); showNotice('selectLink') }
 }
-function imageUpdated(id, url) { const wish = wishes.value.find(wish => wish.id === id); if (wish) wish.image_url = url; notice.value = 'imageUpdated' }
+function imageUpdated(id, url) { const wish = wishes.value.find(wish => wish.id === id); if (wish) wish.image_url = url; showNotice('imageUpdated') }
 </script>
 <template>
   <div class="lists-page" :aria-busy="checking || loading">
     <UiButton href="/my/lists" variant="secondary" :disabled="busy">{{ t('lists.back') }}</UiButton>
-    <UiToast v-if="notice" @dismiss="notice = ''">{{ t(`lists.notice.${notice}`) }}</UiToast>
+    <UiToast v-if="notice" :key="noticeSequence" :duration="notice === 'selectLink' ? 0 : 6000" :variant="notice === 'selectLink' ? 'info' : 'success'" @dismiss="notice = ''">{{ t(`lists.notice.${notice}`) }}</UiToast>
     <UiSkeleton v-if="checking || (user && loading)" class="list-form-skeleton list-form-heading" />
     <UiCard v-else-if="unavailable || error" class="list-empty list-form-heading"><EmptyState :icon="error === 'list_not_found' ? 'lock' : 'globe'" :title="t(error === 'list_not_found' ? 'lists.notFound' : 'lists.loadError')" :description="t(`lists.error.${error || 'unavailable'}`)"><UiButton v-if="error !== 'list_not_found'" @click="unavailable ? retry() : load()">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
     <template v-else-if="user && list">
