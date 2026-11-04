@@ -10,12 +10,14 @@ import PublicLayout from './layouts/PublicLayout.vue'
 import AppShell from './layouts/AppShell.vue'
 import RecoveryPage from './pages/RecoveryPage.vue'
 import MyPage from './pages/MyPage.vue'
+import NewWishPage from './pages/NewWishPage.vue'
 import { useSession } from './composables/useSession.js'
 
 // Full document navigation keeps the small auth flow independent of a router.
 const path = window.location.pathname.replace(/\/+$/, '') || '/'
 const aliases = { '/sign-in': '/login', '/sign-up': '/register' }
 const page = aliases[path] || path
+const privatePage = page === '/my' || page === '/my/wishes/new'
 
 if (aliases[path]) {
   window.history.replaceState(null, '', `${page}${window.location.search}${window.location.hash}`)
@@ -24,17 +26,18 @@ const { user, unavailable, initialize } = useSession()
 onMounted(async () => {
   await initialize()
   if (user.value && (page === '/login' || page === '/register')) window.location.replace('/my')
-  else if (!user.value && !unavailable.value && page === '/my') window.location.replace('/login')
+  else if (!user.value && !unavailable.value && privatePage) window.location.replace('/login')
 })
 </script>
 
 <template>
-  <component :is="page === '/my' ? AppShell : PublicLayout">
+  <component :is="privatePage ? AppShell : PublicLayout">
     <GuestHomePage v-if="page === '/'" />
     <LoginPage v-else-if="page === '/login'" />
     <RegisterPage v-else-if="page === '/register'" />
     <RecoveryPage v-else-if="page === '/forgot-password'" />
     <MyPage v-else-if="page === '/my'" />
+    <NewWishPage v-else-if="page === '/my/wishes/new'" />
     <StartPage v-else-if="page === '/status'" />
     <section v-else class="not-found">
       <h1>{{ t('notFound.title') }}</h1>

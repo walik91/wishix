@@ -2,14 +2,14 @@
 import { onMounted, ref, watch } from 'vue'
 import { t } from '../../i18n.js'
 import AppIcon from './AppIcon.vue'
-const props = defineProps({ open: Boolean, title: { type: String, required: true } })
+const props = defineProps({ open: Boolean, busy: Boolean, title: { type: String, required: true } })
 const emit = defineEmits(['update:open'])
 const dialog = ref(null)
 function syncOpen() {
   if (props.open && !dialog.value.open) dialog.value.showModal()
   else if (!props.open && dialog.value.open) dialog.value.close()
 }
-function close() { dialog.value.close() }
+function close() { if (!props.busy) dialog.value.close() }
 function trapFocus(event) {
   if (event.key !== 'Tab') return
   const targets = [...dialog.value.querySelectorAll('a[href], button, input, select, textarea, [tabindex]')]
@@ -34,8 +34,8 @@ watch(() => props.open, syncOpen)
 </script>
 
 <template>
-  <dialog ref="dialog" class="dialog" :aria-label="title" @close="emit('update:open', false)" @click="backdrop" @keydown="trapFocus">
-    <header><h2>{{ title }}</h2><button type="button" class="close" autofocus :aria-label="t('my.close')" @click="close"><AppIcon name="close" /></button></header>
+  <dialog ref="dialog" class="dialog" :aria-label="title" :aria-busy="busy || undefined" @cancel="busy && $event.preventDefault()" @close="emit('update:open', false)" @click="backdrop" @keydown="trapFocus">
+    <header><h2>{{ title }}</h2><button type="button" class="close" :disabled="busy" autofocus :aria-label="t('my.close')" @click="close"><AppIcon name="close" /></button></header>
     <slot />
   </dialog>
 </template>
@@ -46,7 +46,8 @@ watch(() => props.open, syncOpen)
 header { display: flex; align-items: center; justify-content: space-between; gap: var(--wx-space-4); margin-bottom: var(--wx-space-6); }
 h2 { margin: 0; font-size: var(--wx-text-xl); line-height: 1.3; }
 .close { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: var(--wx-radius-md); color: var(--wx-text-muted); background: var(--wx-background); cursor: pointer; }
-.close:hover { background: var(--wx-lavender); }
-.close:active { color: var(--wx-primary-pressed); }
+.close:hover:not(:disabled) { background: var(--wx-lavender); }
+.close:active:not(:disabled) { color: var(--wx-primary-pressed); }
+.close:disabled { opacity: .55; cursor: wait; }
 @media (min-width: 48rem) { .dialog { inset: 0; width: min(480px, 100% - 48px); max-height: calc(100svh - 48px); margin: auto; padding: var(--wx-space-8); border-radius: var(--wx-radius-hero); } }
 </style>

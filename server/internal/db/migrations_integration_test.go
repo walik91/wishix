@@ -57,8 +57,14 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("version: got %d, want %d; %v", version, want, err)
 		}
 	}
-	assertVersion(1)
+	assertVersion(2)
 	if _, err := pool.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'migration_test', 'migration@example.test', 'test-hash', now(), now())`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.ExecContext(ctx, `INSERT INTO wishes (id, owner_id, title, price, currency, priority, created_at) VALUES ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001', 'Kept wish', 12.34, 'EUR', 'medium', now())`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.ExecContext(ctx, `INSERT INTO wish_shop_links (wish_id, position, url) VALUES ('00000000-0000-4000-8000-000000000002', 0, 'https://example.test/item')`); err != nil {
 		t.Fatal(err)
 	}
 	if err := migrator.Apply(ctx); err != nil {
@@ -68,12 +74,25 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM users").Scan(&count); err != nil || count != 1 {
 		t.Fatal("repeated up lost account data")
 	}
+	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM wishes JOIN wish_shop_links ON wishes.id = wish_shop_links.wish_id WHERE price = 12.34 AND currency = 'EUR'").Scan(&count); err != nil || count != 1 {
+		t.Fatal("repeated up lost wishes or shop links")
+	}
 	statuses, err := migrator.Status(ctx)
-	if err != nil || len(statuses) != 1 || statuses[0].State != goose.StateApplied {
+	if err != nil || len(statuses) != 2 || statuses[0].State != goose.StateApplied || statuses[1].State != goose.StateApplied {
 		t.Fatal("incorrect Goose status:", err)
 	}
 	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("down:", err)
+	}
+	assertVersion(1)
+	if err := pool.QueryRowContext(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema = $1 AND table_name IN ('wishes', 'wish_shop_links')`, schema).Scan(&count); err != nil || count != 0 {
+		t.Fatal("wishes down did not remove wish tables")
+	}
+	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM users").Scan(&count); err != nil || count != 1 {
+		t.Fatal("wishes rollback removed existing accounts")
+	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("auth down:", err)
 	}
 	assertVersion(0)
 	if err := pool.QueryRowContext(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema = $1 AND table_name IN ('users', 'auth_challenges', 'auth_sessions', 'auth_rate_limits')`, schema).Scan(&count); err != nil || count != 0 {
@@ -126,7 +145,7 @@ func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 		t.Fatal("legacy history was changed")
 	}
 	version, err := fresh.GetDBVersion(ctx)
-	if err != nil || version != 1 {
+	if err != nil || version != 2 {
 		t.Fatal("Goose did not record the adopted version")
 	}
 }

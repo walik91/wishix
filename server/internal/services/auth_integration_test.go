@@ -118,6 +118,8 @@ func newAuthFixture(t *testing.T) *authFixture {
 	auth := services.NewAuth(repo, db.NewTransactionManager(executor), mail, config)
 	mux := http.NewServeMux()
 	controllers.NewAuth(auth, config, slog.New(slog.NewTextHandler(io.Discard, nil))).RegisterRoutes(mux)
+	wishes := services.NewWishes(repositories.NewWishes(executor), db.NewTransactionManager(executor))
+	controllers.NewWishes(wishes, controllers.NewAuth(auth, config, slog.New(slog.NewTextHandler(io.Discard, nil)))).RegisterRoutes(mux)
 	return &authFixture{database, repo, auth, mail, mux}
 }
 
