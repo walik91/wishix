@@ -170,6 +170,34 @@ func (r *Lists) SharedImage(ctx context.Context, token, wishID string) (*models.
 	}
 	return &images[0], nil
 }
+
+// Every query repeats the access condition, including image and membership reads.
+const guestCondition = "l.id = ? AND (l.visibility = 'public' OR (l.visibility = 'link' AND l.share_token = ? AND ? <> ''))"
+
+func (r *Lists) GuestList(ctx context.Context, id, token string) (*models.Wishlist, string, error) {
+	var rows []struct {
+		models.Wishlist
+		Username string
+	}
+	err := r.Ctx(ctx).Table("wishlists AS l").Select("l.*, (SELECT count(*) FROM wishlist_wishes WHERE list_id = l.id) AS wish_count, users.username").Joins("JOIN users ON users.id = l.owner_id").Where(guestCondition, id, token, token).Limit(1).Find(&rows).Error
+	if err != nil || len(rows) == 0 {
+		return nil, "", err
+	}
+	return &rows[0].Wishlist, rows[0].Username, nil
+}
+func (r *Lists) GuestWishes(ctx context.Context, id, token string) ([]models.Wish, error) {
+	wishes := make([]models.Wish, 0)
+	err := r.Ctx(ctx).Select(wishColumns).Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where(guestCondition, id, token, token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	return wishes, err
+}
+func (r *Lists) GuestImage(ctx context.Context, id, token, wishID string) (*models.WishImage, error) {
+	var images []models.WishImage
+	err := r.Ctx(ctx).Model(&models.WishImage{}).Select("wish_images.*").Joins("JOIN wishlist_wishes m ON m.wish_id = wish_images.wish_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where(guestCondition+" AND m.wish_id = ?", id, token, token, wishID).Limit(1).Find(&images).Error
+	if err != nil || len(images) == 0 {
+		return nil, err
+	}
+	return &images[0], nil
+}
 func (r *Lists) PublicProfile(ctx context.Context, username string) (string, bool, []models.Wishlist, error) {
 	var users []models.User
 	err := r.Ctx(ctx).Select("id, username, show_all_wishes").Where("username = ?", username).Limit(1).Find(&users).Error

@@ -20,7 +20,7 @@ try {
       if (route.request().method() === 'PUT') enabled = route.request().postDataJSON().show_all_wishes
       return route.fulfill({ json: { show_all_wishes: enabled } })
     })
-    await page.route('**/api/public/profiles/example', route => route.fulfill({ json: { username: 'example', show_all_wishes: enabled, lists: [{ title: 'Public list', visibility: 'public', wish_count: 1, share_path: '?token=' + 'a'.repeat(43) }] } }))
+    await page.route('**/api/public/profiles/example', route => route.fulfill({ json: { username: 'example', show_all_wishes: enabled, lists: [{ id: '00000000-0000-4000-8000-000000000001', title: 'Public list', visibility: 'public', wish_count: 1, share_path: '/00000000-0000-4000-8000-000000000001' }] } }))
     await page.route('**/api/public/profiles/example/wishes', route => enabled ? route.fulfill({ json: { username: 'example', wishes: [{ id: 'wish', title: 'A very long wish '.repeat(8), description: '', price: null, currency: '', priority: 'medium', shop_links: [], has_image: false }] } }) : route.fulfill({ status: 404, json: { error: 'list_not_found' } }))
     await page.goto(`${origin}/u/example`)
     await page.getByRole('heading', { name: 'example' }).waitFor()

@@ -15,6 +15,7 @@ export const removeListWish = (id, wishID) => mutate(`${idPath(id)}/wishes/${enc
 export const getWishLists = id => requestJSON(`/wishes/${encodeURIComponent(id)}/lists`)
 export const setWishLists = (id, list_ids, version) => mutate(`/wishes/${encodeURIComponent(id)}/lists`, 'PUT', { list_ids, version })
 export const viewSharedList = token => mutate('/public/lists/view', 'POST', { token })
+export const viewGuestList = (id, token) => mutate('/public/lists/guest', 'POST', { id, token })
 export const publicProfile = username => requestJSON(`/public/profiles/${encodeURIComponent(username)}`)
 export const getCollectionSetting = () => requestJSON('/profile/collection')
 export const setCollectionSetting = show_all_wishes => mutate('/profile/collection', 'PUT', { show_all_wishes })
@@ -26,6 +27,11 @@ export async function publicCollectionImage(username, wishID, signal) {
 }
 export async function sharedWishImage(token, wish_id, signal) {
   const response = await fetch('/api/public/lists/image', { method: 'POST', headers, body: JSON.stringify({ token, wish_id }), credentials: 'omit', signal })
+  if (!response.ok || response.headers.get('content-type') !== 'image/jpeg') throw new Error('Image unavailable')
+  return response.blob()
+}
+export async function guestWishImage(id, token, wish_id, signal) {
+  const response = await fetch('/api/public/lists/guest-image', { method: 'POST', headers, body: JSON.stringify({ id, token, wish_id }), credentials: 'omit', signal })
   if (!response.ok || response.headers.get('content-type') !== 'image/jpeg') throw new Error('Image unavailable')
   return response.blob()
 }

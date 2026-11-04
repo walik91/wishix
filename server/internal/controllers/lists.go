@@ -45,8 +45,10 @@ func listDate(date *time.Time) *string {
 }
 func privateList(list *models.Wishlist) listResponse {
 	path := ""
-	if list.Visibility != "private" {
-		path = "?token=" + list.ShareToken
+	if list.Visibility == "public" {
+		path = "/" + list.ID
+	} else if list.Visibility == "link" {
+		path = "/" + list.ID + "/" + list.ShareToken
 	}
 	return listResponse{ID: list.ID, Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), Visibility: list.Visibility, SharePath: path, Revision: list.Revision, WishCount: list.WishCount, CreatedAt: list.CreatedAt}
 }
@@ -80,6 +82,8 @@ func (c *Lists) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/wishes/{id}/lists", c.authorized(c.setMemberships))
 	mux.HandleFunc("POST /api/public/lists/view", c.public(c.shared))
 	mux.HandleFunc("POST /api/public/lists/image", c.public(c.sharedImage))
+	mux.HandleFunc("POST /api/public/lists/guest", c.public(c.guest))
+	mux.HandleFunc("POST /api/public/lists/guest-image", c.public(c.guestImage))
 	mux.HandleFunc("GET /api/public/profiles/{username}", c.profile)
 	mux.HandleFunc("GET /api/public/profiles/{username}/wishes", c.collection)
 	mux.HandleFunc("GET /api/public/profiles/{username}/wishes/{wishID}/image", c.collectionImage)
@@ -87,6 +91,8 @@ func (c *Lists) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/profile/collection", c.authorized(c.setCollectionSetting))
 	mux.HandleFunc("GET /{username}/wishlist/shared", c.sharePage)
 	mux.HandleFunc("GET /{username}/wishlist/shared/{$}", c.sharePage)
+	mux.HandleFunc("GET /u/{username}/wishlist/{id}", c.guestPage)
+	mux.HandleFunc("GET /u/{username}/wishlist/{id}/{token}", c.guestPage)
 }
 
 var shareUsername = regexp.MustCompile(`^[A-Za-z0-9_]{3,30}$`)
@@ -118,11 +124,52 @@ func (c *Lists) sharePage(w http.ResponseWriter, r *http.Request) {
 	if list.Visibility == "public" {
 		w.Header().Del("X-Robots-Tag")
 	}
-	query := url.Values{"token": {values[0]}}.Encode()
-	if r.PathValue("username") != username || r.URL.Path != "/"+username+"/wishlist/shared" || r.URL.RawQuery != query {
-		location := "/" + url.PathEscape(username) + "/wishlist/shared?" + query
-		w.Header().Set("Location", location)
+	location := guestPath(username, list, values[0])
+	w.Header().Set("Location", location)
+	if list.Visibility == "public" {
+		// Visibility can change back; a permanent redirect would strand the old link.
+		w.WriteHeader(http.StatusFound)
+	} else {
 		w.WriteHeader(http.StatusMovedPermanently)
+	}
+}
+
+func guestPath(username string, list *models.Wishlist, token string) string {
+	path := "/u/" + url.PathEscape(username) + "/wishlist/" + list.ID
+	if list.Visibility == "link" {
+		path += "/" + token
+	}
+	return path
+}
+
+func (c *Lists) guestPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+	if !shareUsername.MatchString(r.PathValue("username")) {
+		http.NotFound(w, r)
+		return
+	}
+	list, username, err := c.service.ResolveGuest(r.Context(), r.PathValue("id"), r.PathValue("token"))
+	if err != nil {
+		if services.ListErrorCode(err) != "list_not_found" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("X-Accel-Redirect", "/_shared_index")
+		return
+	}
+	if list.Visibility == "public" {
+		w.Header().Del("X-Robots-Tag")
+	}
+	canonical := guestPath(username, list, r.PathValue("token"))
+	if r.URL.Path != canonical || r.URL.RawQuery != "" {
+		w.Header().Set("Location", canonical)
+		if list.Visibility == "public" && r.PathValue("token") != "" {
+			w.WriteHeader(http.StatusFound)
+		} else {
+			w.WriteHeader(http.StatusMovedPermanently)
+		}
 		return
 	}
 	w.Header().Set("X-Accel-Redirect", "/_shared_index")
@@ -312,6 +359,7 @@ func (c *Lists) failure(w http.ResponseWriter, err error) {
 
 // Public DTOs deliberately omit owner IDs, sessions, email, revisions and private image URLs.
 type publicListResponse struct {
+	ID          string  `json:"id"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	EventDate   *string `json:"event_date"`
@@ -321,11 +369,47 @@ type publicListResponse struct {
 }
 
 func publicList(list *models.Wishlist, link bool) publicListResponse {
-	result := publicListResponse{Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), Visibility: list.Visibility, WishCount: list.WishCount}
+	result := publicListResponse{ID: list.ID, Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), Visibility: list.Visibility, WishCount: list.WishCount}
 	if link && list.Visibility == "public" {
-		result.SharePath = "?token=" + list.ShareToken
+		result.SharePath = "/" + list.ID
 	}
 	return result
+}
+
+func (c *Lists) guest(w http.ResponseWriter, r *http.Request) error {
+	var input struct {
+		ID    string `json:"id"`
+		Token string `json:"token"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	list, username, wishes, err := c.service.Guest(r.Context(), input.ID, input.Token)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]any{"list": publicList(list, false), "username": username, "wishes": publicWishes(wishes)})
+	return nil
+}
+func (c *Lists) guestImage(w http.ResponseWriter, r *http.Request) error {
+	var input struct {
+		ID     string `json:"id"`
+		Token  string `json:"token"`
+		WishID string `json:"wish_id"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	image, err := c.service.GuestImage(r.Context(), input.ID, input.Token, input.WishID)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(len(image.Data)))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(image.Data)
+	return nil
 }
 
 type publicWishResponse struct {

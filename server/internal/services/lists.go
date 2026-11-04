@@ -54,6 +54,9 @@ type ListRepository interface {
 	Shared(context.Context, string) (*models.Wishlist, string, error)
 	SharedWishes(context.Context, string) ([]models.Wish, error)
 	SharedImage(context.Context, string, string) (*models.WishImage, error)
+	GuestList(context.Context, string, string) (*models.Wishlist, string, error)
+	GuestWishes(context.Context, string, string) ([]models.Wish, error)
+	GuestImage(context.Context, string, string, string) (*models.WishImage, error)
 	PublicProfile(context.Context, string) (string, bool, []models.Wishlist, error)
 	CollectionSetting(context.Context, string) (bool, error)
 	SetCollectionSetting(context.Context, string, bool) error
@@ -384,6 +387,51 @@ func (s *Lists) SetMemberships(ctx context.Context, owner, wishID string, ids []
 }
 
 var sharePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
+
+func validGuestList(id, token string) bool {
+	return wishIDPattern.MatchString(id) && (token == "" || sharePattern.MatchString(token))
+}
+
+func (s *Lists) ResolveGuest(ctx context.Context, id, token string) (*models.Wishlist, string, error) {
+	if !validGuestList(id, token) {
+		return nil, "", ErrListNotFound
+	}
+	list, username, err := s.repo.GuestList(ctx, id, token)
+	if err == nil && list == nil {
+		err = ErrListNotFound
+	}
+	return list, username, err
+}
+
+func (s *Lists) Guest(ctx context.Context, id, token string) (*models.Wishlist, string, []models.Wish, error) {
+	if !validGuestList(id, token) {
+		return nil, "", nil, ErrListNotFound
+	}
+	var list *models.Wishlist
+	var username string
+	var wishes []models.Wish
+	err := s.tx.WithTransaction(ctx, func(ctx context.Context) error {
+		var err error
+		list, username, err = s.ResolveGuest(ctx, id, token)
+		if err != nil {
+			return err
+		}
+		wishes, err = s.repo.GuestWishes(ctx, id, token)
+		return err
+	})
+	return list, username, wishes, err
+}
+
+func (s *Lists) GuestImage(ctx context.Context, id, token, wishID string) (*models.WishImage, error) {
+	if !validGuestList(id, token) || !wishIDPattern.MatchString(wishID) {
+		return nil, ErrListNotFound
+	}
+	image, err := s.repo.GuestImage(ctx, id, token, wishID)
+	if err == nil && image == nil {
+		err = ErrListNotFound
+	}
+	return image, err
+}
 
 // ResolveShare checks visibility before exposing a canonical owner in a redirect.
 func (s *Lists) ResolveShare(ctx context.Context, token string) (*models.Wishlist, string, error) {

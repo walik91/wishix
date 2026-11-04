@@ -53,7 +53,7 @@ func TestIntegrationListLifecycleAndSharedWishIdentity(t *testing.T) {
 	aID := a["id"].(string)
 	b := f.newList(t, owner, "Ideas", "private")
 	bID := b["id"].(string)
-	if a["visibility"] != "link" || !strings.HasPrefix(a["share_path"].(string), "?token=") || b["share_path"] != "" {
+	if a["visibility"] != "link" || !strings.HasPrefix(a["share_path"].(string), "/"+aID+"/") || b["share_path"] != "" {
 		t.Fatal("incorrect default sharing")
 	}
 	one := f.newWish(t, owner, "Shared gift", aID, bID)
@@ -195,7 +195,7 @@ func TestIntegrationListSharingAndPrivateData(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	token := strings.TrimPrefix(link["share_path"].(string), "?token=")
+	token := strings.TrimPrefix(link["share_path"].(string), "/"+linkID+"/")
 	view := f.listCall(t, "POST", "/api/public/lists/view", map[string]string{"token": token}, nil, 200)
 	if view["username"] != "sharing" || len(view["wishes"].([]any)) != 1 || view["wishes"].([]any)[0].(map[string]any)["id"] != visibleID {
 		t.Fatal("shared list exposed unrelated wishes", view)
@@ -236,7 +236,7 @@ func TestIntegrationListSharingAndPrivateData(t *testing.T) {
 	f.listCall(t, "PUT", "/api/lists/"+linkID, map[string]any{"title": "Link again", "visibility": "link", "revision": rev(current)}, owner, 200)
 	current = f.currentList(t, owner, linkID)
 	rotated := f.listCall(t, "POST", "/api/lists/"+linkID+"/share-link", map[string]any{"revision": rev(current)}, owner, 200)["list"].(map[string]any)
-	newToken := strings.TrimPrefix(rotated["share_path"].(string), "?token=")
+	newToken := strings.TrimPrefix(rotated["share_path"].(string), "/"+linkID+"/")
 	f.listCall(t, "POST", "/api/public/lists/view", map[string]string{"token": token}, nil, 404)
 	f.listCall(t, "POST", "/api/public/lists/view", map[string]string{"token": newToken}, nil, 200)
 	var stored models.Wishlist
@@ -265,8 +265,14 @@ func TestIntegrationSharePageRedirectAndPrivacy(t *testing.T) {
 	link := f.newList(t, owner, "Link list", "link")
 	public := f.newList(t, owner, "Public list", "public")
 	private := f.newList(t, owner, "Private list", "private")
-	linkToken := strings.TrimPrefix(link["share_path"].(string), "?token=")
-	publicToken := strings.TrimPrefix(public["share_path"].(string), "?token=")
+	linkID := link["id"].(string)
+	publicID := public["id"].(string)
+	linkToken := strings.TrimPrefix(link["share_path"].(string), "/"+linkID+"/")
+	var publicStored models.Wishlist
+	if err := f.database.Where("id = ?", publicID).First(&publicStored).Error; err != nil {
+		t.Fatal(err)
+	}
+	publicToken := publicStored.ShareToken
 	request := func(path string) *httptest.ResponseRecorder {
 		t.Helper()
 		w := httptest.NewRecorder()
@@ -274,15 +280,15 @@ func TestIntegrationSharePageRedirectAndPrivacy(t *testing.T) {
 		return w
 	}
 	old := request("/outdated/wishlist/shared?token=" + linkToken)
-	if old.Code != http.StatusMovedPermanently || old.Header().Get("Location") != "/canonical/wishlist/shared?token="+linkToken || !strings.Contains(old.Header().Get("X-Robots-Tag"), "noindex") {
+	if old.Code != http.StatusMovedPermanently || old.Header().Get("Location") != "/u/canonical/wishlist/"+linkID+"/"+linkToken || !strings.Contains(old.Header().Get("X-Robots-Tag"), "noindex") {
 		t.Fatal("link-only canonical redirect is incorrect")
 	}
-	current := request("/canonical/wishlist/shared?token=" + linkToken)
+	current := request("/u/canonical/wishlist/" + linkID + "/" + linkToken)
 	if current.Code != 200 || current.Header().Get("X-Accel-Redirect") != "/_shared_index" || !strings.Contains(current.Header().Get("X-Robots-Tag"), "noindex") || current.Header().Get("Referrer-Policy") != "no-referrer" {
 		t.Fatal("link-only response lacks required headers")
 	}
 	publicRedirect := request("/outdated/wishlist/shared?token=" + publicToken)
-	if publicRedirect.Code != http.StatusMovedPermanently || publicRedirect.Header().Get("X-Robots-Tag") != "" {
+	if publicRedirect.Code != http.StatusFound || publicRedirect.Header().Get("X-Robots-Tag") != "" || publicRedirect.Header().Get("Location") != "/u/canonical/wishlist/"+publicID {
 		t.Fatal("public redirect should be indexable")
 	}
 	var stored models.Wishlist
@@ -298,10 +304,94 @@ func TestIntegrationSharePageRedirectAndPrivacy(t *testing.T) {
 	if err := f.database.Model(&models.User{}).Where("username = ?", "canonical").Update("username", "renamed").Error; err != nil {
 		t.Fatal(err)
 	}
-	changed := request("/canonical/wishlist/shared?token=" + linkToken)
-	if changed.Code != http.StatusMovedPermanently || changed.Header().Get("Location") != "/renamed/wishlist/shared?token="+linkToken {
+	changed := request("/u/canonical/wishlist/" + linkID + "/" + linkToken)
+	if changed.Code != http.StatusMovedPermanently || changed.Header().Get("Location") != "/u/renamed/wishlist/"+linkID+"/"+linkToken {
 		t.Fatal("username change did not produce a permanent redirect")
 	}
+}
+
+func TestIntegrationGuestURLsAndVisibilityChanges(t *testing.T) {
+	f := newAuthFixture(t)
+	owner := f.account(t, "guesturl@example.test", "guesturl")
+	link := f.newList(t, owner, "Occasion", "link")
+	id := link["id"].(string)
+	token := strings.TrimPrefix(link["share_path"].(string), "/"+id+"/")
+	wishID := f.newWish(t, owner, "Gift", id)["id"].(string)
+	if err := f.database.Create(&models.WishImage{WishID: wishID, Version: "00000000-0000-4000-8000-000000000001", Data: []byte{255, 216, 255, 217}}).Error; err != nil {
+		t.Fatal(err)
+	}
+	guest := func(token string, status int) map[string]any {
+		return f.listCall(t, "POST", "/api/public/lists/guest", map[string]string{"id": id, "token": token}, nil, status)
+	}
+	image := func(listID, token, wishID string) int {
+		r := httptest.NewRequest("POST", "/api/public/lists/guest-image", strings.NewReader(listBody(t, map[string]string{"id": listID, "token": token, "wish_id": wishID})))
+		r.Header.Set("Origin", listOrigin)
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("X-Wishix-Request", "1")
+		w := httptest.NewRecorder()
+		f.handler.ServeHTTP(w, r)
+		return w.Code
+	}
+	guest("", 404)
+	guest(token, 200)
+	guest(strings.Repeat("x", 43), 404)
+	otherID := f.newList(t, owner, "Another link", "link")["id"].(string)
+	f.listCall(t, "POST", "/api/public/lists/guest", map[string]string{"id": otherID, "token": token}, nil, 404)
+	if image(otherID, token, wishID) != 404 {
+		t.Fatal("token used with another list")
+	}
+	if image(id, "", wishID) != 404 || image(id, token, wishID) != 200 {
+		t.Fatal("link image access mismatch")
+	}
+	if profile := f.listCall(t, "GET", "/api/public/profiles/guesturl", nil, nil, 200); len(profile["lists"].([]any)) != 0 {
+		t.Fatal("link list exposed on profile")
+	}
+	current := f.currentList(t, owner, id)
+	public := f.listCall(t, "PUT", "/api/lists/"+id, map[string]any{"title": "Occasion", "visibility": "public", "revision": rev(current)}, owner, 200)["list"].(map[string]any)
+	if public["share_path"] != "/"+id {
+		t.Fatal("public response leaked token", public)
+	}
+	profile := f.listCall(t, "GET", "/api/public/profiles/guesturl", nil, nil, 200)
+	publicList := profile["lists"].([]any)[0].(map[string]any)
+	if publicList["id"] != id || publicList["share_path"] != "/"+id || strings.Contains(listBody(t, profile), token) {
+		t.Fatal("public profile leaked token", profile)
+	}
+	view := guest("", 200)
+	if len(view["wishes"].([]any)) != 1 || image(id, "", wishID) != 200 {
+		t.Fatal("public access failed")
+	}
+	page := httptest.NewRecorder()
+	f.handler.ServeHTTP(page, httptest.NewRequest("GET", "/u/guesturl/wishlist/"+id+"/"+token, nil))
+	if page.Code != http.StatusFound || page.Header().Get("Location") != "/u/guesturl/wishlist/"+id || page.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("public redirect must be temporary", page.Code)
+	}
+	current = f.currentList(t, owner, id)
+	linked := f.listCall(t, "PUT", "/api/lists/"+id, map[string]any{"title": "Occasion", "visibility": "link", "revision": rev(current)}, owner, 200)["list"].(map[string]any)
+	if linked["share_path"] != "/"+id+"/"+token {
+		t.Fatal("visibility change replaced token")
+	}
+	guest("", 404)
+	guest(token, 200)
+	if image(id, "", wishID) != 404 || image(id, token, wishID) != 200 {
+		t.Fatal("public image access not revoked")
+	}
+	current = f.currentList(t, owner, id)
+	rotated := f.listCall(t, "POST", "/api/lists/"+id+"/share-link", map[string]any{"revision": rev(current)}, owner, 200)["list"].(map[string]any)
+	newToken := strings.TrimPrefix(rotated["share_path"].(string), "/"+id+"/")
+	if newToken == token {
+		t.Fatal("manual refresh retained token")
+	}
+	guest(token, 404)
+	guest(newToken, 200)
+	if image(id, token, wishID) != 404 || image(id, newToken, wishID) != 200 {
+		t.Fatal("manual refresh did not revoke image")
+	}
+	guest("invalid", 404)
+	f.listCall(t, "POST", "/api/public/lists/guest", map[string]string{"id": "bad", "token": newToken}, nil, 404)
+	current = f.currentList(t, owner, id)
+	f.listCall(t, "PUT", "/api/lists/"+id, map[string]any{"title": "Occasion", "visibility": "private", "revision": rev(current)}, owner, 200)
+	guest("", 404)
+	guest(newToken, 404)
 }
 
 func TestIntegrationListInputAndCSRF(t *testing.T) {
