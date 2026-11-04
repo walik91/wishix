@@ -14,6 +14,7 @@ try {
   await page.route('**/api/wishes', route=>route.fulfill({json:{wishes:hasWishes?[wish]:[]}}))
   await page.goto(`${origin}/my`); await page.locator(hasWishes ? '.wish-preview' : '.wishes-empty').waitFor(); await page.evaluate(()=>document.fonts.ready)
   await page.locator(hasLists ? '.list-card' : '.list-empty').first().waitFor()
+  assert.deepEqual(await page.locator('.dashboard-section').evaluateAll(sections=>sections.map(section=>section.getAttribute('aria-labelledby'))),['dashboard-wishes-title','dashboard-lists-title'])
   assert.equal(await page.locator('.list-card').count(),hasLists?2:0)
   assert.equal(await page.locator('.list-empty').count(),hasLists?0:1)
   assert.equal(await page.locator('.create-list').count(),hasLists?1:0)

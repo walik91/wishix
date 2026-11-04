@@ -35,19 +35,19 @@ async function retry() {
         <div class="hero-copy"><h2 id="dashboard-hero-title">{{ t('my.heroTitle') }}</h2><p>{{ t('my.heroDescription') }}</p><UiButton :href="wishes.length ? '/my/lists/new' : '/my/wishes/new'"><AppIcon name="plus" />{{ t(wishes.length ? 'my.createList' : 'my.addWish') }}</UiButton></div>
         <img :src="gift" alt="" width="300" height="240" aria-hidden="true" />
       </section>
-      <section class="dashboard-section" aria-labelledby="dashboard-lists-title">
-        <div class="section-heading"><div><h2 id="dashboard-lists-title">{{ t('my.lists') }}</h2><p>{{ t('dashboard.listsDescription') }}</p></div><a href="/my/lists">{{ t('dashboard.allLists') }} <AppIcon name="arrow" /></a></div>
-        <div v-if="listsLoading" class="list-grid" role="status" :aria-label="t('lists.loading')"><UiSkeleton v-for="i in 3" :key="i" class="list-skeleton" /></div>
-        <UiCard v-else-if="listsError" class="dashboard-error"><EmptyState icon="globe" :title="t('lists.loadError')" :description="t('lists.error.unavailable')"><UiButton @click="loadLists">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
-        <UiCard v-else-if="!lists.length" class="list-empty"><EmptyState icon="list" :title="t('lists.emptyTitle')" :description="t('lists.emptyDescription')"><UiButton href="/my/lists/new"><AppIcon name="plus" />{{ t('lists.create') }}</UiButton></EmptyState></UiCard>
-        <div v-else class="list-grid"><ListCard v-for="list in lists.slice(0, 2)" :key="list.id" :list="list" /><a class="create-list" href="/my/lists/new"><span><AppIcon name="plus" /></span>{{ t('dashboard.createListTile') }}</a></div>
-      </section>
       <section class="dashboard-section" aria-labelledby="dashboard-wishes-title">
         <div class="section-heading"><div><h2 id="dashboard-wishes-title">{{ t('my.allWishes') }}</h2><p>{{ t('my.wishesDescription') }}</p></div><a href="/my/wishes">{{ t('dashboard.allWishes') }} <AppIcon name="arrow" /></a></div>
         <div v-if="wishesLoading" class="wish-preview-grid" role="status" :aria-label="t('wishes.loading')"><UiSkeleton v-for="i in 3" :key="i" class="wish-skeleton" /></div>
         <UiCard v-else-if="wishesError" class="dashboard-error"><EmptyState icon="globe" :title="t('wishes.loadErrorTitle')" :description="t('wishes.loadError')"><UiButton @click="loadWishes">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
         <UiCard v-else-if="!wishes.length" class="wishes-empty"><EmptyState :title="t('my.emptyWishesTitle')" :description="t('wishes.emptyDescription')"><UiButton href="/my/wishes/new"><AppIcon name="plus" />{{ t('my.addWish') }}</UiButton></EmptyState></UiCard>
         <div v-else class="wish-preview-grid" :aria-label="t('dashboard.wishesPreview')"><a v-for="wish in wishes.slice(0, 3)" :key="wish.id" class="wish-preview" href="/my/wishes"><span class="wish-image"><img v-if="wish.image_url" :src="wish.image_url" alt="" loading="lazy" /><AppIcon v-else name="heart" /></span><span>{{ wish.title }}</span><AppIcon name="arrow" /></a></div>
+      </section>
+      <section class="dashboard-section" aria-labelledby="dashboard-lists-title">
+        <div class="section-heading"><div><h2 id="dashboard-lists-title">{{ t('my.lists') }}</h2><p>{{ t('dashboard.listsDescription') }}</p></div><a href="/my/lists">{{ t('dashboard.allLists') }} <AppIcon name="arrow" /></a></div>
+        <div v-if="listsLoading" class="list-grid" role="status" :aria-label="t('lists.loading')"><UiSkeleton v-for="i in 3" :key="i" class="list-skeleton" /></div>
+        <UiCard v-else-if="listsError" class="dashboard-error"><EmptyState icon="globe" :title="t('lists.loadError')" :description="t('lists.error.unavailable')"><UiButton @click="loadLists">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
+        <UiCard v-else-if="!lists.length" class="list-empty"><EmptyState icon="list" :title="t('lists.emptyTitle')" :description="t('lists.emptyDescription')"><UiButton href="/my/lists/new"><AppIcon name="plus" />{{ t('lists.create') }}</UiButton></EmptyState></UiCard>
+        <div v-else class="list-grid"><ListCard v-for="list in lists.slice(0, 2)" :key="list.id" :list="list" /><a class="create-list" href="/my/lists/new"><span><AppIcon name="plus" /></span>{{ t('dashboard.createListTile') }}</a></div>
       </section>
       <p class="privacy-note"><AppIcon name="lock" />{{ t('my.privacyNote') }}</p>
     </template>
