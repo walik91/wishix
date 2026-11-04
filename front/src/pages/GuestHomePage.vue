@@ -7,7 +7,7 @@ import UiButton from '../components/ui/UiButton.vue'
 import gift from '../assets/brand/gift-hero.svg'
 
 const { user, checking } = useSession()
-const startHref = computed(() => user.value ? '/my' : '/register')
+const startHref = computed(() => user.value ? '/my/wishes' : '/register')
 const startLabel = computed(() => t(checking.value ? 'auth.checkingSession' : user.value ? 'home.openMyWishes' : 'home.start'))
 
 const steps = [

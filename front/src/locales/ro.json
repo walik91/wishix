@@ -315,5 +315,11 @@
   "lists.notice.deleted": "Lista a fost ștearsă. Dorințele au fost păstrate.",
   "wishes.listsUpdated": "Listele dorinței au fost actualizate.",
   "wishes.error.list_selection_invalid": "Unele dorințe sau liste selectate nu mai sunt disponibile. Reîncarcă și alege din nou.",
-  "lists.continueInCollection": "Continuă în colecția mea"
+  "lists.continueInCollection": "Continuă în colecția mea",
+  "my.myWishes": "Dorințele mele",
+  "dashboard.allLists": "Toate listele",
+  "dashboard.allWishes": "Toate dorințele",
+  "dashboard.listsDescription": "Listele tale pentru momente speciale.",
+  "dashboard.wishesPreview": "Cele mai recente dorințe",
+  "dashboard.createListTile": "Listă nouă"
 }

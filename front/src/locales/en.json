@@ -315,5 +315,11 @@
   "lists.notice.deleted": "List deleted. Your wishes have been kept.",
   "wishes.listsUpdated": "Wish lists updated.",
   "wishes.error.list_selection_invalid": "Some selected wishes or lists are no longer available. Reload and choose again.",
-  "lists.continueInCollection": "Continue in my collection"
+  "lists.continueInCollection": "Continue in my collection",
+  "my.myWishes": "My wishes",
+  "dashboard.allLists": "All lists",
+  "dashboard.allWishes": "View all wishes",
+  "dashboard.listsDescription": "Your lists for the moments that matter.",
+  "dashboard.wishesPreview": "Your latest wishes",
+  "dashboard.createListTile": "New list"
 }

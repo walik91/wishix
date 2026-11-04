@@ -10,6 +10,7 @@ import PublicLayout from './layouts/PublicLayout.vue'
 import AppShell from './layouts/AppShell.vue'
 import RecoveryPage from './pages/RecoveryPage.vue'
 import MyPage from './pages/MyPage.vue'
+import WishesPage from './pages/WishesPage.vue'
 import NewWishPage from './pages/NewWishPage.vue'
 import ListsPage from './pages/ListsPage.vue'
 import NewListPage from './pages/NewListPage.vue'
@@ -24,7 +25,7 @@ const aliases = { '/sign-in': '/login', '/sign-up': '/register' }
 const page = aliases[path] || path
 const listMatch = page.match(/^\/my\/lists\/([^/]+)$/)
 const profileMatch = page.match(/^\/u\/([A-Za-z0-9_]{3,30})$/)
-const privatePage = page === '/my' || page === '/my/wishes/new' || page === '/my/lists' || !!listMatch
+const privatePage = page === '/my' || page === '/my/wishes' || page === '/my/wishes/new' || page === '/my/lists' || !!listMatch
 
 if (aliases[path]) {
   window.history.replaceState(null, '', `${page}${window.location.search}${window.location.hash}`)
@@ -44,6 +45,7 @@ onMounted(async () => {
     <RegisterPage v-else-if="page === '/register'" />
     <RecoveryPage v-else-if="page === '/forgot-password'" />
     <MyPage v-else-if="page === '/my'" />
+    <WishesPage v-else-if="page === '/my/wishes'" />
     <NewWishPage v-else-if="page === '/my/wishes/new'" />
     <ListsPage v-else-if="page === '/my/lists'" />
     <NewListPage v-else-if="page === '/my/lists/new'" />

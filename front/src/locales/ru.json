@@ -315,5 +315,11 @@
   "lists.notice.deleted": "Список удалён. Желания сохранены.",
   "wishes.listsUpdated": "Списки желания обновлены.",
   "wishes.error.list_selection_invalid": "Некоторые выбранные желания или списки уже недоступны. Обновите данные и повторите выбор.",
-  "lists.continueInCollection": "Продолжить в общей коллекции"
+  "lists.continueInCollection": "Продолжить в общей коллекции",
+  "my.myWishes": "Мои желания",
+  "dashboard.allLists": "Все списки",
+  "dashboard.allWishes": "Все желания",
+  "dashboard.listsDescription": "Ваши списки для особенных моментов.",
+  "dashboard.wishesPreview": "Ваши последние желания",
+  "dashboard.createListTile": "Новый список"
 }

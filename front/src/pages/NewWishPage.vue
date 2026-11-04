@@ -101,7 +101,7 @@ async function submit() {
       list_ids: selectedLists.value,
     }, image.value)
     saved.value = true
-    window.location.assign(contextList.value && selectedLists.value.includes(contextList.value) ? `/my/lists/${contextList.value}?notice=wish-added` : '/my?notice=wish-added')
+    window.location.assign(contextList.value && selectedLists.value.includes(contextList.value) ? `/my/lists/${contextList.value}?notice=wish-added` : '/my/wishes?notice=wish-added')
   } catch (error) {
     if (error.status === 401) { window.location.replace('/login'); return }
     const fields = { wish_title_invalid: 'title', wish_description_invalid: 'description', wish_price_invalid: 'price', wish_priority_invalid: 'priority' }
@@ -119,7 +119,7 @@ async function submit() {
     <div v-if="checking" class="page-loading"><UiSkeleton class="loading-title" /><UiSkeleton class="loading-form" /><p class="sr-only" role="status">{{ t('auth.checkingSession') }}</p></div>
     <UiCard v-else-if="unavailable" class="connection-error"><EmptyState icon="globe" :title="t('my.connectionTitle')" :description="t('auth.error.unavailable')"><UiButton @click="retry">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
     <template v-else-if="user">
-      <UiButton class="back-link" variant="secondary" href="/my" :disabled="saving || saved"><AppIcon name="arrow" />{{ t('wishes.back') }}</UiButton>
+      <UiButton class="back-link" variant="secondary" href="/my/wishes" :disabled="saving || saved"><AppIcon name="arrow" />{{ t('wishes.back') }}</UiButton>
       <header class="page-heading"><h1>{{ t('my.addWish') }}</h1><p>{{ t('wishes.formDescription') }}</p></header>
       <UiCard class="form-card">
         <form ref="form" novalidate :aria-busy="saving || saved" @submit.prevent="submit">
@@ -152,7 +152,7 @@ async function submit() {
           </fieldset>
           <p v-if="failure" class="operation-error" role="alert" tabindex="-1">{{ t(`wishes.error.${failure}`) }}</p>
           <p v-if="contextMissing" class="list-error" role="alert">{{ t('lists.error.list_not_found') }}</p><UiButton v-if="contextList && (contextMissing || listsError)" variant="secondary" :disabled="saving || saved" @click="contextList = ''">{{ t('lists.continueInCollection') }}</UiButton><UiButton v-if="failure === 'list_selection_invalid'" variant="secondary" :disabled="saving || saved" @click="loadLists">{{ t('lists.reload') }}</UiButton>
-          <div class="form-actions"><UiButton type="submit" :loading="saving || saved" :disabled="!!contextList && (listsLoading || listsError || contextMissing)">{{ t('wishes.save') }}</UiButton><UiButton :href="contextList && !contextMissing ? `/my/lists/${contextList}` : '/my'" variant="secondary" :disabled="saving || saved">{{ t('wishes.cancel') }}</UiButton></div>
+          <div class="form-actions"><UiButton type="submit" :loading="saving || saved" :disabled="!!contextList && (listsLoading || listsError || contextMissing)">{{ t('wishes.save') }}</UiButton><UiButton :href="contextList && !contextMissing ? `/my/lists/${contextList}` : '/my/wishes'" variant="secondary" :disabled="saving || saved">{{ t('wishes.cancel') }}</UiButton></div>
         </form>
       </UiCard>
       <p class="privacy-note"><AppIcon name="lock" /><span>{{ t('wishes.privateNote') }}</span></p>

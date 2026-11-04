@@ -1,134 +1,79 @@
-<script setup>
-import { nextTick, ref, watch, watchEffect } from 'vue'
+﻿<script setup>
+import { watch, watchEffect } from 'vue'
 import { t } from '../i18n.js'
 import { useSession } from '../composables/useSession.js'
+import { useLists } from '../composables/useLists.js'
 import { useWishes } from '../composables/useWishes.js'
 import UiButton from '../components/ui/UiButton.vue'
 import UiCard from '../components/ui/UiCard.vue'
 import UiSkeleton from '../components/ui/UiSkeleton.vue'
-import UiDialog from '../components/ui/UiDialog.vue'
-import UiToast from '../components/ui/UiToast.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
-import WishCard from '../components/wishes/WishCard.vue'
-import WishImageDialog from '../components/wishes/WishImageDialog.vue'
-import WishListsDialog from '../components/lists/WishListsDialog.vue'
+import ListCard from '../components/wishes/ListCard.vue'
 import gift from '../assets/brand/gift-hero.svg'
 
 const { user, checking, unavailable, refresh } = useSession()
-const { wishes, loading, error, load, remove } = useWishes()
-const deleteOpen = ref(false)
-const selected = ref(null)
-const deleting = ref(false)
-const deleteError = ref(false)
-const addButton = ref(null)
-const imageOpen = ref(false)
-const imageWish = ref(null)
-const listsOpen = ref(false), listsWish = ref(null)
-const notice = ref(new URLSearchParams(window.location.search).get('notice') === 'wish-added' ? 'added' : '')
-if (notice.value) window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`)
-
-watchEffect(() => { document.title = `${t('my.allWishes')} · ${t('appName')}` })
+const { lists, loading: listsLoading, error: listsError, load: loadLists } = useLists()
+const { wishes, loading: wishesLoading, error: wishesError, load: loadWishes } = useWishes()
 watch([user, checking, unavailable], ([account, pending, failed]) => {
-  if (account && !pending && !failed) load()
+  if (account && !pending && !failed) { loadLists(); loadWishes() }
 }, { immediate: true })
-
+watchEffect(() => { document.title = `${t('auth.my')} · ${t('appName')}` })
 async function retry() {
   await refresh()
   if (!user.value && !unavailable.value) window.location.replace('/login')
 }
-function confirmDelete(wish) {
-  selected.value = wish
-  deleteError.value = false
-  deleteOpen.value = true
-}
-function editImage(wish) { imageWish.value = wish; imageOpen.value = true }
-function imageUpdated(id, url) {
-  const wish = wishes.value.find(wish => wish.id === id)
-  if (wish) wish.image_url = url
-  notice.value = 'imageUpdated'
-}
-async function removeSelected() {
-  if (deleting.value) return
-  deleting.value = true
-  deleteError.value = false
-  try {
-    await remove(selected.value.id)
-    deleteOpen.value = false
-    notice.value = 'deleted'
-    await nextTick()
-    // The deleted card's trigger no longer exists, so restore focus explicitly.
-    addButton.value?.$el.focus()
-  } catch { deleteError.value = true }
-  finally { deleting.value = false }
-}
 </script>
 
 <template>
-  <div class="my-page" :aria-busy="checking || loading">
-    <div v-if="checking" class="page-loading">
-      <p class="sr-only" role="status">{{ t('auth.checkingSession') }}</p>
-      <UiSkeleton class="loading-title" /><UiSkeleton class="loading-subtitle" />
-      <div class="wish-grid"><UiSkeleton v-for="index in 4" :key="index" class="loading-card" /></div>
-    </div>
-    <UiCard v-else-if="unavailable" class="connection-error">
-      <EmptyState icon="globe" :title="t('my.connectionTitle')" :description="t('auth.error.unavailable')"><UiButton @click="retry">{{ t('checkAgain') }}</UiButton></EmptyState>
-    </UiCard>
+  <div class="dashboard" :aria-busy="checking || (user && (listsLoading || wishesLoading))">
+    <div v-if="checking" class="dashboard-loading" role="status" :aria-label="t('auth.checkingSession')"><UiSkeleton class="loading-title" /><UiSkeleton class="loading-hero" /><UiSkeleton class="loading-hero" /></div>
+    <UiCard v-else-if="unavailable" class="dashboard-error"><EmptyState icon="globe" :title="t('my.connectionTitle')" :description="t('auth.error.unavailable')"><UiButton @click="retry">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
     <template v-else-if="user">
-      <UiToast v-if="notice" @dismiss="notice = ''">{{ t(`wishes.${notice}`) }}</UiToast>
-      <header class="collection-heading">
-        <div><p class="eyebrow">{{ t('auth.my') }}</p><h1>{{ t('my.allWishes') }}<span v-if="!loading && !error" class="wish-count">{{ wishes.length }}</span></h1><p>{{ t('my.wishesDescription') }}</p></div>
-        <UiButton ref="addButton" href="/my/wishes/new"><AppIcon name="plus" />{{ t('my.addWish') }}</UiButton>
-      </header>
-      <div v-if="loading" class="wish-grid" role="status" :aria-label="t('wishes.loading')"><UiSkeleton v-for="index in 4" :key="index" class="loading-card" /></div>
-      <UiCard v-else-if="error" class="connection-error">
-        <EmptyState icon="globe" :title="t('wishes.loadErrorTitle')" :description="t('wishes.loadError')"><UiButton @click="load">{{ t('checkAgain') }}</UiButton></EmptyState>
-      </UiCard>
-      <UiCard v-else-if="!wishes.length" class="wishes-empty">
-        <img :src="gift" alt="" width="220" height="180" aria-hidden="true" />
-        <EmptyState :title="t('my.emptyWishesTitle')" :description="t('wishes.emptyDescription')"><UiButton href="/my/wishes/new"><AppIcon name="plus" />{{ t('wishes.firstWish') }}</UiButton></EmptyState>
-      </UiCard>
-      <div v-else class="wish-grid"><WishCard v-for="wish in wishes" :key="wish.id" :wish="wish" @delete="confirmDelete" @image="editImage"><template #actions><UiButton variant="secondary" @click="listsWish = wish; listsOpen = true"><AppIcon name="list" />{{ t('lists.wishLists') }}</UiButton></template></WishCard></div>
-      <p class="privacy-note"><AppIcon name="lock" /><span>{{ t('wishes.privateNote') }}</span></p>
+      <header class="greeting"><h1>{{ t('my.hello') }} {{ user.username }}!</h1><p>{{ t('my.description') }}</p></header>
+      <section class="hero" aria-labelledby="dashboard-hero-title">
+        <div class="hero-copy"><h2 id="dashboard-hero-title">{{ t('my.heroTitle') }}</h2><p>{{ t('my.heroDescription') }}</p><UiButton href="/my/lists/new"><AppIcon name="plus" />{{ t('my.createList') }}</UiButton></div>
+        <img :src="gift" alt="" width="300" height="240" aria-hidden="true" />
+      </section>
+      <section class="dashboard-section" aria-labelledby="dashboard-lists-title">
+        <div class="section-heading"><div><h2 id="dashboard-lists-title">{{ t('my.lists') }}</h2><p>{{ t('dashboard.listsDescription') }}</p></div><a href="/my/lists">{{ t('dashboard.allLists') }} <AppIcon name="arrow" /></a></div>
+        <div v-if="listsLoading" class="list-grid" role="status" :aria-label="t('lists.loading')"><UiSkeleton v-for="i in 3" :key="i" class="list-skeleton" /></div>
+        <UiCard v-else-if="listsError" class="dashboard-error"><EmptyState icon="globe" :title="t('lists.loadError')" :description="t('lists.error.unavailable')"><UiButton @click="loadLists">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
+        <div v-else class="list-grid"><ListCard v-for="list in lists.slice(0, 2)" :key="list.id" :list="list" /><a class="create-list" href="/my/lists/new"><span><AppIcon name="plus" /></span>{{ t('dashboard.createListTile') }}</a></div>
+      </section>
+      <section class="dashboard-section" aria-labelledby="dashboard-wishes-title">
+        <div class="section-heading"><div><h2 id="dashboard-wishes-title">{{ t('my.allWishes') }}</h2><p>{{ t('my.wishesDescription') }}</p></div><a href="/my/wishes">{{ t('dashboard.allWishes') }} <AppIcon name="arrow" /></a></div>
+        <div v-if="wishesLoading" class="wish-preview-grid" role="status" :aria-label="t('wishes.loading')"><UiSkeleton v-for="i in 3" :key="i" class="wish-skeleton" /></div>
+        <UiCard v-else-if="wishesError" class="dashboard-error"><EmptyState icon="globe" :title="t('wishes.loadErrorTitle')" :description="t('wishes.loadError')"><UiButton @click="loadWishes">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
+        <UiCard v-else-if="!wishes.length" class="wishes-empty"><EmptyState :title="t('my.emptyWishesTitle')" :description="t('wishes.emptyDescription')"><UiButton href="/my/wishes/new"><AppIcon name="plus" />{{ t('my.addWish') }}</UiButton></EmptyState></UiCard>
+        <div v-else class="wish-preview-grid" :aria-label="t('dashboard.wishesPreview')"><a v-for="wish in wishes.slice(0, 3)" :key="wish.id" class="wish-preview" href="/my/wishes"><span class="wish-image"><img v-if="wish.image_url" :src="wish.image_url" alt="" loading="lazy" /><AppIcon v-else name="heart" /></span><span>{{ wish.title }}</span><AppIcon name="arrow" /></a></div>
+      </section>
+      <p class="privacy-note"><AppIcon name="lock" />{{ t('my.privacyNote') }}</p>
     </template>
-    <WishImageDialog v-model:open="imageOpen" :wish="imageWish" @updated="imageUpdated" />
-    <WishListsDialog v-model:open="listsOpen" :wish="listsWish" @updated="notice = 'listsUpdated'" />
-    <UiDialog v-model:open="deleteOpen" :busy="deleting" :title="t('wishes.deleteTitle')">
-      <p class="delete-title">{{ selected?.title }}</p>
-      <p class="delete-description">{{ t('wishes.deleteDescription') }}</p>
-      <p v-if="deleteError" class="operation-error" role="alert">{{ t('wishes.deleteError') }}</p>
-      <div class="dialog-actions"><UiButton variant="secondary" :disabled="deleting" @click="deleteOpen = false">{{ t('wishes.cancel') }}</UiButton><UiButton variant="destructive" :loading="deleting" @click="removeSelected">{{ t('wishes.delete') }}</UiButton></div>
-    </UiDialog>
   </div>
 </template>
 
 <style scoped>
-.my-page { min-width: 0; overflow-wrap: anywhere; }
-.collection-heading { display: flex; flex-direction: column; align-items: flex-start; gap: var(--wx-space-5); margin-bottom: var(--wx-space-6); }
-.collection-heading > div { min-width: 0; }
-.eyebrow { margin: 0 0 var(--wx-space-2); color: var(--wx-primary-pressed); font-size: var(--wx-text-sm); font-weight: 600; }
-h1 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--wx-space-3); margin: 0; font-size: 26px; line-height: 1.3; font-weight: 750; letter-spacing: -.03em; }
-.wish-count { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; padding: var(--wx-space-1) var(--wx-space-2); border-radius: var(--wx-radius-pill); color: var(--wx-primary-pressed); background: var(--wx-lavender); font-size: var(--wx-text-sm); letter-spacing: 0; }
-.collection-heading > div > p:last-child { margin: var(--wx-space-2) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.65; }
-.collection-heading > .button { width: 100%; }
-.wish-grid { display: grid; align-items: start; gap: var(--wx-space-4); }
-.wishes-empty { display: flex; flex-direction: column; align-items: center; padding: var(--wx-space-8) var(--wx-space-5) var(--wx-space-10); }
-.wishes-empty > img { display: block; width: 180px; max-width: 100%; height: auto; margin-bottom: var(--wx-space-4); }
-.wishes-empty :deep(.empty-state > .empty-icon) { display: none; }
-.privacy-note { display: flex; align-items: flex-start; justify-content: center; gap: var(--wx-space-2); margin: var(--wx-space-6) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.6; }
-.privacy-note .icon { width: 16px; height: 18px; }
-.page-loading { display: grid; gap: var(--wx-space-4); }
-.loading-title { width: 60%; height: 32px; }.loading-subtitle { width: 80%; margin-bottom: var(--wx-space-5); }.loading-card { height: 180px; border-radius: var(--wx-radius-card); }
-.connection-error { padding: var(--wx-space-10) var(--wx-space-5); }
-.delete-title { margin: 0 0 var(--wx-space-3); font-weight: 650; line-height: 1.5; }
-.delete-description { margin: 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.65; }
-.dialog-actions { display: flex; flex-direction: column-reverse; gap: var(--wx-space-3); margin-top: var(--wx-space-6); }
-.operation-error { color: var(--wx-error); font-size: var(--wx-text-sm); line-height: 1.5; }
-@media (min-width: 48rem) {
-  .collection-heading { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--wx-space-6); margin-bottom: var(--wx-space-8); }
-  h1 { font-size: var(--wx-text-2xl); }.collection-heading > .button { flex-shrink: 0; width: auto; }
-  .wish-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .wishes-empty { min-height: 400px; padding: var(--wx-space-10); }.wishes-empty > img { width: 220px; }
-  .dialog-actions { flex-direction: row; justify-content: flex-end; }
-}
+.dashboard { min-width: 0; overflow-wrap: anywhere; }
+.greeting h1 { margin: 0; font-size: 26px; line-height: 1.25; letter-spacing: -.03em; }
+.greeting p, .section-heading p { margin: var(--wx-space-2) 0 0; color: var(--wx-text-muted); line-height: 1.6; }
+.hero { position: relative; display: flex; align-items: center; min-height: 220px; margin-top: var(--wx-space-6); padding: var(--wx-space-6); overflow: hidden; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-card); background: linear-gradient(110deg, var(--wx-cream), var(--wx-lavender)); }
+.hero-copy { position: relative; z-index: 1; min-width: 0; }
+.hero h2 { max-width: 420px; margin: 0; font-size: 24px; line-height: 1.2; letter-spacing: -.03em; }
+.hero p { max-width: 490px; margin: var(--wx-space-3) 0 var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.6; }
+.hero img { display: none; }
+.dashboard-section { margin-top: var(--wx-space-8); }
+.section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--wx-space-2) var(--wx-space-4); margin-bottom: var(--wx-space-4); }
+.section-heading h2 { margin: 0; font-size: 22px; line-height: 1.3; letter-spacing: -.02em; }
+.section-heading p { font-size: var(--wx-text-sm); }
+.section-heading a { display: inline-flex; align-items: center; gap: var(--wx-space-1); min-height: 44px; color: var(--wx-primary-pressed); font-size: var(--wx-text-sm); font-weight: 600; text-decoration: none; }
+.section-heading a:hover { text-decoration: underline; }.section-heading a .icon { width: 16px; height: 16px; }
+.create-list { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--wx-space-3); min-height: 144px; padding: var(--wx-space-5); border: 1px dashed var(--wx-secondary); border-radius: var(--wx-radius-card); color: var(--wx-primary-pressed); background: var(--wx-background); text-align: center; text-decoration: none; font-size: var(--wx-text-sm); font-weight: 600; }
+.create-list:hover { background: var(--wx-lavender); }.create-list span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--wx-lavender); }
+.wishes-empty, .dashboard-error { padding: var(--wx-space-8) var(--wx-space-5); }
+.wish-preview-grid { display: grid; gap: var(--wx-space-4); }.wish-preview { display: flex; align-items: center; gap: var(--wx-space-3); min-width: 0; min-height: 90px; padding: var(--wx-space-3); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-card); background: var(--wx-surface); color: var(--wx-text); text-decoration: none; font-size: var(--wx-text-sm); font-weight: 600; box-shadow: var(--wx-shadow-card); }.wish-preview:hover { border-color: var(--wx-secondary); }.wish-preview > span:nth-child(2) { flex: 1; min-width: 0; }.wish-preview > .icon { color: var(--wx-primary); }.wish-image { display: grid; place-items: center; flex: 0 0 58px; height: 58px; overflow: hidden; border-radius: var(--wx-radius-sm); color: var(--wx-primary); background: var(--wx-lavender); }.wish-image img { width: 100%; height: 100%; object-fit: contain; background: var(--wx-surface); }
+.privacy-note { display: flex; align-items: center; justify-content: center; gap: var(--wx-space-2); margin: var(--wx-space-8) 0 0; color: var(--wx-text-muted); text-align: center; font-size: var(--wx-text-xs); }.privacy-note .icon { width: 16px; height: 16px; }
+.dashboard-loading { display: grid; gap: var(--wx-space-5); }.loading-title { width: 60%; height: 32px; }.loading-hero { height: 220px; border-radius: var(--wx-radius-card); }.wish-skeleton { height: 90px; border-radius: var(--wx-radius-card); }
+@media (min-width: 48rem) { .greeting h1 { font-size: var(--wx-text-2xl); }.hero { min-height: 250px; padding: var(--wx-space-8); }.hero-copy { max-width: 60%; }.hero img { display: block; position: absolute; right: var(--wx-space-5); bottom: 0; width: 32%; max-width: 300px; height: auto; }.wish-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 75rem) { .wish-preview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 </style>

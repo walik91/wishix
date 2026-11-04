@@ -98,7 +98,7 @@ try {
     if (mode !== 'loading') await waitStatus(page, texts.en[`wishes.import.${mode}`])
     await page.locator('#wish-title').fill('Manual gift')
     await page.locator('button[type=submit]').click()
-    await page.waitForURL('**/my?notice=wish-added')
+    await page.waitForURL('**/my/wishes?notice=wish-added')
     assert.equal(saved.title, 'Manual gift'); assert.equal(saved.price, null)
     checks++; await context.close()
   }

@@ -119,7 +119,7 @@ try {
   await page.getByRole('button', { name: `${tx('lists.remove')}: Gift A`, exact: true }).click(); await confirm(page, 'lists.remove')
   await page.locator(`[data-wish-id="${gift.id}"]`).waitFor({ state: 'detached' })
   assert.equal((await call('GET', `/lists/${second.id}`)).wishes[0].id, gift.id)
-  await page.goto(`${origin}/my`)
+  await page.goto(`${origin}/my/wishes`)
   await page.locator(`[data-wish-id="${gift.id}"]`).getByRole('button', { name: tx('lists.wishLists'), exact: true }).click()
   const membership = page.getByRole('dialog', { name: tx('lists.wishLists'), exact: true })
   await membership.locator(`input[value="${firstID}"]`).check(); await membership.locator(`input[value="${second.id}"]`).uncheck()
