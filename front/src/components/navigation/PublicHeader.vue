@@ -3,6 +3,8 @@ import { t } from '../../i18n.js'
 import LanguagePicker from '../ui/LanguagePicker.vue'
 import UiButton from '../ui/UiButton.vue'
 import logo from '../../assets/brand/logo-lockup.svg'
+import { useSession } from '../../composables/useSession.js'
+const { user, checking } = useSession()
 </script>
 
 <template>
@@ -14,8 +16,11 @@ import logo from '../../assets/brand/logo-lockup.svg'
     </nav>
     <LanguagePicker class="language" />
     <nav class="account-nav" :aria-label="t('home.accountNavigation')">
-      <a class="login-link" href="/login">{{ t('login.submit') }}</a>
-      <UiButton href="/register">{{ t('login.createAccount') }}</UiButton>
+      <UiButton v-if="user" href="/my">{{ t('auth.my') }}</UiButton>
+      <template v-else-if="!checking">
+        <a class="login-link" href="/login">{{ t('login.submit') }}</a>
+        <UiButton href="/register">{{ t('login.createAccount') }}</UiButton>
+      </template>
     </nav>
   </header>
 </template>

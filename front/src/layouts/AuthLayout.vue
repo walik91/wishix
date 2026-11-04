@@ -10,6 +10,7 @@ defineProps({
   titleId: { type: String, required: true },
   dividerLabel: { type: String, required: true },
   notice: { type: String, default: '' },
+  showSocial: { type: Boolean, default: true },
 })
 defineEmits(['social'])
 </script>
@@ -34,8 +35,8 @@ defineEmits(['social'])
           <h1 :id="titleId" tabindex="-1">{{ title }}</h1>
           <p>{{ description }}</p>
         </div>
-        <SocialAuthButtons @select="$emit('social', $event)" />
-        <div class="divider"><span>{{ dividerLabel }}</span></div>
+        <SocialAuthButtons v-if="showSocial" @select="$emit('social', $event)" />
+        <div v-if="showSocial" class="divider"><span>{{ dividerLabel }}</span></div>
         <slot />
         <p class="auth-switch"><slot name="switch" /></p>
         <p v-if="notice" class="preview-notice" role="status">{{ notice }}</p>

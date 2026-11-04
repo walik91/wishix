@@ -10,9 +10,11 @@ import (
 	"go.uber.org/fx/fxevent"
 	"gorm.io/gorm"
 
+	"wishix/server/internal/auth"
 	"wishix/server/internal/controllers"
 	"wishix/server/internal/db"
 	"wishix/server/internal/infrastructure"
+	"wishix/server/internal/repositories"
 	"wishix/server/internal/services"
 )
 
@@ -23,6 +25,12 @@ func New(options ...fx.Option) *fx.App {
 			func() *slog.Logger { return slog.New(slog.NewJSONHandler(os.Stdout, nil)) },
 			services.NewHealth,
 			controllers.NewHealth,
+			auth.LoadConfig,
+			fx.Annotate(auth.NewMailer, fx.As(new(services.CodeMailer))),
+			fx.Annotate(repositories.NewAuth, fx.As(new(services.AuthRepository))),
+			services.NewAuth,
+			controllers.NewAuth,
+			fx.Annotate(db.NewMigrator, fx.As(new(infrastructure.Schema))),
 			infrastructure.NewMux,
 			infrastructure.NewHTTPServer,
 			db.New,
@@ -33,7 +41,8 @@ func New(options ...fx.Option) *fx.App {
 		fx.WithLogger(func(logger *slog.Logger) fxevent.Logger {
 			return &fxevent.SlogLogger{Logger: logger}
 		}),
-		fx.Invoke(func(*gorm.DB) {}, func(*http.Server) {}),
+		fx.Invoke(func(*gorm.DB) {}, func(*http.Server) {}, infrastructure.StartAuthMaintenance),
+		fx.StartTimeout(60 * time.Second),
 		fx.StopTimeout(5 * time.Second),
 	}
 

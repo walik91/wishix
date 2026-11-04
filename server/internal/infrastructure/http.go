@@ -13,25 +13,32 @@ import (
 	"wishix/server/internal/controllers"
 )
 
-func NewMux(health *controllers.Health) *http.ServeMux {
+func NewMux(health *controllers.Health, auth *controllers.Auth) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", health.Get)
 	mux.HandleFunc("GET /api/ready", health.Ready)
+	auth.RegisterRoutes(mux)
 	return mux
 }
 
-func NewHTTPServer(lifecycle fx.Lifecycle, mux *http.ServeMux, logger *slog.Logger, shutdowner fx.Shutdowner) *http.Server {
+type Schema interface{ Apply(context.Context) error }
+
+func NewHTTPServer(lifecycle fx.Lifecycle, mux *http.ServeMux, logger *slog.Logger, shutdowner fx.Shutdowner, schema Schema) *http.Server {
 	server := &http.Server{
 		Addr:              ":8080",
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
+		WriteTimeout:      25 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
 	lifecycle.Append(fx.Hook{
-		OnStart: func(context.Context) error {
+		OnStart: func(ctx context.Context) error {
+			if err := schema.Apply(ctx); err != nil {
+				logger.Error("database migration failed", "error", err)
+				return errors.New("database migration failed; check schema and migration versions")
+			}
 			listener, err := net.Listen("tcp", server.Addr)
 			if err != nil {
 				return err

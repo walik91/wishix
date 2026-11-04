@@ -11,6 +11,12 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: process.env.API_PROXY_TARGET || 'http://server:8080',
+        configure(proxy) {
+          proxy.on('proxyReq', (proxyRequest, request) => {
+            proxyRequest.setHeader('X-Real-IP', request.socket.remoteAddress)
+            proxyRequest.removeHeader('X-Forwarded-For')
+          })
+        },
       },
     },
   },

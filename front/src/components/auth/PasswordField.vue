@@ -8,6 +8,7 @@ defineProps({
   error: { type: String, default: '' },
   autocomplete: { type: String, default: 'current-password' },
   placeholder: { type: String, default: '' },
+  hint: { type: String, default: '' },
 })
 const value = defineModel({ type: String, default: '' })
 const visible = ref(false)
@@ -16,7 +17,7 @@ defineExpose({ focus: () => field.value?.focus() })
 </script>
 
 <template>
-  <TextField id="password" ref="field" v-model="value" name="password" :type="visible ? 'text' : 'password'" :autocomplete="autocomplete" required :label="t('login.password')" :placeholder="placeholder || t('login.passwordPlaceholder')" :error="error">
+  <TextField id="password" ref="field" v-model="value" name="password" :type="visible ? 'text' : 'password'" :autocomplete="autocomplete" required :label="t('login.password')" :placeholder="placeholder || t('login.passwordPlaceholder')" :hint="hint" :error="error">
     <button class="password-toggle" type="button" :aria-label="t(visible ? 'login.hidePassword' : 'login.showPassword')" :aria-pressed="visible" aria-controls="password" @click="visible = !visible">
       <AppIcon :name="visible ? 'eyeOff' : 'eye'" />
     </button>

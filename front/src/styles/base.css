@@ -39,3 +39,6 @@ button, input, select { font: inherit; }
   }
 }
 
+/* Shared feedback for registration, sign-in and recovery. */
+.auth-error { color: var(--wx-error); font-size: var(--wx-text-sm); line-height: 1.6; overflow-wrap: anywhere; }
+.auth-notice { padding: var(--wx-space-4); border-radius: var(--wx-radius-sm); background: var(--wx-lavender); color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.6; overflow-wrap: anywhere; }

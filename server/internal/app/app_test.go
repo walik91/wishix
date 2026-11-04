@@ -14,7 +14,9 @@ import (
 	"gorm.io/gorm"
 
 	"wishix/server/internal/app"
+	"wishix/server/internal/auth"
 	"wishix/server/internal/db"
+	"wishix/server/internal/infrastructure"
 	"wishix/server/internal/services"
 )
 
@@ -114,5 +116,10 @@ func httpTestApp(t *testing.T, options ...fx.Option) *fx.App {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return app.New(append(options, fx.Replace(database))...)
+	config := &auth.Config{Origin: "http://localhost", Secret: "test-secret-only-not-for-production"}
+	return app.New(append(options, fx.Replace(database, config, fx.Annotate(noMigrations{}, fx.As(new(infrastructure.Schema)))))...)
 }
+
+type noMigrations struct{}
+
+func (noMigrations) Apply(context.Context) error { return nil }
