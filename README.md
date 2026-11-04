@@ -17,7 +17,21 @@ docker compose up --build --watch
 
 Гостевая главная: <http://localhost:5173/>. Рабочая регистрация и вход: <http://localhost:5173/register> и <http://localhost:5173/login> (`/sign-up` и `/sign-in` открывают соответствующие экраны). Регистрация требует подтверждения email кодом из письма; после подтверждения и входа открывается `/my`. Восстановление — `/forgot-password`. Сессии хранятся на сервере, выход и сброс пароля отзывают их. Страницы адаптивны и поддерживают EN/RU/RO. Google/Facebook подключаются позже.
 
-В `.env` также нужны `APP_ORIGIN`, `AUTH_SECRET`, `AUTH_TRUSTED_PROXY_CIDRS` и настройки `SMTP_*`. Сейчас рабочий origin — `http://localhost:5173`, SMTP — предоставленный владельцем Zoho через STARTTLS. `AUTH_SECRET` создаётся один раз и сохраняется между запусками. Подробности настройки, API, предложенных параметров паролей/кодов и проверок — в [docs/AUTH.md](docs/AUTH.md). При старте сервер применяет версионируемые SQL-миграции; существующие данные не удаляются.
+В `.env` также нужны `APP_ORIGIN`, `AUTH_SECRET`, `AUTH_TRUSTED_PROXY_CIDRS` и настройки `SMTP_*`. Сейчас рабочий origin — `http://localhost:5173`, SMTP — предоставленный владельцем Zoho через STARTTLS. `AUTH_SECRET` создаётся один раз и сохраняется между запусками. Подробности настройки, API, предложенных параметров паролей/кодов и проверок — в [docs/AUTH.md](docs/AUTH.md). При старте сервер автоматически выполняет Goose `up`; HTTP запускается только после успешных миграций.
+
+## Миграции Goose
+
+Отдельная консольная команда собирается в Docker вместе с API. Для применения и проверки версии:
+
+```sh
+docker compose run --rm --build migrate up
+docker compose run --rm migrate status
+docker compose run --rm migrate version
+```
+
+Явный откат последней миграции: `docker compose run --rm migrate down`. Перед откатом остановить API: `docker compose stop server`. **Down первой миграции удаляет аккаунты и связанные данные.** Следующий запуск текущего API снова выполнит автоматический up; для работы на старой схеме сначала вернуть соответствующую версию кода. Есть также `up-by-one`, `up-to VERSION`, `down-to VERSION`, `redo`, `reset`.
+
+Для production добавить `-f compose.prod.yaml` сразу после `docker compose`. Подробности перехода со старой схемы, проверки пустой БД и написания новых миграций — в [docs/MIGRATIONS.md](docs/MIGRATIONS.md).
 
 Прежняя техническая страница проверки соединения сохранена по адресу <http://localhost:5173/status>.
 

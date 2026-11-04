@@ -2,72 +2,43 @@ package db
 
 import (
 	"context"
-	"crypto/sha256"
+	"database/sql"
 	"embed"
-	"encoding/hex"
-	"fmt"
-	"strings"
+	"io/fs"
 
+	"github.com/pressly/goose/v3"
 	"gorm.io/gorm"
 )
 
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-type Migrator struct{ database *gorm.DB }
+// Migrator uses the same Goose provider and embedded SQL for startup and CLI.
+// It does not own the pool: its caller must close the connection.
+type Migrator struct{ *goose.Provider }
 
-func NewMigrator(database *gorm.DB) *Migrator { return &Migrator{database: database} }
-
-// Apply runs forward-only, idempotent DDL before accepting HTTP requests.
-// CockroachDB schema changes run individually, outside application transactions.
-// A partially applied migration can be resumed; recorded files cannot be edited.
-func (m *Migrator) Apply(ctx context.Context) error {
-	database := m.database.WithContext(ctx)
-	if err := database.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version STRING PRIMARY KEY, checksum STRING NOT NULL)`).Error; err != nil {
-		return err
-	}
-	entries, err := migrationFiles.ReadDir("migrations")
+func NewMigrator(database *gorm.DB) (*Migrator, error) {
+	pool, err := database.DB()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for _, entry := range entries {
-		body, err := migrationFiles.ReadFile("migrations/" + entry.Name())
-		if err != nil {
-			return err
-		}
-		// Git autocrlf must not change a migration checksum across platforms.
-		sql := strings.ReplaceAll(string(body), "\r\n", "\n")
-		sum := sha256.Sum256([]byte(sql))
-		checksum := hex.EncodeToString(sum[:])
-		var rows []struct{ Checksum string }
-		if err := database.Raw("SELECT checksum FROM schema_migrations WHERE version = ?", entry.Name()).Scan(&rows).Error; err != nil {
-			return err
-		}
-		if len(rows) > 0 {
-			if rows[0].Checksum != checksum {
-				return fmt.Errorf("migration %s checksum mismatch", entry.Name())
-			}
-			continue
-		}
-		// These SQL files contain only simple DDL, with no procedural bodies.
-		for _, statement := range strings.Split(sql, ";") {
-			if strings.TrimSpace(statement) == "" {
-				continue
-			}
-			if err := database.Exec(statement).Error; err != nil {
-				return fmt.Errorf("apply migration %s: %w", entry.Name(), err)
-			}
-		}
-		if err := database.Exec("INSERT INTO schema_migrations (version, checksum) VALUES (?, ?) ON CONFLICT (version) DO NOTHING", entry.Name(), checksum).Error; err != nil {
-			return err
-		}
-		rows = nil
-		if err := database.Raw("SELECT checksum FROM schema_migrations WHERE version = ?", entry.Name()).Scan(&rows).Error; err != nil {
-			return err
-		}
-		if len(rows) != 1 || rows[0].Checksum != checksum {
-			return fmt.Errorf("migration %s checksum mismatch", entry.Name())
-		}
+	return NewSQLMigrator(pool)
+}
+
+func NewSQLMigrator(pool *sql.DB) (*Migrator, error) {
+	files, err := fs.Sub(migrationFiles, "migrations")
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	provider, err := goose.NewProvider(goose.DialectPostgres, pool, files, goose.WithDisableGlobalRegistry(true))
+	if err != nil {
+		return nil, err
+	}
+	return &Migrator{Provider: provider}, nil
+}
+
+// Apply is the automatic startup path: never roll back migrations implicitly.
+func (m *Migrator) Apply(ctx context.Context) error {
+	_, err := m.Up(ctx)
+	return err
 }

@@ -75,6 +75,18 @@ services:
       server:
         condition: service_healthy
 
+  migrate:
+    build: ./server
+    profiles: [tools]
+    entrypoint: ["./migrate"]
+    command: ["status"]
+    environment: *test-database
+    volumes:
+      - db-client-ca:/db-certs:ro
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
   go-tests:
     image: golang:1.27.3-alpine3.24
     profiles: [checks]

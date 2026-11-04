@@ -31,6 +31,22 @@ services:
       db:
         condition: service_healthy
 
+  migrate:
+    build:
+      context: ./server
+    profiles: [tools]
+    entrypoint: ["./migrate"]
+    command: ["status"]
+    environment:
+      DB_NAME: ${DB_NAME:?Укажите DB_NAME в .env}
+      DB_USER: ${DB_USER:?Укажите DB_USER в .env}
+      DB_PASSWORD: ${DB_PASSWORD:?Укажите DB_PASSWORD в .env}
+    volumes:
+      - db-client-ca:/db-certs:ro
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
 volumes:
   db-data:
   db-node-certs:

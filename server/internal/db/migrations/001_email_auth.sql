@@ -1,3 +1,5 @@
+-- +goose NO TRANSACTION
+-- +goose Up
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
     username STRING NOT NULL UNIQUE,
@@ -41,3 +43,9 @@ CREATE TABLE IF NOT EXISTS auth_rate_limits (
 );
 
 CREATE INDEX IF NOT EXISTS auth_rate_limits_expiry ON auth_rate_limits (expires_at);
+
+-- +goose Down
+DROP TABLE IF EXISTS auth_sessions;
+DROP TABLE IF EXISTS auth_challenges;
+DROP TABLE IF EXISTS auth_rate_limits;
+DROP TABLE IF EXISTS users;

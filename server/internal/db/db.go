@@ -15,14 +15,11 @@ import (
 
 // New prepares CockroachDB access and registers its connection lifecycle.
 func New(lifecycle fx.Lifecycle) (*gorm.DB, error) {
-	name, user, password := os.Getenv("DB_NAME"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD")
-	if name == "" || user == "" || password == "" {
-		return nil, errors.New("DB_NAME, DB_USER and DB_PASSWORD are required")
+	dsn, err := ConnectionString()
+	if err != nil {
+		return nil, err
 	}
-	dsn := url.URL{Scheme: "postgresql", Host: "db:26257", Path: "/" + name, User: url.UserPassword(user, password)}
-	query := url.Values{"sslmode": {"verify-full"}, "sslrootcert": {"/db-certs/ca.crt"}, "connect_timeout": {"5"}}
-	dsn.RawQuery = query.Encode()
-	database, err := gorm.Open(postgres.Open(dsn.String()), &gorm.Config{
+	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		DisableAutomaticPing: true,
 		Logger:               logger.Default.LogMode(logger.Silent),
 	})
@@ -47,6 +44,19 @@ func New(lifecycle fx.Lifecycle) (*gorm.DB, error) {
 		OnStop: func(context.Context) error { return connection.Close() },
 	})
 	return database, nil
+}
+
+// ConnectionString shares TLS and credential encoding between the API and CLI.
+// The resulting connection string must never be printed or passed in argv.
+func ConnectionString() (string, error) {
+	name, user, password := os.Getenv("DB_NAME"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD")
+	if name == "" || user == "" || password == "" {
+		return "", errors.New("DB_NAME, DB_USER and DB_PASSWORD are required")
+	}
+	dsn := url.URL{Scheme: "postgresql", Host: "db:26257", Path: "/" + name, User: url.UserPassword(user, password)}
+	query := url.Values{"sslmode": {"verify-full"}, "sslrootcert": {"/db-certs/ca.crt"}, "connect_timeout": {"5"}}
+	dsn.RawQuery = query.Encode()
+	return dsn.String(), nil
 }
 
 // SQL exposes the same underlying pool for infrastructure health checks.
