@@ -7,6 +7,7 @@ import StartPage from './pages/StartPage.vue'
 import UiButton from './components/ui/UiButton.vue'
 import { t } from './i18n.js'
 import PublicLayout from './layouts/PublicLayout.vue'
+import AppShell from './layouts/AppShell.vue'
 import RecoveryPage from './pages/RecoveryPage.vue'
 import MyPage from './pages/MyPage.vue'
 import { useSession } from './composables/useSession.js'
@@ -28,7 +29,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <PublicLayout>
+  <component :is="page === '/my' ? AppShell : PublicLayout">
     <GuestHomePage v-if="page === '/'" />
     <LoginPage v-else-if="page === '/login'" />
     <RegisterPage v-else-if="page === '/register'" />
@@ -40,7 +41,7 @@ onMounted(async () => {
       <p>{{ t('notFound.description') }}</p>
       <UiButton href="/">{{ t('notFound.home') }}</UiButton>
     </section>
-  </PublicLayout>
+  </component>
 </template>
 
 <style scoped>
