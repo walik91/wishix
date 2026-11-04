@@ -2,6 +2,10 @@ import { requestJSON } from './client.js'
 
 const headers = { 'Content-Type': 'application/json', 'X-Wishix-Request': '1' }
 export const listWishes = () => requestJSON('/wishes')
+export const previewWish = (url, locale, signal) => requestJSON('/wishes/import-preview', {
+  method: 'POST', headers, body: JSON.stringify({ url, locale }),
+  signal: AbortSignal.any([signal, AbortSignal.timeout(20000)]),
+})
 export function createWish(data, image = null) {
   if (!image) return requestJSON('/wishes', { method: 'POST', headers, body: JSON.stringify(data), signal: AbortSignal.timeout(20000) })
   const body = new FormData()

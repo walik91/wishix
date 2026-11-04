@@ -1,0 +1,548 @@
+package productimport
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/url"
+	"regexp"
+	"sort"
+	"strings"
+	"unicode"
+
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/charset"
+)
+
+// Document is bounded, inert HTML. Adapters may inspect it but do not fetch URLs.
+type Document struct {
+	URL  *url.URL
+	HTML *html.Node
+}
+
+type Metadata struct {
+	Title      string
+	Price      string
+	Currency   string
+	ShopName   string
+	Images     []string
+	NotProduct bool
+}
+
+// Adapter is an optional override for a confirmed site-specific incompatibility.
+// The default registry is empty. Image URLs still pass the common secure fetcher.
+type Adapter interface {
+	Match(*url.URL) bool
+	Enrich(Document, Metadata) Metadata
+}
+
+func attr(n *html.Node, key string) string {
+	for _, a := range n.Attr {
+		if a.Key == key {
+			return a.Val
+		}
+	}
+	return ""
+}
+func content(n *html.Node) string {
+	if v := attr(n, "content"); v != "" {
+		return v
+	}
+	if v := attr(n, "href"); v != "" {
+		return v
+	}
+	if v := attr(n, "src"); v != "" {
+		return v
+	}
+	return nodeText(n)
+}
+func nodeText(n *html.Node) string {
+	var b strings.Builder
+	var walk func(*html.Node, int)
+	walk = func(n *html.Node, depth int) {
+		if depth > 64 || b.Len() > 8192 || n.Data == "script" || n.Data == "style" {
+			return
+		}
+		if n.Type == html.TextNode {
+			b.WriteString(n.Data)
+			b.WriteByte(' ')
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c, depth+1)
+		}
+	}
+	walk(n, 0)
+	return clean(b.String(), 1000)
+}
+func clean(s string, limit int) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
+			return ' '
+		}
+		return r
+	}, s)
+	s = strings.Join(strings.Fields(s), " ")
+	runes := []rune(s)
+	if len(runes) > limit {
+		s = string(runes[:limit])
+	}
+	return s
+}
+func types(v any, wanted string) bool {
+	switch v := v.(type) {
+	case string:
+		for _, token := range strings.Fields(v) {
+			token = strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(token, "https://schema.org/"), "http://schema.org/"), "schema:")
+			if strings.EqualFold(strings.TrimSuffix(token, "/"), wanted) {
+				return true
+			}
+		}
+	case []any:
+		for _, value := range v {
+			if types(value, wanted) {
+				return true
+			}
+		}
+	}
+	return false
+}
+func str(v any) string {
+	switch v := v.(type) {
+	case string:
+		return v
+	case json.Number:
+		return string(v)
+	}
+	return ""
+}
+func objects(v any) []map[string]any {
+	if m, ok := v.(map[string]any); ok {
+		return []map[string]any{m}
+	}
+	var result []map[string]any
+	if values, ok := v.([]any); ok {
+		for _, v := range values {
+			if m, ok := v.(map[string]any); ok {
+				result = append(result, m)
+			}
+		}
+	}
+	return result
+}
+func decodeJSON(raw string) any {
+	if len(raw) > 512*1024 {
+		return nil
+	}
+	// Bound nesting before decoding/traversal (the document itself is also capped).
+	depth, quoted, escape := 0, false, false
+	for _, ch := range raw {
+		if quoted {
+			if escape {
+				escape = false
+			} else if ch == '\\' {
+				escape = true
+			} else if ch == '"' {
+				quoted = false
+			}
+			continue
+		}
+		if ch == '"' {
+			quoted = true
+		} else if ch == '[' || ch == '{' {
+			depth++
+			if depth > 32 {
+				return nil
+			}
+		} else if ch == ']' || ch == '}' {
+			depth--
+		}
+	}
+	d := json.NewDecoder(strings.NewReader(raw))
+	d.UseNumber()
+	var v any
+	if d.Decode(&v) != nil || d.Decode(new(any)) != io.EOF {
+		return nil
+	}
+	return v
+}
+
+var currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
+var decimalPattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,9})(\.[0-9]+)?$`)
+var groupedPrice = regexp.MustCompile(`^[0-9]{1,3}([ ,\.][0-9]{3})+([,.][0-9]{1,2})?$`)
+
+// decimal preserves exact values; no floating-point conversion or rounding.
+func decimal(raw string) string {
+	s := strings.TrimSpace(strings.ReplaceAll(raw, "\u00a0", " "))
+	if strings.Contains(s, ",") || strings.Contains(s, " ") {
+		if groupedPrice.MatchString(s) {
+			last := strings.LastIndexAny(s, ",.")
+			fraction := ""
+			if last >= 0 && len(s)-last-1 <= 2 {
+				fraction = "." + s[last+1:]
+				s = s[:last]
+			}
+			s = strings.NewReplacer(",", "", ".", "", " ", "").Replace(s) + fraction
+		} else if strings.Count(s, ",") == 1 && !strings.Contains(s, ".") && !strings.Contains(s, " ") {
+			s = strings.ReplaceAll(s, ",", ".")
+		} else {
+			return ""
+		}
+	}
+	if !decimalPattern.MatchString(s) {
+		return ""
+	}
+	parts := strings.SplitN(s, ".", 2)
+	fraction := ""
+	if len(parts) == 2 {
+		fraction = strings.TrimRight(parts[1], "0")
+	}
+	if len(fraction) > 2 {
+		return ""
+	}
+	return parts[0] + "." + (fraction + "00")[:2]
+}
+
+func samePage(raw string, base *url.URL) bool {
+	u, err := url.Parse(raw)
+	if err != nil || raw == "" {
+		return false
+	}
+	u = base.ResolveReference(u)
+	return strings.EqualFold(u.Host, base.Host) && strings.TrimRight(u.Path, "/") == strings.TrimRight(base.Path, "/") && u.RawQuery == base.RawQuery
+}
+
+func imageValues(v any) []string {
+	var result []string
+	switch v := v.(type) {
+	case string:
+		result = append(result, v)
+	case []any:
+		for _, v := range v {
+			result = append(result, imageValues(v)...)
+			if len(result) >= 24 {
+				break
+			}
+		}
+	case map[string]any:
+		for _, k := range []string{"contentUrl", "url", "@id"} {
+			if s := str(v[k]); s != "" {
+				result = append(result, s)
+			}
+		}
+	}
+	return result
+}
+
+func priceFrom(offers any, page *url.URL) (string, string) {
+	var valid []map[string]any
+	for _, offer := range objects(offers) {
+		if types(offer["@type"], "AggregateOffer") {
+			if str(offer["lowPrice"]) != str(offer["highPrice"]) {
+				continue
+			}
+			offer["price"] = offer["lowPrice"]
+		}
+		valid = append(valid, offer)
+	}
+	// Prefer a current-page offer among variants; ambiguous differing prices are omitted.
+	var matched []map[string]any
+	for _, o := range valid {
+		if samePage(str(o["url"]), page) {
+			matched = append(matched, o)
+		}
+	}
+	if len(matched) > 0 {
+		valid = matched
+	}
+	price, currency := "", ""
+	for _, o := range valid {
+		p, c := decimal(str(o["price"])), strings.ToUpper(strings.TrimSpace(str(o["priceCurrency"])))
+		if p == "" {
+			for _, spec := range objects(o["priceSpecification"]) {
+				p, c = decimal(str(spec["price"])), strings.ToUpper(str(spec["priceCurrency"]))
+				if p != "" {
+					break
+				}
+			}
+		}
+		if p == "" || !currencyPattern.MatchString(c) {
+			continue
+		}
+		if price != "" && (price != p || currency != c) {
+			return "", ""
+		}
+		price, currency = p, c
+	}
+	return price, currency
+}
+
+func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
+	reader, err := charset.NewReader(bytes.NewReader(raw), "")
+	if err != nil {
+		return Metadata{}, ErrFetch
+	}
+	doc, err := html.Parse(reader)
+	if err != nil {
+		return Metadata{}, ErrFetch
+	}
+	meta := map[string]string{}
+	var h1 []string
+	var products []map[string]any
+	var micro []*html.Node
+	var galleries []string
+	collection, cards, count := false, 0, 0
+	pageTitle := ""
+	var jsonWalk func(any, int)
+	jsonWalk = func(v any, depth int) {
+		if depth > 8 || len(products) > 64 {
+			return
+		}
+		if a, ok := v.([]any); ok {
+			for _, e := range a {
+				jsonWalk(e, depth+1)
+			}
+			return
+		}
+		m, ok := v.(map[string]any)
+		if !ok {
+			return
+		}
+		if types(m["@type"], "CollectionPage") || types(m["@type"], "ItemList") {
+			collection = true
+			return
+		}
+		if types(m["@type"], "Product") {
+			products = append(products, m)
+			return
+		}
+		if types(m["@type"], "ProductGroup") {
+			jsonWalk(m["hasVariant"], depth+1)
+			return
+		}
+		for _, key := range []string{"@graph", "mainEntity", "mainEntityOfPage"} {
+			jsonWalk(m[key], depth+1)
+		}
+	}
+	var galleryJSON func(any, int)
+	galleryJSON = func(v any, depth int) {
+		if depth > 5 || len(galleries) >= 24 {
+			return
+		}
+		if m, ok := v.(map[string]any); ok {
+			// Only image/gallery fields, never execute embedded JavaScript or traverse arbitrary scripts.
+			keys := make([]string, 0, len(m))
+			for k := range m {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				lower := strings.ToLower(k)
+				if strings.Contains(lower, "image") || strings.Contains(lower, "photo") || strings.Contains(lower, "gallery") {
+					galleries = append(galleries, imageValues(m[k])...)
+				}
+			}
+		}
+	}
+	var walk func(*html.Node, int)
+	walk = func(n *html.Node, depth int) {
+		count++
+		if count > 100000 || depth > 256 {
+			return
+		}
+		if n.Type == html.ElementNode {
+			switch n.Data {
+			case "meta":
+				key := strings.ToLower(attr(n, "property"))
+				if key == "" {
+					key = strings.ToLower(attr(n, "name"))
+				}
+				if len(key) < 100 && meta[key] == "" {
+					meta[key] = attr(n, "content")
+				}
+			case "title":
+				pageTitle = nodeText(n)
+			case "h1":
+				value := nodeText(n)
+				if value != "" && len(h1) < 8 {
+					h1 = append(h1, value)
+				}
+			case "script":
+				if strings.EqualFold(strings.TrimSpace(strings.Split(attr(n, "type"), ";")[0]), "application/ld+json") && n.FirstChild != nil {
+					jsonWalk(decodeJSON(n.FirstChild.Data), 0)
+				}
+			case "link":
+				if strings.EqualFold(attr(n, "rel"), "image_src") {
+					galleries = append(galleries, attr(n, "href"))
+				}
+			}
+			if types(attr(n, "itemtype"), "Product") || types(attr(n, "typeof"), "Product") {
+				micro = append(micro, n)
+			}
+			if attr(n, "data-product-id") != "" {
+				cards++
+			}
+			for _, a := range n.Attr {
+				key := strings.ToLower(a.Key)
+				if strings.Contains(key, "product") || strings.Contains(key, "gallery") || key == ":imgs" || key == "data-images" {
+					v := decodeJSON(a.Val)
+					if key == ":imgs" || key == "data-images" {
+						galleries = append(galleries, imageValues(v)...)
+					} else {
+						galleryJSON(v, 0)
+					}
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c, depth+1)
+		}
+	}
+	walk(doc, 0)
+	if count > 100000 {
+		return Metadata{}, ErrFetch
+	}
+	result := Metadata{ShopName: clean(meta["og:site_name"], 120)}
+	var product map[string]any
+	bestScore, tied := 0, false
+	for _, p := range products {
+		score := 0
+		if samePage(str(p["url"]), page) || samePage(str(p["@id"]), page) {
+			score = 100
+		}
+		for _, offer := range objects(p["offers"]) {
+			if samePage(str(offer["url"]), page) && score < 90 {
+				score = 90
+			}
+		}
+		name := clean(str(p["name"]), 200)
+		if name != "" && score == 0 {
+			for _, heading := range h1 {
+				if strings.EqualFold(name, heading) {
+					score = 50
+					break
+				}
+			}
+		}
+		if score > bestScore {
+			product, bestScore, tied = p, score, false
+		} else if score == bestScore && score > 0 {
+			tied = true
+		}
+	}
+	if tied {
+		product = nil
+	}
+	if product == nil && len(products) == 1 && !collection {
+		product = products[0]
+	}
+	if product != nil {
+		result.Title = str(product["name"])
+		result.Price, result.Currency = priceFrom(product["offers"], page)
+		result.Images = append(result.Images, imageValues(product["image"])...)
+	}
+	if product == nil && len(micro) == 1 && !collection {
+		var scope func(*html.Node)
+		scope = func(n *html.Node) {
+			if n != micro[0] && (types(attr(n, "itemtype"), "Product") || types(attr(n, "typeof"), "Product")) {
+				return
+			}
+			for _, prop := range strings.Fields(attr(n, "itemprop") + " " + attr(n, "property")) {
+				prop = strings.TrimPrefix(prop, "schema:")
+				switch prop {
+				case "name":
+					if result.Title == "" {
+						result.Title = content(n)
+					}
+				case "price":
+					if result.Price == "" {
+						result.Price = decimal(content(n))
+					}
+				case "priceCurrency":
+					if result.Currency == "" {
+						result.Currency = strings.ToUpper(content(n))
+					}
+				case "image":
+					result.Images = append(result.Images, content(n))
+				}
+			}
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				scope(c)
+			}
+		}
+		scope(micro[0])
+	}
+	// Collection pages must not import logos, card prices, or arbitrary recommendations.
+	result.NotProduct = product == nil && (collection || len(products) > 1 || len(micro) > 1 || cards >= 4)
+	if !result.NotProduct {
+		ogTitle := meta["og:title"]
+		if ogTitle == "" {
+			ogTitle = meta["twitter:title"]
+		}
+		mainTitle := ""
+		if len(h1) > 0 {
+			mainTitle = h1[0]
+			for _, h := range h1 {
+				if h != mainTitle {
+					mainTitle = ""
+					break
+				}
+			}
+		}
+		// Prefer a matching main heading: keeps the selected variant and drops schema suffix noise.
+		if mainTitle != "" && (result.Title == "" || strings.HasPrefix(strings.ToLower(mainTitle), strings.ToLower(result.Title)) || (ogTitle == mainTitle && strings.HasPrefix(strings.ToLower(result.Title), strings.ToLower(mainTitle)))) {
+			result.Title = mainTitle
+		}
+		if result.Title == "" {
+			result.Title = ogTitle
+		}
+		if result.Title == "" {
+			result.Title = pageTitle
+		}
+		if result.Price == "" {
+			for _, prefix := range []string{"product:price:", "og:price:"} {
+				p, c := decimal(meta[prefix+"amount"]), strings.ToUpper(meta[prefix+"currency"])
+				if p != "" && currencyPattern.MatchString(c) {
+					result.Price, result.Currency = p, c
+					break
+				}
+			}
+		}
+		result.Images = append(result.Images, meta["og:image"], meta["og:image:secure_url"], meta["twitter:image"], meta["twitter:image:src"])
+		result.Images = append(result.Images, galleries...)
+	}
+	for _, adapter := range adapters {
+		if adapter.Match(page) {
+			result = adapter.Enrich(Document{URL: page, HTML: doc}, result)
+			break
+		}
+	}
+	if result.NotProduct {
+		return Metadata{NotProduct: true}, nil
+	}
+	result.Title = clean(result.Title, 200)
+	result.ShopName = clean(result.ShopName, 120)
+	result.Price = decimal(result.Price)
+	result.Currency = strings.ToUpper(strings.TrimSpace(result.Currency))
+	if result.Price == "" || !currencyPattern.MatchString(result.Currency) {
+		result.Price, result.Currency = "", ""
+	}
+	var images []string
+	seen := map[string]bool{}
+	for _, raw := range result.Images {
+		if len(images) >= 24 {
+			break
+		}
+		u, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || raw == "" {
+			continue
+		}
+		resolved, err := ValidateURL(page.ResolveReference(u).String())
+		if err != nil || seen[resolved.String()] {
+			continue
+		}
+		seen[resolved.String()] = true
+		images = append(images, resolved.String())
+	}
+	result.Images = images
+	return result, nil
+}

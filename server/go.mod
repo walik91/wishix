@@ -10,6 +10,7 @@ require (
 	go.uber.org/fx v1.24.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/image v0.47.0
+	golang.org/x/net v0.62.0
 	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
 )

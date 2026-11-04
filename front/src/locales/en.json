@@ -213,6 +213,19 @@
   "auth.error.unauthorized": "Please sign in again.",
   "auth.error.forbidden": "Refresh this page and try again.",
   "auth.error.email_unavailable": "We couldn’t send the email. Please try again shortly.",
-  "auth.error.unavailable": "We couldn’t connect to Wishix. Please try again."
+  "auth.error.unavailable": "We couldn’t connect to Wishix. Please try again.",
+  "wishes.import.action": "Fill from link",
+  "wishes.import.retry": "Try import again",
+  "wishes.import.hint": "The first link can fill in the title, image and approximate price. You can edit everything or add a wish by hand.",
+  "wishes.import.loading": "Reading the product page. You can keep filling in the form.",
+  "wishes.import.ok": "Product details added. Check them before saving.",
+  "wishes.import.partial": "Some product details were added. Fill in anything missing and check the price.",
+  "wishes.import.not_product": "This looks like a category or a list of products. Use a link to a specific product, or fill in the wish by hand.",
+  "wishes.import.empty": "No product details found. You can fill in the wish by hand.",
+  "wishes.import.kept": "Your edits have been kept. You can finish filling in the wish.",
+  "wishes.import.failed": "Could not read this page. Try again or fill in the wish by hand.",
+  "wishes.import.busy": "Import is temporarily busy. Try again later or fill in the wish by hand.",
+  "wishes.import.session": "Sign in again to import. Your form is still here.",
+  "wishes.import.shop": "Store:",
+  "wishes.import.login": "Sign in"
 }
-

@@ -118,6 +118,11 @@ func (a *Auth) LimitIP(ctx context.Context, action, ip string) error {
 	return a.limit(ctx, "ip:"+action, ip, maximum, 15*time.Minute)
 }
 
+// LimitProductImport shares the persistent, atomic limiter, keyed by private account ID.
+func (a *Auth) LimitProductImport(ctx context.Context, userID string) error {
+	return a.limit(ctx, "product-import", userID, 20, 10*time.Minute)
+}
+
 func (a *Auth) newChallenge(purpose, email, username, passwordHash, locale string, userID *string) (*models.AuthChallenge, string, string) {
 	token, code := security.Token(), security.Code()
 	id := security.Digest(token)

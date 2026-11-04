@@ -213,6 +213,19 @@
   "auth.error.unauthorized": "Autentificați-vă din nou.",
   "auth.error.forbidden": "Reîncărcați pagina și încercați din nou.",
   "auth.error.email_unavailable": "Nu am putut trimite emailul. Încercați din nou puțin mai târziu.",
-  "auth.error.unavailable": "Nu ne-am putut conecta la Wishix. Încercați din nou."
+  "auth.error.unavailable": "Nu ne-am putut conecta la Wishix. Încercați din nou.",
+  "wishes.import.action": "Completează din link",
+  "wishes.import.retry": "Reîncearcă importul",
+  "wishes.import.hint": "Primul link poate completa titlul, imaginea și prețul aproximativ. Poți modifica totul sau adăuga dorința manual.",
+  "wishes.import.loading": "Încărcăm datele produsului. Poți continua să completezi formularul.",
+  "wishes.import.ok": "Datele produsului au fost adăugate. Verifică-le înainte de salvare.",
+  "wishes.import.partial": "O parte din date a fost adăugată. Completează ce lipsește și verifică prețul.",
+  "wishes.import.not_product": "Aceasta pare să fie o categorie sau o listă de produse. Folosește linkul unui produs sau completează dorința manual.",
+  "wishes.import.empty": "Nu am găsit date despre produs. Poți completa dorința manual.",
+  "wishes.import.kept": "Modificările tale au fost păstrate. Poți termina de completat dorința.",
+  "wishes.import.failed": "Pagina nu a putut fi citită. Reîncearcă sau completează dorința manual.",
+  "wishes.import.busy": "Importul este ocupat momentan. Reîncearcă mai târziu sau completează dorința manual.",
+  "wishes.import.session": "Autentifică-te din nou pentru import. Formularul a rămas completat.",
+  "wishes.import.shop": "Magazin:",
+  "wishes.import.login": "Autentificare"
 }
-

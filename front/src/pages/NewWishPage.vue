@@ -1,8 +1,9 @@
 <script setup>
-import { nextTick, ref, watchEffect } from 'vue'
+import { computed, nextTick, ref, watchEffect } from 'vue'
 import { t } from '../i18n.js'
 import { useSession } from '../composables/useSession.js'
 import { createWish } from '../api/wishes.js'
+import { useWishImport, validImportLink } from '../composables/useWishImport.js'
 import UiButton from '../components/ui/UiButton.vue'
 import UiCard from '../components/ui/UiCard.vue'
 import UiSkeleton from '../components/ui/UiSkeleton.vue'
@@ -26,6 +27,10 @@ const saving = ref(false)
 const saved = ref(false)
 const failure = ref('')
 const form = ref(null)
+const firstLink = computed(() => links.value[0]?.value || '')
+const { status: importStatus, shopName, canImport, loading: importing, markDirty, cancel: cancelImport, run: importLink, firstLinkBlur } = useWishImport(firstLink, { title, price, currency, image }, applied => {
+  for (const field of applied) delete errors.value[field]
+})
 const currencies = ['EUR', 'USD', 'GBP', 'MDL', 'RON', 'UAH', 'RUB', 'CHF', 'CAD', 'AUD', 'JPY']
 watchEffect(() => { document.title = `${t('my.addWish')} · ${t('appName')}` })
 
@@ -47,10 +52,7 @@ async function removeLink(id) {
   document.getElementById(`wish-link-${links.value[Math.min(index, links.value.length - 1)].id}`)?.focus()
 }
 function validLink(raw) {
-  try {
-    const url = new URL(raw)
-    return /^https?:$/.test(url.protocol) && !url.username && !url.password && raw.length <= 2048 && !/[\s\u0000-\u001f\u007f]/.test(raw)
-  } catch { return false }
+  return validImportLink(raw)
 }
 async function submit() {
   if (saving.value || saved.value) return
@@ -72,6 +74,7 @@ async function submit() {
     return
   }
   saving.value = true
+  cancelImport()
   try {
     await createWish({
       title: title.value.trim(), description: description.value.trim(),
@@ -106,17 +109,19 @@ async function submit() {
             <section class="links-section" aria-labelledby="links-title">
               <h2 id="links-title">{{ t('wishes.shopLinks') }}</h2><p class="links-hint">{{ t('wishes.linksHint') }}</p>
               <div v-for="(link, index) in links" :key="link.id" class="link-row">
-                <TextField :id="`wish-link-${link.id}`" v-model="link.value" :label="`${t('wishes.shopLink')} ${index + 1}`" :error="errors[`link-${link.id}`] ? t('wishes.error.wish_links_invalid') : ''" type="url" placeholder="https://" maxlength="2048" autocomplete="off" />
+                <TextField :id="`wish-link-${link.id}`" v-model="link.value" :label="`${t('wishes.shopLink')} ${index + 1}`" :error="errors[`link-${link.id}`] ? t('wishes.error.wish_links_invalid') : ''" type="url" placeholder="https://" maxlength="2048" autocomplete="off" @blur="index === 0 && firstLinkBlur()" />
                 <button v-if="links.length > 1" class="remove-link" type="button" :aria-label="`${t('wishes.removeLink')} ${index + 1}`" @click="removeLink(link.id)"><AppIcon name="close" /></button>
               </div>
-              <UiButton variant="secondary" :disabled="links.length >= 10" @click="addLink"><AppIcon name="plus" />{{ t('wishes.addLink') }}</UiButton>
+              <div class="link-actions"><UiButton variant="secondary" :disabled="links.length >= 10" @click="addLink"><AppIcon name="plus" />{{ t('wishes.addLink') }}</UiButton><UiButton v-if="canImport" id="wish-import" variant="secondary" :loading="importing" @click="importLink">{{ t(importStatus === 'idle' ? 'wishes.import.action' : 'wishes.import.retry') }}</UiButton></div>
+              <p class="import-hint">{{ t('wishes.import.hint') }}</p>
+              <div v-if="importStatus !== 'idle'" class="import-status" role="status" aria-live="polite" aria-atomic="true"><p>{{ t(`wishes.import.${importStatus}`) }}</p><p v-if="shopName" class="import-shop">{{ t('wishes.import.shop') }} {{ shopName }}</p><a v-if="importStatus === 'session'" href="/login">{{ t('wishes.import.login') }}</a></div>
             </section>
-            <TextField id="wish-title" v-model="title" :label="t('wishes.titleLabel')" :placeholder="t('wishes.titlePlaceholder')" :hint="t('wishes.titleHint')" :error="errors.title ? t(`wishes.error.${errors.title}`) : ''" required maxlength="400" autocomplete="off" />
-            <WishImageInput id="wish-image" v-model="image" :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" />
+            <TextField id="wish-title" v-model="title" :label="t('wishes.titleLabel')" :placeholder="t('wishes.titlePlaceholder')" :hint="t('wishes.titleHint')" :error="errors.title ? t(`wishes.error.${errors.title}`) : ''" required maxlength="400" autocomplete="off" @input="markDirty('title')" />
+            <WishImageInput id="wish-image" v-model="image" :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" @manual-change="markDirty('image')" />
             <TextField id="wish-description" v-model="description" multiline rows="4" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" maxlength="10000" />
             <div class="price-fields">
-              <TextField id="wish-price" v-model="price" :label="t('wishes.priceLabel')" :hint="t('wishes.priceHint')" :error="errors.price ? t(`wishes.error.${errors.price}`) : ''" inputmode="decimal" placeholder="0.00" maxlength="13" />
-              <TextField id="wish-currency" v-model="currency" :label="t('wishes.currencyLabel')" :hint="t('wishes.currencyHint')" :error="errors.currency ? t(`wishes.error.${errors.currency}`) : ''" list="wish-currencies" maxlength="3" placeholder="USD" autocomplete="off" />
+              <TextField id="wish-price" v-model="price" :label="t('wishes.priceLabel')" :hint="t('wishes.priceHint')" :error="errors.price ? t(`wishes.error.${errors.price}`) : ''" inputmode="decimal" placeholder="0.00" maxlength="13" @input="markDirty('price')" />
+              <TextField id="wish-currency" v-model="currency" :label="t('wishes.currencyLabel')" :hint="t('wishes.currencyHint')" :error="errors.currency ? t(`wishes.error.${errors.currency}`) : ''" list="wish-currencies" maxlength="3" placeholder="USD" autocomplete="off" @input="markDirty('currency')" />
               <datalist id="wish-currencies"><option v-for="code in currencies" :key="code" :value="code" /></datalist>
             </div>
             <div class="select-field">
@@ -147,6 +152,9 @@ select { width: 100%; min-width: 0; min-height: 48px; padding: var(--wx-space-3)
 select:hover { border-color: var(--wx-secondary); }
 .links-section { min-width: 0; padding-bottom: var(--wx-space-6); border-bottom: 1px solid var(--wx-border); }.links-hint { margin: var(--wx-space-2) 0 var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }
 .link-row { display: flex; align-items: flex-start; gap: var(--wx-space-2); margin-bottom: var(--wx-space-4); }.link-row > .field { flex: 1; }
+.link-actions { display: flex; flex-wrap: wrap; gap: var(--wx-space-3); }.link-actions > * { max-width: 100%; }
+.import-hint { margin: var(--wx-space-3) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }
+.import-status { margin-top: var(--wx-space-4); padding: var(--wx-space-3) var(--wx-space-4); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); background: var(--wx-background); color: var(--wx-text); font-size: var(--wx-text-sm); line-height: 1.65; }.import-status p { margin: 0; }.import-status .import-shop { margin-top: var(--wx-space-2); color: var(--wx-text-muted); font-size: var(--wx-text-xs); }.import-status a { display: inline-flex; align-items: center; min-height: 44px; color: var(--wx-primary); }
 .remove-link { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; min-height: 48px; margin-top: 29px; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-text-muted); background: var(--wx-surface); cursor: pointer; }.remove-link:hover { color: var(--wx-error); background: var(--wx-background); }.remove-link:disabled { cursor: wait; }
 .form-actions { display: flex; flex-direction: column; gap: var(--wx-space-3); margin-top: var(--wx-space-8); padding-top: var(--wx-space-6); border-top: 1px solid var(--wx-border); }
 .privacy-note { display: flex; align-items: flex-start; justify-content: center; gap: var(--wx-space-2); margin: var(--wx-space-6) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }.privacy-note .icon { width: 16px; height: 18px; }

@@ -14,6 +14,7 @@ import (
 	"wishix/server/internal/controllers"
 	"wishix/server/internal/db"
 	"wishix/server/internal/infrastructure"
+	"wishix/server/internal/productimport"
 	"wishix/server/internal/repositories"
 	"wishix/server/internal/services"
 )
@@ -33,6 +34,9 @@ func New(options ...fx.Option) *fx.App {
 			fx.Annotate(repositories.NewWishes, fx.As(new(services.WishRepository))),
 			services.NewWishes,
 			controllers.NewWishes,
+			func() *productimport.Importer { return productimport.New() },
+			services.NewProductImport,
+			controllers.NewProductImport,
 			fx.Annotate(db.NewMigrator, fx.As(new(infrastructure.Schema))),
 			infrastructure.NewMux,
 			infrastructure.NewHTTPServer,

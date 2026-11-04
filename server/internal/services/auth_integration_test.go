@@ -27,6 +27,7 @@ import (
 	"wishix/server/internal/controllers"
 	"wishix/server/internal/db"
 	"wishix/server/internal/models"
+	"wishix/server/internal/productimport"
 	"wishix/server/internal/repositories"
 	"wishix/server/internal/services"
 )
@@ -120,6 +121,7 @@ func newAuthFixture(t *testing.T) *authFixture {
 	controllers.NewAuth(auth, config, slog.New(slog.NewTextHandler(io.Discard, nil))).RegisterRoutes(mux)
 	wishes := services.NewWishes(repositories.NewWishes(executor), db.NewTransactionManager(executor))
 	controllers.NewWishes(wishes, controllers.NewAuth(auth, config, slog.New(slog.NewTextHandler(io.Discard, nil)))).RegisterRoutes(mux)
+	controllers.NewProductImport(services.NewProductImport(productimport.New(), auth), controllers.NewAuth(auth, config, slog.New(slog.NewTextHandler(io.Discard, nil)))).RegisterRoutes(mux)
 	return &authFixture{database, repo, auth, mail, mux}
 }
 

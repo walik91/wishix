@@ -6,7 +6,7 @@ import AppIcon from '../ui/AppIcon.vue'
 
 const props = defineProps({ id: { type: String, required: true }, existingSrc: { type: String, default: '' }, error: { type: String, default: '' }, disabled: Boolean })
 const file = defineModel({ default: null })
-const emit = defineEmits(['validation'])
+const emit = defineEmits(['validation', 'manual-change'])
 const picker = ref(null)
 const choose = ref(null)
 const preview = ref('')
@@ -23,6 +23,7 @@ function setError(code) { localError.value = code; emit('validation', code) }
 function select(event) {
   const selected = event.target.files?.[0]
   if (!selected) return
+  emit('manual-change')
   event.target.value = ''
   setError('')
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(selected.type)) { setError('wish_image_invalid'); return }
@@ -30,6 +31,7 @@ function select(event) {
   file.value = selected
 }
 async function clear() {
+  emit('manual-change')
   file.value = null
   setError('')
   await nextTick()
