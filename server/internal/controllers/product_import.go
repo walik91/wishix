@@ -6,6 +6,8 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"wishix/server/internal/productimport"
 	"wishix/server/internal/services"
@@ -14,6 +16,22 @@ import (
 type ProductImport struct {
 	service *services.ProductImport
 	auth    *Auth
+}
+
+// Query parameters, fragments and credentials may contain access tokens.
+// Never record paths on our own origin or reservation links either.
+func importLogURL(raw, origin string) string {
+	u, err := productimport.ValidateURL(raw)
+	if err != nil {
+		return ""
+	}
+	configured, err := url.Parse(origin)
+	path := strings.ToLower(u.Path)
+	if err == nil && strings.EqualFold(u.Hostname(), configured.Hostname()) || strings.Contains(path, "reserv") || strings.Contains(path, "booking") {
+		u.Path, u.RawPath = "", ""
+	}
+	u.RawQuery, u.ForceQuery, u.Fragment = "", false, ""
+	return u.String()
 }
 
 func NewProductImport(service *services.ProductImport, auth *Auth) *ProductImport {
@@ -51,6 +69,27 @@ func (c *ProductImport) preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := c.service.Preview(r.Context(), user.ID, input.URL, input.Locale)
+	address := importLogURL(input.URL, c.auth.config.Origin)
+	if err != nil {
+		reason, upstreamStatus := productimport.FailureDetails(err)
+		if errors.Is(err, services.ErrRateLimit) {
+			reason = "rate_limited"
+		}
+		c.auth.logger.Info("product import", "url", address, "status", "failed", "reason", reason, "upstream_status", upstreamStatus)
+	} else {
+		reason := ""
+		switch result.Status {
+		case "empty":
+			reason = "no_product_metadata"
+		case "not_product":
+			reason = "not_product"
+		case "partial":
+			reason = "missing_fields"
+		}
+		c.auth.logger.Info("product import", "url", address, "status", result.Status, "reason", reason,
+			"has_title", result.Title != "", "has_price", result.Price != "", "has_image", result.Image != nil,
+			"image_reason", result.ImageReason, "image_upstream_status", result.ImageHTTPStatus)
+	}
 	if err != nil {
 		if !errors.Is(err, productimport.ErrURL) && !errors.Is(err, productimport.ErrFetch) && !errors.Is(err, productimport.ErrBusy) {
 			c.auth.failure(w, err)

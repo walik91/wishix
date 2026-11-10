@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/charset"
@@ -277,9 +278,15 @@ func priceFrom(offers any, page *url.URL) (string, string) {
 }
 
 func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
-	reader, err := charset.NewReader(bytes.NewReader(raw), "")
+	// HTML without an explicit charset is often UTF-8; do not misdecode it as Windows-1252.
+	_, _, certain := charset.DetermineEncoding(raw, "")
+	var reader io.Reader = bytes.NewReader(raw)
+	var err error
+	if certain || !utf8.Valid(raw) {
+		reader, err = charset.NewReader(reader, "")
+	}
 	if err != nil {
-		return Metadata{}, ErrFetch
+		return Metadata{}, failure(ErrFetch, "charset_invalid", 0)
 	}
 	doc, err := html.Parse(reader)
 	if err != nil {
@@ -290,6 +297,7 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 	var products []map[string]any
 	var micro []*html.Node
 	var galleries []string
+	var descriptiveImages []*html.Node
 	collection, cards, count := false, 0, 0
 	pageTitle := ""
 	var jsonWalk func(any, int)
@@ -374,6 +382,10 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 				if strings.EqualFold(attr(n, "rel"), "image_src") {
 					galleries = append(galleries, attr(n, "href"))
 				}
+			case "img":
+				if len(descriptiveImages) < 512 && len([]rune(attr(n, "alt"))) >= 20 && attr(n, "src") != "" {
+					descriptiveImages = append(descriptiveImages, n)
+				}
 			}
 			if types(attr(n, "itemtype"), "Product") || types(attr(n, "typeof"), "Product") {
 				micro = append(micro, n)
@@ -399,7 +411,7 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 	}
 	walk(doc, 0)
 	if count > 100000 {
-		return Metadata{}, ErrFetch
+		return Metadata{}, failure(ErrFetch, "html_too_complex", 0)
 	}
 	result := Metadata{ShopName: clean(meta["og:site_name"], 120)}
 	var product map[string]any
@@ -488,6 +500,19 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 				}
 			}
 		}
+		// Multiple section headings are common. A single heading contained in the
+		// document title is a safer main-heading signal than an arbitrary first H1.
+		if mainTitle == "" && pageTitle != "" {
+			for _, heading := range h1 {
+				if strings.Contains(strings.ToLower(pageTitle), strings.ToLower(heading)) {
+					if mainTitle != "" && !strings.EqualFold(mainTitle, heading) {
+						mainTitle = ""
+						break
+					}
+					mainTitle = heading
+				}
+			}
+		}
 		// Prefer a matching main heading: keeps the selected variant and drops schema suffix noise.
 		if mainTitle != "" && (result.Title == "" || strings.HasPrefix(strings.ToLower(mainTitle), strings.ToLower(result.Title)) || (ogTitle == mainTitle && strings.HasPrefix(strings.ToLower(result.Title), strings.ToLower(mainTitle)))) {
 			result.Title = mainTitle
@@ -509,6 +534,16 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 		}
 		result.Images = append(result.Images, meta["og:image"], meta["og:image:secure_url"], meta["twitter:image"], meta["twitter:image:src"])
 		result.Images = append(result.Images, galleries...)
+		// Fall back to an image whose descriptive alt starts with the selected
+		// product title; avoid guessing from unrelated images or short names.
+		if len([]rune(result.Title)) >= 20 {
+			for _, img := range descriptiveImages {
+				alt := clean(attr(img, "alt"), 1000)
+				if strings.HasPrefix(strings.ToLower(alt), strings.ToLower(result.Title)) {
+					result.Images = append(result.Images, attr(img, "src"))
+				}
+			}
+		}
 	}
 	for _, adapter := range adapters {
 		if adapter.Match(page) {

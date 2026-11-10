@@ -23,7 +23,42 @@ var (
 	ErrBusy  = errors.New("import_busy")
 )
 
-const MaxHTML = 2 * 1024 * 1024
+const MaxHTML = 4 * 1024 * 1024
+
+// Failure contains only fixed diagnostic codes and a status, never upstream URLs or bodies.
+type Failure struct {
+	Cause      error
+	Reason     string
+	HTTPStatus int
+}
+
+func (f *Failure) Error() string { return f.Cause.Error() }
+func (f *Failure) Unwrap() error { return f.Cause }
+
+func failure(cause error, reason string, status int) error {
+	return &Failure{Cause: cause, Reason: reason, HTTPStatus: status}
+}
+
+func FailureDetails(err error) (string, int) {
+	var f *Failure
+	if errors.As(err, &f) {
+		return f.Reason, f.HTTPStatus
+	}
+	switch {
+	case errors.Is(err, ErrURL):
+		return "invalid_url", 0
+	case errors.Is(err, ErrBusy):
+		return "busy", 0
+	case errors.Is(err, context.Canceled):
+		return "cancelled", 0
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout", 0
+	case errors.Is(err, ErrFetch):
+		return "unavailable", 0
+	default:
+		return "internal_error", 0
+	}
+}
 
 // Explicitly exclude special-purpose ranges as well as IsPrivate/IsGlobalUnicast.
 // IPv6 is restricted to ordinary global unicast, excluding transition mechanisms.
@@ -133,12 +168,12 @@ func secureFetcher(dns resolver, dial dialFunc) *fetcher {
 			}
 			ips, err := dns.LookupNetIP(ctx, "ip", host)
 			if err != nil || len(ips) == 0 || len(ips) > 32 {
-				return nil, ErrFetch
+				return nil, failure(ErrFetch, "dns_failed", 0)
 			}
 			// Reject mixed public/private DNS answers before trying ANY address.
 			for _, ip := range ips {
 				if !publicIP(ip) {
-					return nil, ErrURL
+					return nil, failure(ErrURL, "address_forbidden", 0)
 				}
 			}
 			for _, ip := range ips {
@@ -151,7 +186,7 @@ func secureFetcher(dns resolver, dial dialFunc) *fetcher {
 					break
 				}
 			}
-			return nil, ErrFetch
+			return nil, failure(ErrFetch, "connect_failed", 0)
 		},
 	}
 	return &fetcher{client: &http.Client{Transport: transport, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
@@ -173,17 +208,28 @@ func (f *fetcher) get(ctx context.Context, raw, locale string, max int64, image 
 		}
 		res, err := f.client.Do(req)
 		if err != nil {
-			return nil, nil, ErrFetch
+			if ctx.Err() != nil {
+				return nil, nil, failure(ErrFetch, "cancelled_or_timeout", 0)
+			}
+			var detail *Failure
+			if errors.As(err, &detail) {
+				return nil, nil, detail
+			}
+			var timeout net.Error
+			if errors.As(err, &timeout) && timeout.Timeout() {
+				return nil, nil, failure(ErrFetch, "timeout", 0)
+			}
+			return nil, nil, failure(ErrFetch, "request_failed", 0)
 		} // Do not expose URL-bearing network errors.
 		if res.StatusCode == 301 || res.StatusCode == 302 || res.StatusCode == 303 || res.StatusCode == 307 || res.StatusCode == 308 {
 			location := res.Header.Get("Location")
 			res.Body.Close()
 			if hop == 3 || location == "" {
-				return nil, nil, ErrFetch
+				return nil, nil, failure(ErrFetch, "redirect_limit_or_missing_location", res.StatusCode)
 			}
 			next, parseErr := url.Parse(location)
 			if parseErr != nil {
-				return nil, nil, ErrFetch
+				return nil, nil, failure(ErrFetch, "invalid_redirect", res.StatusCode)
 			}
 			u, err = ValidateURL(u.ResolveReference(next).String())
 			if err != nil {
@@ -196,15 +242,29 @@ func (f *fetcher) get(ctx context.Context, raw, locale string, max int64, image 
 		if image {
 			allowed = media == "image/jpeg" || media == "image/png" || media == "image/webp" || media == "application/octet-stream"
 		}
-		if res.StatusCode != 200 || !allowed || res.ContentLength > max {
+		if res.StatusCode != 200 {
 			res.Body.Close()
-			return nil, nil, ErrFetch
+			return nil, nil, failure(ErrFetch, "http_status", res.StatusCode)
+		}
+		if !allowed {
+			res.Body.Close()
+			return nil, nil, failure(ErrFetch, "unsupported_content_type", res.StatusCode)
+		}
+		if res.ContentLength > max {
+			res.Body.Close()
+			return nil, nil, failure(ErrFetch, "response_too_large", res.StatusCode)
 		}
 		// net/http transparently decompresses gzip; the limit applies to decoded bytes.
 		body, readErr := io.ReadAll(io.LimitReader(res.Body, max+1))
 		res.Body.Close()
-		if readErr != nil || len(body) == 0 || int64(len(body)) > max {
-			return nil, nil, ErrFetch
+		if readErr != nil {
+			return nil, nil, failure(ErrFetch, "read_failed", res.StatusCode)
+		}
+		if int64(len(body)) > max {
+			return nil, nil, failure(ErrFetch, "response_too_large", res.StatusCode)
+		}
+		if len(body) == 0 {
+			return nil, nil, failure(ErrFetch, "empty_response", res.StatusCode)
 		}
 		return body, u, nil
 	}

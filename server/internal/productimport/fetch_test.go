@@ -167,3 +167,24 @@ func TestFetchBounds(t *testing.T) {
 		t.Fatal("request not cancelled")
 	}
 }
+
+func TestLargeProductPageAndFailureDetails(t *testing.T) {
+	f, _ := testFetcher(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(strings.Repeat("x", 2300000)))
+	})
+	if body, _, err := f.get(context.Background(), "http://shop.example.com/", "en", MaxHTML, false); err != nil || len(body) != 2300000 {
+		t.Fatalf("valid product page rejected: bytes=%d err=%v", len(body), err)
+	}
+	_, _, err := f.get(context.Background(), "http://shop.example.com/", "en", 2000000, false)
+	reason, _ := FailureDetails(err)
+	if !errors.Is(err, ErrFetch) || reason != "response_too_large" {
+		t.Fatalf("unexpected failure: %v %s", err, reason)
+	}
+	f, _ = testFetcher(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusForbidden) })
+	_, _, err = f.get(context.Background(), "http://shop.example.com/", "en", MaxHTML, false)
+	reason, status := FailureDetails(err)
+	if !errors.Is(err, ErrFetch) || reason != "http_status" || status != http.StatusForbidden {
+		t.Fatalf("unexpected HTTP failure: %v %s %d", err, reason, status)
+	}
+}

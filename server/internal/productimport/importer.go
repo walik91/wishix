@@ -14,12 +14,14 @@ type Image struct {
 }
 
 type Preview struct {
-	Status   string `json:"status"`
-	Title    string `json:"title,omitempty"`
-	Price    string `json:"price,omitempty"`
-	Currency string `json:"currency,omitempty"`
-	ShopName string `json:"shop_name,omitempty"`
-	Image    *Image `json:"image,omitempty"`
+	Status          string `json:"status"`
+	Title           string `json:"title,omitempty"`
+	Price           string `json:"price,omitempty"`
+	Currency        string `json:"currency,omitempty"`
+	ShopName        string `json:"shop_name,omitempty"`
+	Image           *Image `json:"image,omitempty"`
+	ImageReason     string `json:"-"`
+	ImageHTTPStatus int    `json:"-"`
 }
 
 type Importer struct {
@@ -60,20 +62,23 @@ func (i *Importer) Preview(ctx context.Context, raw, locale string) (Preview, er
 	if metadata.NotProduct {
 		return Preview{Status: "not_product"}, nil
 	}
-	result := Preview{Status: "partial", Title: metadata.Title, Price: metadata.Price, Currency: metadata.Currency, ShopName: metadata.ShopName}
+	result := Preview{Status: "partial", Title: metadata.Title, Price: metadata.Price, Currency: metadata.Currency, ShopName: metadata.ShopName, ImageReason: "no_candidate"}
 	for index, candidate := range metadata.Images {
 		if index >= 3 || ctx.Err() != nil {
 			break
 		}
 		rawImage, _, err := i.fetch.get(ctx, candidate, locale, wishimage.MaxUploadBytes, true)
 		if err != nil {
+			result.ImageReason, result.ImageHTTPStatus = FailureDetails(err)
 			continue
 		}
 		data, err := i.images.Process(ctx, rawImage)
 		if err != nil {
+			result.ImageReason, result.ImageHTTPStatus = "invalid_image", 0
 			continue
 		}
 		result.Image = &Image{MIME: "image/jpeg", Data: base64.StdEncoding.EncodeToString(data)}
+		result.ImageReason, result.ImageHTTPStatus = "", 0
 		break
 	}
 	if ctx.Err() != nil && result.Title == "" && result.Price == "" {
