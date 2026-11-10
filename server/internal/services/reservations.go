@@ -18,10 +18,11 @@ type ReservationError string
 func (e ReservationError) Error() string { return string(e) }
 
 const (
-	ErrReservationUnavailable ReservationError = "reservation_unavailable"
-	ErrReservationLimit       ReservationError = "reservation_limit"
-	ErrReservationExpired     ReservationError = "reservation_expired"
-	ErrReservationAction      ReservationError = "reservation_action_invalid"
+	ErrReservationUnavailable   ReservationError = "reservation_unavailable"
+	ErrReservationLimit         ReservationError = "reservation_limit"
+	ErrReservationExpired       ReservationError = "reservation_expired"
+	ErrReservationAction        ReservationError = "reservation_action_invalid"
+	ErrReservationLoginRequired ReservationError = "reservation_login_required"
 )
 
 type ReservationContext struct {
@@ -182,6 +183,19 @@ func (s *Reservations) Confirm(ctx context.Context, input ReservationInput, user
 		c, err := s.context(tx, input)
 		if err != nil {
 			return err
+		}
+		// A guest must prove control of the address before learning whether an
+		// account exists. Do this inside the transaction so registration racing
+		// with confirmation cannot silently produce an anonymous reservation.
+		if challenge.UserID == nil {
+			account, err := s.auth.repo.UserByEmail(tx, challenge.Email)
+			if err != nil {
+				return err
+			}
+			if account != nil {
+				outcome = ErrReservationLoginRequired
+				return s.repo.DeleteChallenge(tx, id)
+			}
 		}
 		key := contextKey(c)
 		if err := s.repo.LockLimit(tx, security.MAC(s.config.Secret, "reservation-limit:"+key+":"+challenge.Email)); err != nil {

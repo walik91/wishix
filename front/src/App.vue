@@ -21,6 +21,7 @@ import PublicCollectionPage from './pages/PublicCollectionPage.vue'
 import ReservationPage from './pages/ReservationPage.vue'
 import { useSession } from './composables/useSession.js'
 import { isNamedSharedListPath } from './sharedListPath.js'
+import { consumeReservationReturn } from './reservationReturn.js'
 
 // Full document navigation keeps the small auth flow independent of a router.
 const path = window.location.pathname.replace(/\/+$/, '') || '/'
@@ -37,7 +38,8 @@ if (aliases[path]) {
 const { user, unavailable, initialize } = useSession()
 onMounted(async () => {
   await initialize()
-  if (user.value && (page === '/login' || page === '/register')) window.location.replace('/my')
+  if (user.value && page === '/login') window.location.replace(consumeReservationReturn())
+  else if (user.value && page === '/register') window.location.replace('/my')
   else if (!user.value && !unavailable.value && privatePage) window.location.replace('/login')
 })
 </script>

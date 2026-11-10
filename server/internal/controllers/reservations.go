@@ -108,7 +108,7 @@ func (c *Reservations) failure(w http.ResponseWriter, err error) {
 	code := services.ReservationErrorCode(err)
 	status := 400
 	switch code {
-	case "reservation_unavailable", "reservation_limit", "reservation_expired", "reservation_action_invalid":
+	case "reservation_unavailable", "reservation_limit", "reservation_expired", "reservation_action_invalid", "reservation_login_required":
 		status = 409
 	case "rate_limited":
 		status = 429

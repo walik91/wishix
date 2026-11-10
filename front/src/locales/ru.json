@@ -231,6 +231,8 @@
   "lists.deletionMessage": "Сообщение дарителям (необязательно)",
   "lists.deletionMessageHint": "Если есть кому отправить уведомление, сообщение будет включено в письмо.",
   "reservation.reserve": "Забронировать подарок",
+  "reservation.accountExists": "Этот email уже связан с аккаунтом. Войдите, затем подтвердите бронь новым кодом.",
+  "reservation.signIn": "Войти",
   "reservation.reserved": "Забронировано",
   "reservation.purchased": "Куплено",
   "reservation.needLink": "Нужна ссылка для управления?",

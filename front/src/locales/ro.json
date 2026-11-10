@@ -231,6 +231,8 @@
   "lists.deletionMessage": "Mesaj pentru cei care oferă cadouri (opțional)",
   "lists.deletionMessageHint": "Dacă există destinatari, mesajul va fi inclus în email.",
   "reservation.reserve": "Rezervă cadoul",
+  "reservation.accountExists": "Există deja un cont cu această adresă de email. Autentifică-te, apoi confirmă rezervarea cu un cod nou.",
+  "reservation.signIn": "Autentifică-te",
   "reservation.reserved": "Rezervat",
   "reservation.purchased": "Cumpărat",
   "reservation.needLink": "Ai nevoie de linkul de gestionare?",

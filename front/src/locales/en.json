@@ -231,6 +231,8 @@
   "lists.deletionMessage": "Message to gift givers (optional)",
   "lists.deletionMessageHint": "If there are people to notify, this message will be included in their email.",
   "reservation.reserve": "Reserve gift",
+  "reservation.accountExists": "An account already uses this email. Sign in, then confirm your reservation with a new code.",
+  "reservation.signIn": "Sign in",
   "reservation.reserved": "Reserved",
   "reservation.purchased": "Purchased",
   "reservation.needLink": "Need your management link?",

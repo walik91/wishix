@@ -4,12 +4,16 @@ package services_test
 
 import (
 	"context"
+	"io"
+	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	security "wishix/server/internal/auth"
+	"wishix/server/internal/controllers"
 	"wishix/server/internal/db"
 	"wishix/server/internal/models"
 	"wishix/server/internal/repositories"
@@ -258,6 +262,94 @@ func TestIntegrationConcurrentReservationOfSameWish(t *testing.T) {
 	var count int64
 	if err := f.database.Model(&models.Reservation{}).Where("wish_id = ?", wishID).Count(&count).Error; err != nil || count != 1 {
 		t.Fatalf("reservation count = %d: %v", count, err)
+	}
+}
+
+func TestIntegrationGuestWithExistingAccountMustSignInAfterCode(t *testing.T) {
+	f := newAuthFixture(t)
+	owner := f.account(t, "account-check-owner@example.test", "accountowner")
+	accountCookie := f.account(t, "existing@example.test", "existingguest")
+	listID := f.newList(t, owner, "Shared", "public")["id"].(string)
+	wishID := f.newWish(t, owner, "Gift", listID)["id"].(string)
+	executor := db.NewExecutor(f.database)
+	config := &security.Config{Origin: "https://wishix.test", Secret: strings.Repeat("integration-secret", 3)}
+	bookings := services.NewReservations(repositories.NewReservations(executor), db.NewTransactionManager(executor), f.auth, f.mail, &reservationMessages{}, config)
+	ctx, stop := context.WithTimeout(context.Background(), 120*time.Second)
+	defer stop()
+	input := services.ReservationInput{WishID: wishID, ListID: listID, Email: " EXISTING@EXAMPLE.TEST "}
+	var err error
+	input.Challenge, err = bookings.Start(ctx, input, nil)
+	if err != nil || len(input.Challenge) != 43 {
+		t.Fatalf("account disclosed before verification: %v", err)
+	}
+	input.Code = f.mail.code("existing@example.test", "reservation")
+	wrong := input
+	wrong.Code = "000000"
+	if wrong.Code == input.Code {
+		wrong.Code = "111111"
+	}
+	if err := bookings.Confirm(ctx, wrong, nil); err != services.ErrCode {
+		t.Fatalf("account disclosed for wrong code: %v", err)
+	}
+	if err := bookings.Confirm(ctx, input, nil); err != services.ErrReservationLoginRequired {
+		t.Fatalf("guest should sign in: %v", err)
+	}
+	if err := bookings.Confirm(ctx, input, nil); err != services.ErrCode {
+		t.Fatalf("verified challenge reused: %v", err)
+	}
+	var count int64
+	if err := f.database.Model(&models.Reservation{}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("guest booking created: %d %v", count, err)
+	}
+	if err := f.database.Model(&models.ReservationMailOutbox{}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("guest booking email queued: %d %v", count, err)
+	}
+	user, err := f.auth.Current(ctx, accountCookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.Challenge, err = bookings.Start(ctx, input, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.Code = f.mail.code("existing@example.test", "reservation")
+	if err := bookings.Confirm(ctx, input, user); err != nil {
+		t.Fatalf("signed-in reservation failed: %v", err)
+	}
+	var booking models.Reservation
+	if err := f.database.Where("wish_id = ?", wishID).Take(&booking).Error; err != nil || booking.UserID == nil || *booking.UserID != user.ID {
+		t.Fatalf("booking not associated with account: %v", err)
+	}
+	guest := f.listCall(t, "POST", "/api/public/lists/guest", map[string]string{"id": listID}, nil, 200)
+	publicWish := guest["wishes"].([]any)[0].(map[string]any)
+	if publicWish["reserved"] != true || publicWish["guest_recoverable"] != false {
+		t.Fatal("account booking exposed guest recovery", publicWish)
+	}
+
+	lateEmail := "later@example.test"
+	lateWish := f.newWish(t, owner, "Later", listID)["id"].(string)
+	late := services.ReservationInput{WishID: lateWish, ListID: listID, Email: lateEmail}
+	late.Challenge, err = bookings.Start(ctx, late, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	late.Code = f.mail.code(lateEmail, "reservation")
+	f.account(t, lateEmail, "laterguest")
+	if err := bookings.Confirm(ctx, late, nil); err != services.ErrReservationLoginRequired {
+		t.Fatalf("account created after code request was missed: %v", err)
+	}
+
+	// Verify the same privacy boundary through the real HTTP handler.
+	authController := controllers.NewAuth(f.auth, config, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	listsController := controllers.NewLists(services.NewLists(repositories.NewLists(executor), db.NewTransactionManager(executor)), authController)
+	controllers.NewReservations(bookings, authController, listsController).RegisterRoutes(f.handler.(*http.ServeMux))
+	request := map[string]any{"wish_id": lateWish, "list_id": listID, "email": lateEmail}
+	started := f.listCall(t, "POST", "/api/reservations/start", request, nil, 202)
+	request["challenge"] = started["challenge"]
+	request["code"] = f.mail.code(lateEmail, "reservation")
+	response := f.listCall(t, "POST", "/api/reservations/confirm", request, nil, 409)
+	if response["error"] != "reservation_login_required" {
+		t.Fatalf("unexpected account prompt response: %v", response)
 	}
 }
 

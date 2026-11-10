@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { locale, t } from '../../i18n.js'
 import { useSession } from '../../composables/useSession.js'
+import { rememberReservationReturn } from '../../reservationReturn.js'
 import { startReservation, confirmReservation, recoverReservation } from '../../api/reservations.js'
 import UiButton from '../ui/UiButton.vue'
 import UiDialog from '../ui/UiDialog.vue'
@@ -14,6 +15,7 @@ const { user } = useSession()
 const open = ref(false), mode = ref('start'), email = ref(''), code = ref(''), challenge = ref(''), busy = ref(false), failure = ref(''), success = ref(''), refreshNeeded = ref(false)
 watch(open, value => { if (!value && refreshNeeded.value) { refreshNeeded.value = false; emit('updated') } })
 function show(which) { mode.value = which; email.value = user.value?.email || ''; code.value = ''; challenge.value = ''; failure.value = ''; success.value = ''; open.value = true }
+function rememberReturn() { rememberReservationReturn(window.location.pathname) }
 function payload() { return { wish_id: props.wish.id, list_id: props.listId, list_token: props.token, username: props.username, email: email.value, locale: locale.value } }
 async function submit() {
   if (busy.value) return
@@ -22,7 +24,10 @@ async function submit() {
     if (mode.value === 'start') { const result = await startReservation(payload()); challenge.value = result.challenge; mode.value = 'verify' }
     else if (mode.value === 'verify') { await confirmReservation({ ...payload(), challenge: challenge.value, code: code.value }); success.value = t('reservation.confirmed'); mode.value = 'done'; refreshNeeded.value = true }
     else if (mode.value === 'recover') { await recoverReservation(payload()); success.value = t('reservation.recoverySent'); mode.value = 'done' }
-  } catch (error) { failure.value = t(`reservation.error.${['invalid_code', 'invalid_input', 'reservation_unavailable', 'reservation_limit', 'rate_limited', 'email_unavailable'].includes(error.code) ? error.code : 'unavailable'}`) }
+  } catch (error) {
+    if (mode.value === 'verify' && error.code === 'reservation_login_required') { code.value = ''; challenge.value = ''; mode.value = 'login' }
+    else failure.value = t(`reservation.error.${['invalid_code', 'invalid_input', 'reservation_unavailable', 'reservation_limit', 'rate_limited', 'email_unavailable'].includes(error.code) ? error.code : 'unavailable'}`)
+  }
   finally { busy.value = false }
 }
 const container = ref(null), image = ref('')
@@ -50,7 +55,8 @@ onBeforeUnmount(reset)
     <WishCard :wish="wish" read-only />
     <div class="reservation-actions"><template v-if="wish.reserved"><span class="reservation-status">{{ t('reservation.reserved') }}</span><UiButton v-if="wish.guest_recoverable" variant="secondary" @click="show('recover')">{{ t('reservation.needLink') }}</UiButton></template><UiButton v-else @click="show('start')">{{ t('reservation.reserve') }}</UiButton></div>
     <UiDialog v-model:open="open" :busy="busy" :title="t(mode === 'recover' ? 'reservation.needLink' : 'reservation.reserve')">
-      <form v-if="mode !== 'done'" class="reservation-form" @submit.prevent="submit">
+      <div v-if="mode === 'login'" class="reservation-form" role="status"><p>{{ t('reservation.accountExists') }}</p><UiButton href="/login" @click="rememberReturn">{{ t('reservation.signIn') }}</UiButton></div>
+      <form v-else-if="mode !== 'done'" class="reservation-form" @submit.prevent="submit">
         <p class="reservation-hint">{{ wish.title }}</p>
         <TextField v-if="mode !== 'verify'" :id="`email-${wish.id}`" v-model="email" type="email" required autocomplete="email" :label="t('reservation.email')" :disabled="busy || (mode === 'start' && !!user)" />
         <template v-else><p class="reservation-hint">{{ t('reservation.codeSent') }} {{ email }}</p><TextField :id="`code-${wish.id}`" v-model="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required :label="t('reservation.code')" :disabled="busy" /></template>

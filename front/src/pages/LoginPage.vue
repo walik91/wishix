@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watchEffect } from 'vue'
 import { t } from '../i18n.js'
 import { login } from '../api/auth.js'
 import { useAuthForm } from '../composables/useAuthForm.js'
+import { consumeReservationReturn } from '../reservationReturn.js'
 import AuthLayout from '../layouts/AuthLayout.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
 import UiButton from '../components/ui/UiButton.vue'
@@ -35,7 +36,7 @@ async function submit() {
     await login({ email: email.value, password: password.value })
     submitted.value = false
     password.value = ''
-    window.location.assign('/my')
+    window.location.assign(consumeReservationReturn())
   })
 }
 watchEffect(() => { document.title = `${t('login.submit')} · ${t('appName')}` })
