@@ -9,7 +9,7 @@ const eventDate = computed(() => props.list.event_date ? new Intl.DateTimeFormat
 </script>
 <template>
   <UiCard class="list-card" :data-list-id="list.id">
-    <a class="list-card-main" :href="path"><div class="list-cover" aria-hidden="true"><AppIcon :name="list.event_date ? 'calendar' : 'list'" /></div><div class="list-card-content"><h2>{{ list.title }}</h2><p>{{ t('lists.wishesCount') }} {{ list.wish_count }}</p><p v-if="eventDate">{{ eventDate }}</p></div></a>
+    <a class="list-card-main" :href="path"><div class="list-cover" aria-hidden="true"><AppIcon :name="list.event_date ? 'calendar' : 'list'" /></div><div class="list-card-content"><h2>{{ list.title }}</h2><p>{{ t('lists.wishesCount') }} {{ list.wish_count }}</p><p v-if="eventDate">{{ eventDate }}</p><p v-if="list.expired">{{ t('lists.expired') }}</p></div></a>
     <div class="list-card-footer"><span class="list-visibility"><AppIcon :name="list.visibility === 'private' ? 'lock' : list.visibility === 'public' ? 'globe' : 'link'" />{{ t(`lists.visibility.${list.visibility}`) }}</span><a v-if="manage" class="list-card-menu" :href="`${path}?manage=1`" :aria-label="`${t('lists.manage')}: ${list.title}`"><AppIcon name="more" /></a></div>
   </UiCard>
 </template>

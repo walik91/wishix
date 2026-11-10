@@ -17,6 +17,11 @@ func NewMailer(config *Config) *Mailer { return &Mailer{config: config} }
 // SendCode never logs messages or credentials. SMTP is outside retryable DB work.
 func (m *Mailer) SendCode(ctx context.Context, email, locale, purpose, code string) error {
 	subject, body := codeMessage(locale, purpose, code)
+	return m.SendMessage(ctx, email, subject, body)
+}
+
+// SendMessage transmits a prepared plain-text message without logging its contents.
+func (m *Mailer) SendMessage(ctx context.Context, email, subject, body string) error {
 	c := m.config
 	deadline := time.Now().Add(5 * time.Second)
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
@@ -82,6 +87,8 @@ func codeMessage(locale, purpose, code string) (string, string) {
 		action := "подтверждения email"
 		if purpose == "reset" {
 			action = "восстановления пароля"
+		} else if purpose == "reservation" {
+			action = "подтверждения бронирования"
 		}
 		return "Wishix — код " + action, fmt.Sprintf("Код %s: %s\r\n\r\nКод действует 10 минут. Никому его не сообщайте. Если вы не запрашивали код, просто проигнорируйте это письмо.", action, code)
 	}
@@ -89,12 +96,16 @@ func codeMessage(locale, purpose, code string) (string, string) {
 		action := "confirmarea adresei de email"
 		if purpose == "reset" {
 			action = "resetarea parolei"
+		} else if purpose == "reservation" {
+			action = "confirmarea rezervării"
 		}
 		return "Wishix — cod pentru " + action, fmt.Sprintf("Cod pentru %s: %s\r\n\r\nCodul este valabil 10 minute. Nu îl divulgați nimănui. Dacă nu ați solicitat acest cod, ignorați acest mesaj.", action, code)
 	}
 	action := "email verification"
 	if purpose == "reset" {
 		action = "password reset"
+	} else if purpose == "reservation" {
+		action = "reservation confirmation"
 	}
 	return "Wishix — " + action + " code", fmt.Sprintf("Your %s code: %s\r\n\r\nThis code expires in 10 minutes. Do not share it. If you did not request it, ignore this email.", action, code)
 }

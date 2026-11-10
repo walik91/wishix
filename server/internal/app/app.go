@@ -27,7 +27,8 @@ func New(options ...fx.Option) *fx.App {
 			services.NewHealth,
 			controllers.NewHealth,
 			auth.LoadConfig,
-			fx.Annotate(auth.NewMailer, fx.As(new(services.CodeMailer))),
+			auth.NewMailer,
+			func(mailer *auth.Mailer) services.CodeMailer { return mailer },
 			fx.Annotate(repositories.NewAuth, fx.As(new(services.AuthRepository))),
 			services.NewAuth,
 			controllers.NewAuth,
@@ -37,6 +38,10 @@ func New(options ...fx.Option) *fx.App {
 			fx.Annotate(repositories.NewLists, fx.As(new(services.ListRepository))),
 			services.NewLists,
 			controllers.NewLists,
+			fx.Annotate(repositories.NewReservations, fx.As(new(services.ReservationRepository))),
+			func(mailer *auth.Mailer) services.ReservationMailer { return mailer },
+			services.NewReservations,
+			controllers.NewReservations,
 			func() *productimport.Importer { return productimport.New() },
 			services.NewProductImport,
 			controllers.NewProductImport,
@@ -51,7 +56,7 @@ func New(options ...fx.Option) *fx.App {
 		fx.WithLogger(func(logger *slog.Logger) fxevent.Logger {
 			return &fxevent.SlogLogger{Logger: logger}
 		}),
-		fx.Invoke(func(*gorm.DB) {}, func(*http.Server) {}, infrastructure.StartAuthMaintenance),
+		fx.Invoke(func(*gorm.DB) {}, func(*http.Server) {}, infrastructure.StartAuthMaintenance, infrastructure.StartReservationMaintenance),
 		fx.StartTimeout(60 * time.Second),
 		fx.StopTimeout(5 * time.Second),
 	}

@@ -17,6 +17,7 @@ func NewLists(executor *db.Executor) *Lists { return &Lists{Base: NewBase(execut
 
 const listColumns = "wishlists.*, (SELECT count(*) FROM wishlist_wishes WHERE list_id = wishlists.id) AS wish_count"
 const wishColumns = "wishes.*, COALESCE((SELECT version::STRING FROM wish_images WHERE wish_id = wishes.id), '') AS image_version"
+const publicWishColumns = wishColumns + ", EXISTS (SELECT 1 FROM reservations r WHERE r.wish_id = wishes.id AND (r.status = 'purchased' OR r.expires_at > now())) AS reserved, EXISTS (SELECT 1 FROM reservations r WHERE r.wish_id = wishes.id AND r.user_id IS NULL AND (r.status = 'purchased' OR r.expires_at > now())) AS guest_recoverable"
 
 func (r *Lists) List(ctx context.Context, owner string) ([]models.Wishlist, error) {
 	lists := make([]models.Wishlist, 0)
@@ -45,10 +46,13 @@ func (r *Lists) Create(ctx context.Context, list *models.Wishlist) error {
 	return r.Ctx(ctx).Create(list).Error
 }
 func (r *Lists) Update(ctx context.Context, list *models.Wishlist, revision int64) (bool, error) {
-	result := r.Ctx(ctx).Model(&models.Wishlist{}).Where("id = ? AND owner_id = ? AND revision = ?", list.ID, list.OwnerID, revision).Updates(map[string]any{"title": list.Title, "description": list.Description, "event_date": list.EventDate, "visibility": list.Visibility, "share_token": list.ShareToken, "updated_at": list.UpdatedAt, "revision": gorm.Expr("revision + 1")})
+	result := r.Ctx(ctx).Model(&models.Wishlist{}).Where("id = ? AND owner_id = ? AND revision = ?", list.ID, list.OwnerID, revision).Updates(map[string]any{"title": list.Title, "description": list.Description, "event_date": list.EventDate, "event_timezone": list.EventTimezone, "visibility": list.Visibility, "share_token": list.ShareToken, "updated_at": list.UpdatedAt, "revision": gorm.Expr("revision + 1")})
 	return result.RowsAffected == 1, result.Error
 }
-func (r *Lists) Delete(ctx context.Context, owner, id string) error {
+func (r *Lists) Delete(ctx context.Context, owner, id, message string) error {
+	if err := cancelReservations(r.Ctx(ctx), "r.list_id = ?", []any{id}, "list_deleted", message); err != nil {
+		return err
+	}
 	if err := r.Clear(ctx, owner, id); err != nil {
 		return err
 	}
@@ -78,12 +82,18 @@ func (r *Lists) Add(ctx context.Context, owner, id string, ids []string, now tim
 	return r.Ctx(ctx).Model(&models.Wish{}).Where("owner_id = ? AND id IN ?", owner, ids).UpdateColumn("lists_version", gorm.Expr("lists_version + 1")).Error
 }
 func (r *Lists) Remove(ctx context.Context, owner, id string, ids []string) error {
+	if err := cancelReservations(r.Ctx(ctx), "r.list_id = ? AND r.wish_id IN ?", []any{id, ids}, "wish_removed", ""); err != nil {
+		return err
+	}
 	if err := r.Ctx(ctx).Model(&models.Wish{}).Where("owner_id = ? AND id IN ? AND id IN (SELECT wish_id FROM wishlist_wishes WHERE list_id = ? AND owner_id = ?)", owner, ids, id, owner).UpdateColumn("lists_version", gorm.Expr("lists_version + 1")).Error; err != nil {
 		return err
 	}
 	return r.Ctx(ctx).Where("owner_id = ? AND list_id = ? AND wish_id IN ?", owner, id, ids).Delete(&models.WishlistWish{}).Error
 }
 func (r *Lists) Clear(ctx context.Context, owner, id string) error {
+	if err := cancelReservations(r.Ctx(ctx), "r.list_id = ?", []any{id}, "wish_removed", ""); err != nil {
+		return err
+	}
 	if err := r.Ctx(ctx).Model(&models.Wish{}).Where("owner_id = ? AND id IN (SELECT wish_id FROM wishlist_wishes WHERE list_id = ? AND owner_id = ?)", owner, id, owner).UpdateColumn("lists_version", gorm.Expr("lists_version + 1")).Error; err != nil {
 		return err
 	}
@@ -122,6 +132,24 @@ func (r *Lists) ReplaceMemberships(ctx context.Context, owner, wishID string, id
 	if current != version {
 		return false, nil
 	}
+	removed := make([]string, 0)
+	for _, old := range previous {
+		found := false
+		for _, id := range ids {
+			if id == old {
+				found = true
+				break
+			}
+		}
+		if !found {
+			removed = append(removed, old)
+		}
+	}
+	if len(removed) > 0 {
+		if err := cancelReservations(r.Ctx(ctx), "r.list_id IN ? AND r.wish_id = ?", []any{removed, wishID}, "wish_removed", ""); err != nil {
+			return false, err
+		}
+	}
 	var count int64
 	if len(ids) > 0 {
 		if err := r.Ctx(ctx).Model(&models.Wishlist{}).Where("owner_id = ? AND id IN ?", owner, ids).Count(&count).Error; err != nil {
@@ -159,7 +187,7 @@ func (r *Lists) Shared(ctx context.Context, token string) (*models.Wishlist, str
 }
 func (r *Lists) SharedWishes(ctx context.Context, token string) ([]models.Wish, error) {
 	wishes := make([]models.Wish, 0)
-	err := r.Ctx(ctx).Select(wishColumns).Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where("l.share_token = ? AND l.visibility IN ('link', 'public')", token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	err := r.Ctx(ctx).Select(publicWishColumns).Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where("l.share_token = ? AND l.visibility IN ('link', 'public')", token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
 	return wishes, err
 }
 func (r *Lists) SharedImage(ctx context.Context, token, wishID string) (*models.WishImage, error) {
@@ -187,7 +215,7 @@ func (r *Lists) GuestList(ctx context.Context, id, token string) (*models.Wishli
 }
 func (r *Lists) GuestWishes(ctx context.Context, id, token string) ([]models.Wish, error) {
 	wishes := make([]models.Wish, 0)
-	err := r.Ctx(ctx).Select(wishColumns).Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where(guestCondition, id, token, token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	err := r.Ctx(ctx).Select(publicWishColumns).Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where(guestCondition, id, token, token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
 	return wishes, err
 }
 func (r *Lists) GuestImage(ctx context.Context, id, token, wishID string) (*models.WishImage, error) {
@@ -223,7 +251,7 @@ func (r *Lists) PublicCollection(ctx context.Context, username string) (bool, []
 		return false, nil, err
 	}
 	wishes := make([]models.Wish, 0)
-	err := r.Ctx(ctx).Select(wishColumns).Joins("JOIN users ON users.id = wishes.owner_id").Where("users.username = ? AND users.show_all_wishes = true", username).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	err := r.Ctx(ctx).Select(publicWishColumns).Joins("JOIN users ON users.id = wishes.owner_id").Where("users.username = ? AND users.show_all_wishes = true", username).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
 	return true, wishes, err
 }
 func (r *Lists) PublicCollectionImage(ctx context.Context, username, wishID string) (*models.WishImage, error) {

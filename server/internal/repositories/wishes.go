@@ -83,6 +83,13 @@ func (r *Wishes) DeleteImage(ctx context.Context, ownerID, id string) (bool, err
 }
 
 func (r *Wishes) Delete(ctx context.Context, ownerID, id string) (bool, error) {
+	owned, err := r.Owns(ctx, ownerID, id)
+	if err != nil || !owned {
+		return false, err
+	}
+	if err := cancelReservations(r.Ctx(ctx), "r.wish_id = ?", []any{id}, "wish_deleted", ""); err != nil {
+		return false, err
+	}
 	if err := r.Ctx(ctx).Model(&models.Wishlist{}).Where("owner_id = ? AND id IN (SELECT list_id FROM wishlist_wishes WHERE wish_id = ? AND owner_id = ?)", ownerID, id, ownerID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now().UTC()}).Error; err != nil {
 		return false, err
 	}

@@ -4,19 +4,21 @@ import "time"
 
 // A wish belongs to the account's collection; list memberships share its identity.
 type Wish struct {
-	ID           string
-	OwnerID      string
-	Title        string
-	Description  string
-	Price        *string
-	Currency     string
-	Priority     string
-	CreatedAt    time.Time
-	ListsVersion int64          `gorm:"default:1"`
-	Members      []WishlistWish `gorm:"-"`
-	ShopLinks    []WishShopLink `gorm:"foreignKey:WishID"`
-	ImageVersion string         `gorm:"->"`
-	Image        *WishImage     `gorm:"foreignKey:WishID"`
+	ID               string
+	OwnerID          string
+	Title            string
+	Description      string
+	Price            *string
+	Currency         string
+	Priority         string
+	CreatedAt        time.Time
+	ListsVersion     int64          `gorm:"default:1"`
+	Members          []WishlistWish `gorm:"-"`
+	ShopLinks        []WishShopLink `gorm:"foreignKey:WishID"`
+	ImageVersion     string         `gorm:"->"`
+	Reserved         bool           `gorm:"->"`
+	GuestRecoverable bool           `gorm:"->"`
+	Image            *WishImage     `gorm:"foreignKey:WishID"`
 }
 
 type WishImage struct {

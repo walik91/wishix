@@ -13,7 +13,9 @@ function submit() {
   if (!title.value.trim() || [...title.value.trim()].length > 120) invalid.value.title = 'list_title_invalid'
   if ([...description.value.trim()].length > 2000) invalid.value.description = 'list_description_invalid'
   if (Object.keys(invalid.value).length) { setTimeout(() => form.value?.querySelector('[aria-invalid=true]')?.focus()); return }
-  emit('submit', { title: title.value.trim(), description: description.value.trim(), event_date: date.value || null, visibility: visibility.value, revision: props.initial?.revision || 0 })
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  const timezone = props.initial && date.value === (props.initial.event_date || '') ? (props.initial.event_timezone || browserTimezone) : browserTimezone
+  emit('submit', { title: title.value.trim(), description: description.value.trim(), event_date: date.value || null, event_timezone: timezone, visibility: visibility.value, revision: props.initial?.revision || 0 })
 }
 </script>
 <template>

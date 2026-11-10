@@ -24,7 +24,7 @@ onMounted(load)
     <UiCard v-else-if="error" class="list-empty"><EmptyState icon="lock" :title="t('lists.sharedUnavailable')" :description="t(`lists.error.${error}`)"><UiButton v-if="error !== 'list_not_found'" @click="load">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
     <template v-else>
       <header class="list-page-heading"><div><p class="list-eyebrow"><a :href="`/u/${encodeURIComponent(username)}`">{{ username }}</a></p><h1>{{ t('profile.allWishes') }}</h1><p class="list-muted">{{ t('lists.wishesCount') }} {{ wishes.length }}</p></div></header>
-      <div v-if="wishes.length" class="shared-wish-grid"><SharedWishCard v-for="wish in wishes" :key="wish.id" :wish="wish" :username="username" /></div>
+      <div v-if="wishes.length" class="shared-wish-grid"><SharedWishCard v-for="wish in wishes" :key="wish.id" :wish="wish" :username="username" @updated="load" /></div>
       <UiCard v-else class="list-empty"><EmptyState icon="heart" :title="t('lists.emptyListTitle')" :description="t('lists.sharedEmpty')" /></UiCard>
     </template>
   </div>

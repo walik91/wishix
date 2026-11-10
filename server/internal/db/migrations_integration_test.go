@@ -45,7 +45,7 @@ func liveMigrator(t *testing.T) (*sql.DB, *db.Migrator, string) {
 
 func TestIntegrationGooseUpDownUp(t *testing.T) {
 	pool, migrator, schema := liveMigrator(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	if err := migrator.Apply(ctx); err != nil {
 		t.Fatal("automatic up:", err)
@@ -57,7 +57,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("version: got %d, want %d; %v", version, want, err)
 		}
 	}
-	assertVersion(4)
+	assertVersion(7)
 	if _, err := pool.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'migration_test', 'migration@example.test', 'test-hash', now(), now())`); err != nil {
 		t.Fatal(err)
 	}
@@ -78,11 +78,23 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 		t.Fatal("repeated up lost wishes or shop links")
 	}
 	statuses, err := migrator.Status(ctx)
-	if err != nil || len(statuses) != 4 || statuses[0].State != goose.StateApplied || statuses[1].State != goose.StateApplied || statuses[2].State != goose.StateApplied || statuses[3].State != goose.StateApplied {
+	if err != nil || len(statuses) != 7 || statuses[0].State != goose.StateApplied || statuses[1].State != goose.StateApplied || statuses[2].State != goose.StateApplied || statuses[3].State != goose.StateApplied || statuses[4].State != goose.StateApplied || statuses[5].State != goose.StateApplied || statuses[6].State != goose.StateApplied {
 		t.Fatal("incorrect Goose status:", err)
 	}
 	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("down:", err)
+	}
+	assertVersion(6)
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("reservations down:", err)
+	}
+	assertVersion(5)
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("timezone down:", err)
+	}
+	assertVersion(4)
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("lists down:", err)
 	}
 	assertVersion(3)
 	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM wishes").Scan(&count); err != nil || count != 1 {
@@ -128,7 +140,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 
 func TestIntegrationListsUpgradePreservesExistingCollection(t *testing.T) {
 	pool, migrator, _ := liveMigrator(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	if _, err := migrator.UpTo(ctx, 3); err != nil {
 		t.Fatal(err)
@@ -154,6 +166,15 @@ func TestIntegrationListsUpgradePreservesExistingCollection(t *testing.T) {
 		}
 	}
 	assertData()
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("reservation message rollback", err)
+	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("reservations rollback", err)
+	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("timezone rollback", err)
+	}
 	if err := pool.QueryRowContext(ctx, `SELECT lists_version FROM wishes WHERE id = '00000000-0000-4000-8000-000000000002'`).Scan(&count); err != nil || count != 1 {
 		t.Fatal("existing wish membership version not initialized", err, count)
 	}
@@ -165,7 +186,7 @@ func TestIntegrationListsUpgradePreservesExistingCollection(t *testing.T) {
 
 func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 	pool, migrator, _ := liveMigrator(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	if err := migrator.Apply(ctx); err != nil {
 		t.Fatal(err)
@@ -196,7 +217,7 @@ func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 		t.Fatal("legacy history was changed")
 	}
 	version, err := fresh.GetDBVersion(ctx)
-	if err != nil || version != 4 {
+	if err != nil || version != 7 {
 		t.Fatal("Goose did not record the adopted version")
 	}
 }

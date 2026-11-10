@@ -11,6 +11,7 @@ import (
 
 	security "wishix/server/internal/auth"
 	"wishix/server/internal/models"
+	"wishix/server/internal/reservation"
 )
 
 type ListError string
@@ -28,11 +29,12 @@ const (
 )
 
 type ListInput struct {
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	EventDate   *string `json:"event_date"`
-	Visibility  string  `json:"visibility"`
-	Revision    int64   `json:"revision"`
+	Title         string  `json:"title"`
+	Description   string  `json:"description"`
+	EventDate     *string `json:"event_date"`
+	EventTimezone string  `json:"event_timezone"`
+	Visibility    string  `json:"visibility"`
+	Revision      int64   `json:"revision"`
 }
 
 type ListRepository interface {
@@ -40,8 +42,9 @@ type ListRepository interface {
 	Get(context.Context, string, string) (*models.Wishlist, error)
 	Create(context.Context, *models.Wishlist) error
 	Update(context.Context, *models.Wishlist, int64) (bool, error)
+	ReservationDateChanged(context.Context, *models.Wishlist, *time.Time, time.Time) error
 	Lock(context.Context, string, string) (*models.Wishlist, error)
-	Delete(context.Context, string, string) error
+	Delete(context.Context, string, string, string) error
 	Wishes(context.Context, string, string) ([]models.Wish, error)
 	OwnedWishes(context.Context, string, []string) (bool, error)
 	Add(context.Context, string, string, []string, time.Time) error
@@ -95,6 +98,33 @@ func validateList(input ListInput) (ListInput, *time.Time, error) {
 		date = &parsed
 	}
 	return input, date, nil
+}
+
+// ListExpired uses the stored author timezone rather than the viewer's clock.
+func ListExpired(list *models.Wishlist, now time.Time) bool {
+	if list == nil || list.EventDate == nil {
+		return false
+	}
+	zone := list.EventTimezone
+	if zone == "" {
+		zone = "UTC"
+	}
+	end, err := reservation.EventEnd(list.EventDate.Format("2006-01-02"), zone)
+	// Fail closed if stored timezone data is malformed.
+	return err != nil || !now.Before(end)
+}
+
+func validEvent(date *time.Time, zone string, now time.Time) bool {
+	if date == nil {
+		return true
+	}
+	end, err := reservation.EventEnd(date.Format("2006-01-02"), zone)
+	return err == nil && now.Before(end)
+}
+
+func validEventZone(zone string) bool {
+	_, err := reservation.EventEnd("2026-01-01", zone)
+	return err == nil
 }
 
 func validIDs(ids []string) ([]string, error) {
@@ -154,10 +184,16 @@ func (s *Lists) Create(ctx context.Context, owner string, input ListInput) (*mod
 	if err != nil {
 		return nil, err
 	}
+	if input.EventTimezone == "" {
+		input.EventTimezone = "UTC"
+	}
+	if !validEventZone(input.EventTimezone) || !validEvent(date, input.EventTimezone, time.Now()) {
+		return nil, ErrListDate
+	}
 	id, token, now := security.UUID(), security.Token(), time.Now().UTC()
 	var result *models.Wishlist
 	err = s.tx.WithTransaction(ctx, func(ctx context.Context) error {
-		result = &models.Wishlist{ID: id, OwnerID: owner, Title: input.Title, Description: input.Description, EventDate: date, Visibility: input.Visibility, ShareToken: token, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		result = &models.Wishlist{ID: id, OwnerID: owner, Title: input.Title, Description: input.Description, EventDate: date, EventTimezone: input.EventTimezone, Visibility: input.Visibility, ShareToken: token, Revision: 1, CreatedAt: now, UpdatedAt: now}
 		return s.repo.Create(ctx, result)
 	})
 	return result, err
@@ -179,7 +215,23 @@ func (s *Lists) Update(ctx context.Context, owner, id string, input ListInput) (
 		if err != nil {
 			return err
 		}
+		zone := input.EventTimezone
+		if zone == "" {
+			zone = list.EventTimezone
+		}
+		if zone == "" {
+			zone = "UTC"
+		}
+		if !validEventZone(zone) {
+			return ErrListDate
+		}
+		unchangedDate := date != nil && list.EventDate != nil && date.Equal(*list.EventDate) && zone == list.EventTimezone
+		if !unchangedDate && !validEvent(date, zone, time.Now()) {
+			return ErrListDate
+		}
+		dateChanged := (date == nil) != (list.EventDate == nil) || (date != nil && list.EventDate != nil && !date.Equal(*list.EventDate)) || (date != nil && zone != list.EventTimezone)
 		list.Title, list.Description, list.EventDate, list.Visibility = input.Title, input.Description, date, input.Visibility
+		list.EventTimezone = zone
 		list.UpdatedAt = time.Now().UTC()
 		ok, err := s.repo.Update(ctx, list, input.Revision)
 		if err != nil {
@@ -187,6 +239,19 @@ func (s *Lists) Update(ctx context.Context, owner, id string, input ListInput) (
 		}
 		if !ok {
 			return ErrListChanged
+		}
+		if dateChanged {
+			var end *time.Time
+			if date != nil {
+				value, err := reservation.EventEnd(date.Format("2006-01-02"), zone)
+				if err != nil {
+					return err
+				}
+				end = &value
+			}
+			if err := s.repo.ReservationDateChanged(ctx, list, end, list.UpdatedAt); err != nil {
+				return err
+			}
 		}
 		list.Revision++
 		result = list
@@ -207,7 +272,7 @@ func (s *Lists) lock(ctx context.Context, owner, id string, revision int64) (*mo
 	}
 	return list, nil
 }
-func (s *Lists) Destroy(ctx context.Context, owner, id string, revision int64, clearOnly bool) error {
+func (s *Lists) Destroy(ctx context.Context, owner, id string, revision int64, clearOnly bool, message string) error {
 	if owner == "" {
 		return ErrSession
 	}
@@ -216,6 +281,10 @@ func (s *Lists) Destroy(ctx context.Context, owner, id string, revision int64, c
 	}
 	if revision < 1 {
 		return ErrListChanged
+	}
+	message = strings.TrimSpace(message)
+	if !utf8.ValidString(message) || utf8.RuneCountInString(message) > 1000 || strings.ContainsRune(message, 0) || (clearOnly && message != "") {
+		return ErrInvalidInput
 	}
 	return s.tx.WithTransaction(ctx, func(ctx context.Context) error {
 		if _, err := s.lock(ctx, owner, id, revision); err != nil {
@@ -227,7 +296,7 @@ func (s *Lists) Destroy(ctx context.Context, owner, id string, revision int64, c
 			}
 			return s.repo.Touch(ctx, owner, []string{id}, time.Now().UTC())
 		}
-		return s.repo.Delete(ctx, owner, id)
+		return s.repo.Delete(ctx, owner, id, message)
 	})
 }
 func (s *Lists) Add(ctx context.Context, owner, id string, ids []string) error {
@@ -297,7 +366,7 @@ func (s *Lists) Copy(ctx context.Context, owner, id, title string) (*models.Wish
 		if err != nil {
 			return err
 		}
-		result = &models.Wishlist{ID: newID, OwnerID: owner, Title: input.Title, Description: original.Description, Visibility: "link", ShareToken: token, Revision: 1, CreatedAt: now, UpdatedAt: now}
+		result = &models.Wishlist{ID: newID, OwnerID: owner, Title: input.Title, Description: original.Description, EventTimezone: original.EventTimezone, Visibility: "link", ShareToken: token, Revision: 1, CreatedAt: now, UpdatedAt: now}
 		if err := s.repo.Create(ctx, result); err != nil {
 			return err
 		}
@@ -416,6 +485,10 @@ func (s *Lists) Guest(ctx context.Context, id, token string) (*models.Wishlist, 
 		if err != nil {
 			return err
 		}
+		if ListExpired(list, time.Now()) {
+			wishes = []models.Wish{}
+			return nil
+		}
 		wishes, err = s.repo.GuestWishes(ctx, id, token)
 		return err
 	})
@@ -426,7 +499,18 @@ func (s *Lists) GuestImage(ctx context.Context, id, token, wishID string) (*mode
 	if !validGuestList(id, token) || !wishIDPattern.MatchString(wishID) {
 		return nil, ErrListNotFound
 	}
-	image, err := s.repo.GuestImage(ctx, id, token, wishID)
+	var image *models.WishImage
+	err := s.tx.WithTransaction(ctx, func(ctx context.Context) error {
+		list, _, err := s.ResolveGuest(ctx, id, token)
+		if err != nil {
+			return err
+		}
+		if ListExpired(list, time.Now()) {
+			return ErrListNotFound
+		}
+		image, err = s.repo.GuestImage(ctx, id, token, wishID)
+		return err
+	})
 	if err == nil && image == nil {
 		err = ErrListNotFound
 	}
@@ -461,6 +545,10 @@ func (s *Lists) Shared(ctx context.Context, token string) (*models.Wishlist, str
 		if list == nil {
 			return ErrListNotFound
 		}
+		if ListExpired(list, time.Now()) {
+			wishes = []models.Wish{}
+			return nil
+		}
 		wishes, err = s.repo.SharedWishes(ctx, token)
 		return err
 	})
@@ -470,7 +558,18 @@ func (s *Lists) SharedImage(ctx context.Context, token, wishID string) (*models.
 	if !sharePattern.MatchString(token) || !wishIDPattern.MatchString(wishID) {
 		return nil, ErrListNotFound
 	}
-	image, err := s.repo.SharedImage(ctx, token, wishID)
+	var image *models.WishImage
+	err := s.tx.WithTransaction(ctx, func(ctx context.Context) error {
+		list, _, err := s.ResolveShare(ctx, token)
+		if err != nil {
+			return err
+		}
+		if ListExpired(list, time.Now()) {
+			return ErrListNotFound
+		}
+		image, err = s.repo.SharedImage(ctx, token, wishID)
+		return err
+	})
 	if err == nil && image == nil {
 		err = ErrListNotFound
 	}

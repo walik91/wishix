@@ -3,17 +3,18 @@ package models
 import "time"
 
 type Wishlist struct {
-	ID          string
-	OwnerID     string
-	Title       string
-	Description string
-	EventDate   *time.Time
-	Visibility  string
-	ShareToken  string
-	Revision    int64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	WishCount   int64 `gorm:"->"`
+	ID            string
+	OwnerID       string
+	Title         string
+	Description   string
+	EventDate     *time.Time
+	EventTimezone string
+	Visibility    string
+	ShareToken    string
+	Revision      int64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	WishCount     int64 `gorm:"->"`
 }
 
 type WishlistWish struct {

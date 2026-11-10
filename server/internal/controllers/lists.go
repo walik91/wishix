@@ -25,15 +25,17 @@ func NewLists(service *services.Lists, auth *Auth) *Lists {
 }
 
 type listResponse struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	EventDate   *string   `json:"event_date"`
-	Visibility  string    `json:"visibility"`
-	SharePath   string    `json:"share_path"`
-	Revision    int64     `json:"revision"`
-	WishCount   int64     `json:"wish_count"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	Title         string    `json:"title"`
+	Description   string    `json:"description"`
+	EventDate     *string   `json:"event_date"`
+	EventTimezone string    `json:"event_timezone"`
+	Expired       bool      `json:"expired"`
+	Visibility    string    `json:"visibility"`
+	SharePath     string    `json:"share_path"`
+	Revision      int64     `json:"revision"`
+	WishCount     int64     `json:"wish_count"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 func listDate(date *time.Time) *string {
@@ -50,7 +52,7 @@ func privateList(list *models.Wishlist) listResponse {
 	} else if list.Visibility == "link" {
 		path = "/" + list.ID + "/" + list.ShareToken
 	}
-	return listResponse{ID: list.ID, Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), Visibility: list.Visibility, SharePath: path, Revision: list.Revision, WishCount: list.WishCount, CreatedAt: list.CreatedAt}
+	return listResponse{ID: list.ID, Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), EventTimezone: list.EventTimezone, Expired: services.ListExpired(list, time.Now()), Visibility: list.Visibility, SharePath: path, Revision: list.Revision, WishCount: list.WishCount, CreatedAt: list.CreatedAt}
 }
 func privateLists(lists []models.Wishlist) []listResponse {
 	result := make([]listResponse, 0, len(lists))
@@ -254,12 +256,13 @@ func (c *Lists) update(w http.ResponseWriter, r *http.Request, owner string) err
 }
 func (c *Lists) destroy(w http.ResponseWriter, r *http.Request, owner string, clear bool) error {
 	var input struct {
-		Revision int64 `json:"revision"`
+		Revision int64  `json:"revision"`
+		Message  string `json:"message"`
 	}
 	if err := readListJSON(r, &input); err != nil {
 		return err
 	}
-	if err := c.service.Destroy(r.Context(), owner, r.PathValue("id"), input.Revision, clear); err != nil {
+	if err := c.service.Destroy(r.Context(), owner, r.PathValue("id"), input.Revision, clear, input.Message); err != nil {
 		return err
 	}
 	c.auth.write(w, 200, map[string]string{"status": "ok"})
@@ -363,13 +366,18 @@ type publicListResponse struct {
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	EventDate   *string `json:"event_date"`
+	Expired     bool    `json:"expired"`
 	Visibility  string  `json:"visibility"`
 	WishCount   int64   `json:"wish_count"`
 	SharePath   string  `json:"share_path,omitempty"`
 }
 
 func publicList(list *models.Wishlist, link bool) publicListResponse {
-	result := publicListResponse{ID: list.ID, Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), Visibility: list.Visibility, WishCount: list.WishCount}
+	expired := services.ListExpired(list, time.Now())
+	result := publicListResponse{ID: list.ID, Title: list.Title, Description: list.Description, EventDate: listDate(list.EventDate), Expired: expired, Visibility: list.Visibility, WishCount: list.WishCount}
+	if expired {
+		result.WishCount = 0
+	}
 	if link && list.Visibility == "public" {
 		result.SharePath = "/" + list.ID
 	}
@@ -413,14 +421,16 @@ func (c *Lists) guestImage(w http.ResponseWriter, r *http.Request) error {
 }
 
 type publicWishResponse struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Price       *string  `json:"price"`
-	Currency    string   `json:"currency"`
-	Priority    string   `json:"priority"`
-	ShopLinks   []string `json:"shop_links"`
-	HasImage    bool     `json:"has_image"`
+	ID               string   `json:"id"`
+	Title            string   `json:"title"`
+	Description      string   `json:"description"`
+	Price            *string  `json:"price"`
+	Currency         string   `json:"currency"`
+	Priority         string   `json:"priority"`
+	ShopLinks        []string `json:"shop_links"`
+	HasImage         bool     `json:"has_image"`
+	Reserved         bool     `json:"reserved"`
+	GuestRecoverable bool     `json:"guest_recoverable"`
 }
 
 func (c *Lists) public(handler func(http.ResponseWriter, *http.Request) error) http.HandlerFunc {
@@ -458,7 +468,7 @@ func publicWishes(wishes []models.Wish) []publicWishResponse {
 		for _, link := range wish.ShopLinks {
 			links = append(links, link.URL)
 		}
-		result = append(result, publicWishResponse{ID: wish.ID, Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, ShopLinks: links, HasImage: wish.ImageVersion != ""})
+		result = append(result, publicWishResponse{ID: wish.ID, Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, ShopLinks: links, HasImage: wish.ImageVersion != "", Reserved: wish.Reserved, GuestRecoverable: wish.GuestRecoverable})
 	}
 	return result
 }

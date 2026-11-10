@@ -8,6 +8,16 @@ function sharedListRouting() {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url, 'http://localhost')
+        if (/^\/reservation\/?$/.test(url.pathname)) {
+          const writeHead = res.writeHead
+          res.writeHead = function (...args) {
+            this.setHeader('Cache-Control', 'no-store')
+            this.setHeader('Referrer-Policy', 'no-referrer')
+            this.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')
+            return writeHead.apply(this, args)
+          }
+          return next()
+        }
         if (!['GET', 'HEAD'].includes(req.method) || !(/^\/[A-Za-z0-9_]{3,30}\/wishlist\/shared\/?$/.test(url.pathname) || /^\/u\/[A-Za-z0-9_]{3,30}\/wishlist\/[^/]+(?:\/[^/]+)?\/?$/.test(url.pathname))) return next()
         try {
           const target = new URL(req.url, process.env.API_PROXY_TARGET || 'http://server:8080')
