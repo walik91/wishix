@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"wishix/server/internal/productimport"
@@ -18,20 +19,53 @@ type ProductImport struct {
 	auth    *Auth
 }
 
-// Query parameters, fragments and credentials may contain access tokens.
-// Never record paths on our own origin or reservation links either.
+func decodeLogCheck(s string) string {
+	var decoded strings.Builder
+	decoded.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '%' && i+2 < len(s) {
+			if b, err := strconv.ParseUint(s[i+1:i+3], 16, 8); err == nil {
+				decoded.WriteByte(byte(b))
+				i += 2
+				continue
+			}
+		}
+		decoded.WriteByte(s[i])
+	}
+	return decoded.String()
+}
+
+// Preserve shop URLs as entered, but do not log our reservation capabilities,
+// including links nested inside query parameters or encoded in other URLs.
 func importLogURL(raw, origin string) string {
 	u, err := productimport.ValidateURL(raw)
 	if err != nil {
 		return ""
 	}
 	configured, err := url.Parse(origin)
-	path := strings.ToLower(u.Path)
-	if err == nil && strings.EqualFold(u.Hostname(), configured.Hostname()) || strings.Contains(path, "reserv") || strings.Contains(path, "booking") {
-		u.Path, u.RawPath = "", ""
+	ownHost := ""
+	if err == nil {
+		ownHost = strings.ToLower(configured.Hostname())
 	}
-	u.RawQuery, u.ForceQuery, u.Fragment = "", false, ""
-	return u.String()
+	decoded := strings.ToLower(raw)
+	sensitive := ownHost != "" && strings.Contains(decoded, ownHost)
+	for i := 0; i <= 4 && !sensitive; i++ {
+		if strings.Contains(decoded, "reserv") || strings.Contains(decoded, "booking") || ownHost != "" && strings.Contains(decoded, ownHost) {
+			sensitive = true
+			break
+		}
+		next := decodeLogCheck(decoded)
+		if next == decoded {
+			break
+		}
+		decoded = strings.ToLower(next)
+	}
+	if sensitive {
+		u.Path, u.RawPath = "", ""
+		u.RawQuery, u.ForceQuery, u.Fragment = "", false, ""
+		return u.String()
+	}
+	return raw
 }
 
 func NewProductImport(service *services.ProductImport, auth *Auth) *ProductImport {
