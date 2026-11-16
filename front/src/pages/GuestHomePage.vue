@@ -15,7 +15,7 @@ const steps = [
   { key: 'share', icon: 'share' },
   { key: 'give', icon: 'heart' },
 ]
-const questions = ['account', 'links', 'privacy', 'free']
+const questions = ['account', 'links', 'privacy']
 
 watchEffect(() => {
   document.title = `${t('appName')} · ${t('home.pageTitle')}`
@@ -33,7 +33,6 @@ watchEffect(() => {
           <UiButton :href="startHref" :loading="checking">{{ startLabel }}<AppIcon name="arrow" /></UiButton>
           <a class="how-link" href="#how-it-works">{{ t('home.howItWorks') }}</a>
         </div>
-        <p class="hero-note"><AppIcon name="check" />{{ t('home.freeNote') }}</p>
       </div>
       <div class="hero-visual">
         <img class="gift" :src="gift" alt="" width="370" height="300" fetchpriority="high" />
@@ -91,8 +90,6 @@ h1 { max-width: 470px; margin: 0; font-size: var(--wx-text-xl); font-weight: 800
 h1 span { color: var(--wx-primary); }
 .hero-description { max-width: 440px; margin: var(--wx-space-5) 0 var(--wx-space-6); color: var(--wx-text-muted); font-size: var(--wx-text-md); line-height: 1.7; }
 .hero-actions { display: flex; flex-direction: column; align-items: stretch; gap: var(--wx-space-2); }
-.hero-note { display: flex; align-items: flex-start; gap: var(--wx-space-2); margin: var(--wx-space-4) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.6; }
-.hero-note .icon { width: 18px; height: 18px; color: var(--wx-primary); }
 .hero-visual { display: grid; justify-items: center; align-content: center; min-width: 0; }
 .gift { display: block; width: min(100%, 300px); height: auto; }
 .wish-note { display: flex; align-items: center; gap: var(--wx-space-3); width: min(100%, 320px); margin-top: -20px; padding: var(--wx-space-4); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-card); background: var(--wx-surface); box-shadow: var(--wx-shadow-card); }
