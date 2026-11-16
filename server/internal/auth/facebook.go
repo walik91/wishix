@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -34,7 +35,7 @@ func NewFacebookClient(config *Config) *FacebookClient {
 }
 
 func (f *FacebookClient) Enabled() bool {
-	return f.config.FacebookAppID != "" && f.config.FacebookAppSecret != ""
+	return strings.TrimSpace(f.config.FacebookAppID) != "" && strings.TrimSpace(f.config.FacebookAppSecret) != ""
 }
 
 func (f *FacebookClient) AuthorizationURL(state, _ string) string {

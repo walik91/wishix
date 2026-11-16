@@ -80,7 +80,7 @@ func (g *Facebook) Start(ctx context.Context, mode, session string) (string, str
 }
 
 func (g *Facebook) Callback(ctx context.Context, state, session, code string) (FacebookResult, error) {
-	if len(state) != 43 {
+	if !g.Enabled() || len(state) != 43 {
 		return FacebookResult{}, ErrInvalidInput
 	}
 	flow, err := g.repo.ConsumeFlow(ctx, security.Digest(state), g.auth.now())
@@ -179,7 +179,7 @@ func (g *Facebook) link(ctx context.Context, session, subject string) (FacebookR
 
 func (g *Facebook) Complete(ctx context.Context, token, username, session string) (Authenticated, error) {
 	username = strings.ToLower(strings.TrimSpace(username))
-	if len(token) != 43 {
+	if !g.Enabled() || len(token) != 43 {
 		return Authenticated{}, ErrInvalidInput
 	}
 	if !usernamePattern.MatchString(username) {

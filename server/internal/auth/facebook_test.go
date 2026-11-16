@@ -9,6 +9,29 @@ import (
 	"testing"
 )
 
+func TestFacebookDisabledWhenCredentialsAreIncomplete(t *testing.T) {
+	for key, value := range map[string]string{"APP_ENV": "production", "APP_ORIGIN": "https://example.test", "AUTH_SECRET": strings.Repeat("a", 48), "SMTP_HOST": "smtp.example.test", "SMTP_PORT": "587", "SMTP_FROM": "support@example.test", "SMTP_SECURITY": "starttls", "SMTP_USERNAME": "", "SMTP_PASSWORD": "", "AUTH_TRUSTED_PROXY_CIDRS": "", "GOOGLE_CLIENT_ID": "", "GOOGLE_CLIENT_SECRET": ""} {
+		t.Setenv(key, value)
+	}
+	for _, tc := range []struct {
+		id, secret string
+		enabled    bool
+	}{
+		{"", "", false}, {"app", "", false}, {"", "secret", false},
+		{" ", "secret", false}, {"app", " \t", false}, {"app", "secret", true},
+	} {
+		t.Setenv("FACEBOOK_APP_ID", tc.id)
+		t.Setenv("FACEBOOK_APP_SECRET", tc.secret)
+		config, err := LoadConfig()
+		if err != nil {
+			t.Fatalf("incomplete Facebook settings prevent startup: %v", err)
+		}
+		if enabled := NewFacebookClient(config).Enabled(); enabled != tc.enabled {
+			t.Fatalf("enabled = %v, want %v", enabled, tc.enabled)
+		}
+	}
+}
+
 func TestFacebookAuthorizationAndExchange(t *testing.T) {
 	client := NewFacebookClient(&Config{Origin: "https://wishix.test", FacebookAppID: "app", FacebookAppSecret: "secret"})
 	address, err := url.Parse(client.AuthorizationURL("state", "unused"))
