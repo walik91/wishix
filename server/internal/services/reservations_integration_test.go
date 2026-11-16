@@ -85,6 +85,14 @@ func TestIntegrationReservationsAndListChanges(t *testing.T) {
 	if err := bookings.Confirm(ctx, input, nil); err != services.ErrCode {
 		t.Fatalf("challenge reused: %v", err)
 	}
+	// Editing the shared wish changes both lists without affecting its reservation.
+	f.listCall(t, "PUT", "/api/wishes/"+wishID, map[string]any{"title": "Edited present", "edit_version": wish["edit_version"]}, owner, 200)
+	for _, id := range []string{listID, otherID} {
+		items := f.currentList(t, owner, id)["wishes"].([]any)
+		if len(items) != 1 || items[0].(map[string]any)["title"] != "Edited present" {
+			t.Fatal("edit did not propagate to shared lists", items)
+		}
+	}
 	guest := f.listCall(t, "POST", "/api/public/lists/guest", map[string]string{"id": otherID, "token": ""}, nil, 200)
 	publicWish := guest["wishes"].([]any)[0].(map[string]any)
 	if publicWish["reserved"] != true || publicWish["guest_recoverable"] != true {

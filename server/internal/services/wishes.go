@@ -2,6 +2,9 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"regexp"
@@ -26,6 +29,7 @@ const (
 	ErrWishPriority    WishError = "wish_priority_invalid"
 	ErrWishLinks       WishError = "wish_links_invalid"
 	ErrWishNotFound    WishError = "wish_not_found"
+	ErrWishConflict    WishError = "wish_conflict"
 )
 
 type WishInput struct {
@@ -36,11 +40,14 @@ type WishInput struct {
 	Priority    string   `json:"priority"`
 	ShopLinks   []string `json:"shop_links"`
 	ListIDs     []string `json:"list_ids"`
+	EditVersion string   `json:"edit_version,omitempty"`
 	Image       []byte   `json:"-"`
 }
 
 type WishRepository interface {
 	List(context.Context, string) ([]models.Wish, error)
+	Get(context.Context, string, string) (*models.Wish, error)
+	Update(context.Context, *models.Wish) (bool, error)
 	Create(context.Context, *models.Wish) error
 	Delete(context.Context, string, string) (bool, error)
 	Image(context.Context, string, string) (*models.WishImage, error)
@@ -127,9 +134,80 @@ func (s *Wishes) List(ctx context.Context, ownerID string) ([]models.Wish, error
 	return s.repo.List(ctx, ownerID)
 }
 
+func (s *Wishes) Get(ctx context.Context, ownerID, id string) (*models.Wish, error) {
+	if ownerID == "" {
+		return nil, ErrSession
+	}
+	if !wishIDPattern.MatchString(id) {
+		return nil, ErrWishNotFound
+	}
+	wish, err := s.repo.Get(ctx, ownerID, id)
+	if err != nil {
+		return nil, err
+	}
+	if wish == nil {
+		return nil, ErrWishNotFound
+	}
+	return wish, nil
+}
+
+// WishEditVersion covers only editable fields, so image and list changes remain independent.
+func WishEditVersion(wish *models.Wish) string {
+	links := make([]string, 0, len(wish.ShopLinks))
+	for _, link := range wish.ShopLinks {
+		links = append(links, link.URL)
+	}
+	data, _ := json.Marshal(WishInput{Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, ShopLinks: links})
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
+}
+
+func (s *Wishes) Update(ctx context.Context, ownerID, id string, input WishInput) error {
+	if ownerID == "" {
+		return ErrSession
+	}
+	if !wishIDPattern.MatchString(id) {
+		return ErrWishNotFound
+	}
+	if input.ListIDs != nil || input.Image != nil || len(input.EditVersion) != 64 {
+		return ErrInvalidInput
+	}
+	input, err := validateWish(input)
+	if err != nil {
+		return err
+	}
+	return s.tx.WithTransaction(ctx, func(txCtx context.Context) error {
+		current, err := s.repo.Get(txCtx, ownerID, id)
+		if err != nil {
+			return err
+		}
+		if current == nil {
+			return ErrWishNotFound
+		}
+		if WishEditVersion(current) != input.EditVersion {
+			return ErrWishConflict
+		}
+		wish := &models.Wish{ID: id, OwnerID: ownerID, Title: input.Title, Description: input.Description, Price: input.Price, Currency: input.Currency, Priority: input.Priority}
+		for position, link := range input.ShopLinks {
+			wish.ShopLinks = append(wish.ShopLinks, models.WishShopLink{WishID: id, Position: position, URL: link})
+		}
+		updated, err := s.repo.Update(txCtx, wish)
+		if err != nil {
+			return err
+		}
+		if !updated {
+			return ErrWishNotFound
+		}
+		return nil
+	})
+}
+
 func (s *Wishes) Create(ctx context.Context, ownerID string, input WishInput) (*models.Wish, error) {
 	if ownerID == "" {
 		return nil, ErrSession
+	}
+	if input.EditVersion != "" {
+		return nil, ErrInvalidInput
 	}
 	input, err := validateWish(input)
 	if err != nil {

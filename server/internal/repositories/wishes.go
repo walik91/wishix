@@ -22,6 +22,34 @@ func (r *Wishes) List(ctx context.Context, ownerID string) ([]models.Wish, error
 	return wishes, err
 }
 
+func (r *Wishes) Get(ctx context.Context, ownerID, id string) (*models.Wish, error) {
+	var wishes []models.Wish
+	err := r.Ctx(ctx).Select("wishes.*, COALESCE((SELECT version::STRING FROM wish_images WHERE wish_id = wishes.id), '') AS image_version").Where("owner_id = ? AND id = ?", ownerID, id).
+		Preload("ShopLinks", func(query *gorm.DB) *gorm.DB { return query.Order("position ASC") }).Limit(1).Find(&wishes).Error
+	if err != nil || len(wishes) == 0 {
+		return nil, err
+	}
+	return &wishes[0], nil
+}
+
+func (r *Wishes) Update(ctx context.Context, wish *models.Wish) (bool, error) {
+	result := r.Ctx(ctx).Model(&models.Wish{}).Where("id = ? AND owner_id = ?", wish.ID, wish.OwnerID).Updates(map[string]any{
+		"title": wish.Title, "description": wish.Description, "price": wish.Price, "currency": wish.Currency, "priority": wish.Priority,
+	})
+	if result.Error != nil || result.RowsAffected != 1 {
+		return false, result.Error
+	}
+	if err := r.Ctx(ctx).Where("wish_id = ?", wish.ID).Delete(&models.WishShopLink{}).Error; err != nil {
+		return false, err
+	}
+	if len(wish.ShopLinks) > 0 {
+		if err := r.Ctx(ctx).Create(&wish.ShopLinks).Error; err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
 func (r *Wishes) Create(ctx context.Context, wish *models.Wish) error {
 	if err := r.Ctx(ctx).Omit("ShopLinks", "Image").Create(wish).Error; err != nil {
 		return err

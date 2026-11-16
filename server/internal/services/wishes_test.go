@@ -1,10 +1,65 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
+
+	"wishix/server/internal/models"
 )
+
+type editWishRepository struct {
+	WishRepository
+	wish   *models.Wish
+	writes int
+}
+
+func (r *editWishRepository) Get(_ context.Context, owner, id string) (*models.Wish, error) {
+	if r.wish == nil || r.wish.OwnerID != owner || r.wish.ID != id {
+		return nil, nil
+	}
+	return r.wish, nil
+}
+func (r *editWishRepository) Update(_ context.Context, wish *models.Wish) (bool, error) {
+	r.writes++
+	r.wish = wish
+	return true, nil
+}
+
+type editWishTransaction struct{}
+
+func (editWishTransaction) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
+func TestWishEditVersionAndOwnership(t *testing.T) {
+	id := "00000000-0000-4000-8000-000000000001"
+	repo := &editWishRepository{wish: &models.Wish{ID: id, OwnerID: "owner", Title: "Original", Priority: "medium"}}
+	service := NewWishes(repo, editWishTransaction{})
+	version := WishEditVersion(repo.wish)
+	input := WishInput{Title: "Changed", Priority: "high", EditVersion: version}
+	if err := service.Update(t.Context(), "other", id, input); !errors.Is(err, ErrWishNotFound) {
+		t.Fatalf("other owner: %v", err)
+	}
+	if err := service.Update(t.Context(), "owner", id, input); err != nil {
+		t.Fatalf("owner update: %v", err)
+	}
+	if repo.writes != 1 || repo.wish.Title != "Changed" {
+		t.Fatal("update was not applied")
+	}
+	if err := service.Update(t.Context(), "owner", id, input); !errors.Is(err, ErrWishConflict) {
+		t.Fatalf("stale update: %v", err)
+	}
+	if repo.writes != 1 {
+		t.Fatal("stale update wrote data")
+	}
+	newVersion := WishEditVersion(repo.wish)
+	repo.wish.ImageVersion = "new-image"
+	if WishEditVersion(repo.wish) != newVersion {
+		t.Fatal("image changes must not conflict with field edits")
+	}
+}
 
 func TestValidateWish(t *testing.T) {
 	text := func(value string) *string { return &value }

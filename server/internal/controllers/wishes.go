@@ -36,6 +36,7 @@ type wishResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
 	ShopLinks   []string  `json:"shop_links"`
 	ImageURL    *string   `json:"image_url"`
+	EditVersion string    `json:"edit_version"`
 }
 
 func privateWish(wish *models.Wish) wishResponse {
@@ -43,7 +44,7 @@ func privateWish(wish *models.Wish) wishResponse {
 	for _, link := range wish.ShopLinks {
 		links = append(links, link.URL)
 	}
-	return wishResponse{ID: wish.ID, Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, CreatedAt: wish.CreatedAt, ShopLinks: links, ImageURL: wishImageURL(wish.ID, wish.ImageVersion)}
+	return wishResponse{ID: wish.ID, Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, CreatedAt: wish.CreatedAt, ShopLinks: links, ImageURL: wishImageURL(wish.ID, wish.ImageVersion), EditVersion: services.WishEditVersion(wish)}
 }
 
 func wishImageURL(id, version string) *string {
@@ -57,6 +58,8 @@ func wishImageURL(id, version string) *string {
 func (c *Wishes) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/wishes", c.authorized(c.list))
 	mux.HandleFunc("POST /api/wishes", c.authorized(c.create))
+	mux.HandleFunc("GET /api/wishes/{id}", c.authorized(c.get))
+	mux.HandleFunc("PUT /api/wishes/{id}", c.authorized(c.update))
 	mux.HandleFunc("DELETE /api/wishes/{id}", c.authorized(c.delete))
 	mux.HandleFunc("GET /api/wishes/{id}/image", c.authorized(c.image))
 	mux.HandleFunc("PUT /api/wishes/{id}/image", c.authorized(c.saveImage))
@@ -73,7 +76,7 @@ func (c *Wishes) authorized(handler func(http.ResponseWriter, *http.Request, str
 				return
 			}
 			multipart = mediaType == "multipart/form-data" && (r.Method == http.MethodPost || r.Method == http.MethodPut)
-			if (r.Method == http.MethodPut && !multipart) || (mediaType != "application/json" && !multipart) {
+			if mediaType != "application/json" && !multipart {
 				c.auth.write(w, http.StatusUnsupportedMediaType, map[string]string{"error": "invalid_input"})
 				return
 			}
@@ -106,6 +109,31 @@ func (c *Wishes) authorized(handler func(http.ResponseWriter, *http.Request, str
 			c.failure(w, err)
 		}
 	}
+}
+
+func (c *Wishes) get(w http.ResponseWriter, r *http.Request, ownerID string) error {
+	wish, err := c.service.Get(r.Context(), ownerID, r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, http.StatusOK, map[string]any{"wish": privateWish(wish)})
+	return nil
+}
+
+func (c *Wishes) update(w http.ResponseWriter, r *http.Request, ownerID string) error {
+	mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if mediaType != "application/json" {
+		return services.ErrInvalidInput
+	}
+	input, err := decodeWish(r.Body)
+	if err != nil {
+		return err
+	}
+	if err = c.service.Update(r.Context(), ownerID, r.PathValue("id"), input); err != nil {
+		return err
+	}
+	c.auth.write(w, http.StatusOK, map[string]string{"status": "ok"})
+	return nil
 }
 
 func (c *Wishes) list(w http.ResponseWriter, r *http.Request, ownerID string) error {
@@ -265,6 +293,8 @@ func (c *Wishes) failure(w http.ResponseWriter, err error) {
 	status := http.StatusBadRequest
 	if code == "wish_not_found" || code == "list_not_found" {
 		status = http.StatusNotFound
+	} else if code == "wish_conflict" {
+		status = http.StatusConflict
 	} else if code == "wish_image_too_large" {
 		status = http.StatusRequestEntityTooLarge
 	} else if code == "unavailable" {

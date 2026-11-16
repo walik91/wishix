@@ -176,3 +176,71 @@ func TestIntegrationWishValidationAndAtomicCreate(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationWishEditOwnershipAndAtomicity(t *testing.T) {
+	f := newAuthFixture(t)
+	owner := f.account(t, "edit-owner@example.test", "editowner")
+	other := f.account(t, "edit-other@example.test", "editother")
+	request := func(method, path, body string, cookie *http.Cookie) (int, map[string]any) {
+		return f.wishRequest(t, method, path, body, cookie, "https://wishix.test")
+	}
+	status, body := request("POST", "/api/wishes", `{"title":"Original","shop_links":["https://first.test/"]}`, owner)
+	if status != 201 {
+		t.Fatalf("create: %d %v", status, body)
+	}
+	id := body["wish"].(map[string]any)["id"].(string)
+	version := body["wish"].(map[string]any)["edit_version"].(string)
+	withVersion := func(value string) string {
+		return strings.TrimSuffix(value, "}") + `,"edit_version":"` + version + `"}`
+	}
+	path := "/api/wishes/" + id
+	for _, method := range []string{"GET", "PUT"} {
+		if status, _ := request(method, path, `{"title":"Intrusion"}`, nil); status != 401 {
+			t.Fatalf("guest %s: %d", method, status)
+		}
+		if status, response := request(method, path, withVersion(`{"title":"Intrusion"}`), other); status != 404 || response["error"] != "wish_not_found" {
+			t.Fatalf("other owner %s: %d %v", method, status, response)
+		}
+	}
+	if status, _ := f.wishRequest(t, "PUT", path, `{"title":"Cross-site"}`, owner, "https://attacker.test"); status != 403 {
+		t.Fatal("cross-site update accepted")
+	}
+	for _, invalid := range []string{`{"title":""}`, `{"title":"Modified","price":"1.001","currency":"USD"}`, `{"title":"Modified","list_ids":[]}`} {
+		if status, _ := request("PUT", path, withVersion(invalid), owner); status != 400 {
+			t.Fatalf("invalid edit accepted: %d", status)
+		}
+	}
+	if err := f.database.Exec(`ALTER TABLE wish_shop_links ADD CONSTRAINT test_reject_edit_link CHECK (url <> 'https://rejected.test/')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := request("PUT", path, withVersion(`{"title":"Must roll back","shop_links":["https://rejected.test/"]}`), owner); status != 503 {
+		t.Fatalf("failed update: %d", status)
+	}
+	status, body = request("GET", path, "", owner)
+	wish := body["wish"].(map[string]any)
+	if status != 200 || wish["title"] != "Original" || wish["shop_links"].([]any)[0] != "https://first.test/" {
+		t.Fatal("partial edit was committed")
+	}
+	status, body = request("PUT", path, withVersion(`{"title":" Updated ","description":"Notes","price":"12.5","currency":"mdl","priority":"high","shop_links":["https://second.test/","https://third.test/"]}`), owner)
+	if status != 200 {
+		t.Fatalf("update: %d %v", status, body)
+	}
+	status, body = request("GET", path, "", owner)
+	wish = body["wish"].(map[string]any)
+	links := wish["shop_links"].([]any)
+	if status != 200 || wish["title"] != "Updated" || wish["price"] != "12.50" || wish["currency"] != "MDL" || wish["priority"] != "high" || len(links) != 2 || links[0] != "https://second.test/" || links[1] != "https://third.test/" {
+		t.Fatalf("incorrect persisted update: %v", wish)
+	}
+	if status, _ := request("PUT", path, withVersion(`{"title":"Stale edit"}`), owner); status != 409 {
+		t.Fatalf("stale edit accepted: %d", status)
+	}
+	version = wish["edit_version"].(string)
+	if status, _ := request("PUT", path, withVersion(`{"title":"Without optional fields"}`), owner); status != 200 {
+		t.Fatalf("clear fields: %d", status)
+	}
+	_, body = request("GET", path, "", owner)
+	wish = body["wish"].(map[string]any)
+	if wish["price"] != nil || wish["currency"] != "" || len(wish["shop_links"].([]any)) != 0 {
+		t.Fatalf("optional fields not cleared: %v", wish)
+	}
+}

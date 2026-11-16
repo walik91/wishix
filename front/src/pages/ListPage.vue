@@ -26,6 +26,7 @@ const query = new URLSearchParams(window.location.search)
 const noticeSequence = ref(0)
 function showNotice(value) { noticeSequence.value++; notice.value = value }
 if (query.get('notice') === 'wish-added') notice.value = 'added'
+else if (query.get('notice') === 'wish-updated') notice.value = 'wishUpdated'
 else if (validNotices.includes(query.get('notice'))) notice.value = query.get('notice')
 let initialAction = query.has('manage') ? 'manage' : query.has('edit') ? 'edit' : ''
 if (query.size) window.history.replaceState(null, '', window.location.pathname)
