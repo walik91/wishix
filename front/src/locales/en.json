@@ -380,5 +380,14 @@
   "google.linkConflict": "This Google account is already connected to an account, or another Google account is connected here.",
   "google.methods": "Sign-in methods",
   "google.linked": "Google is connected",
-  "google.connect": "Connect Google"
+  "google.connect": "Connect Google",
+  "facebook.error": "Facebook sign-in could not be completed. Please try again.",
+  "facebook.conflict": "An account already exists with this email. Sign in to that account and connect Facebook in your profile.",
+  "facebook.linkConflict": "This Facebook account is already connected to an account, or another Facebook account is connected here.",
+  "facebook.linked": "Facebook is connected",
+  "facebook.connect": "Connect Facebook",
+  "profile.noEmail": "Not added",
+  "profile.emailForMail": "Add and verify an email address to receive emails from Wishix.",
+  "profile.addEmail": "Add email",
+  "reservation.addEmailFirst": "Add and verify an email address in your profile before reserving a gift."
 }

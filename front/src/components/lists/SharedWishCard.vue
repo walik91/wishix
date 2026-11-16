@@ -56,6 +56,7 @@ onBeforeUnmount(reset)
     <div class="reservation-actions"><template v-if="wish.reserved"><span class="reservation-status">{{ t('reservation.reserved') }}</span><UiButton v-if="wish.guest_recoverable" variant="secondary" @click="show('recover')">{{ t('reservation.needLink') }}</UiButton></template><UiButton v-else @click="show('start')">{{ t('reservation.reserve') }}</UiButton></div>
     <UiDialog v-model:open="open" :busy="busy" :title="t(mode === 'recover' ? 'reservation.needLink' : 'reservation.reserve')">
       <div v-if="mode === 'login'" class="reservation-form" role="status"><p>{{ t('reservation.accountExists') }}</p><UiButton href="/login" @click="rememberReturn">{{ t('reservation.signIn') }}</UiButton></div>
+      <div v-else-if="mode === 'start' && user && !user.email" class="reservation-form" role="status"><p>{{ t('reservation.addEmailFirst') }}</p><UiButton href="/my?add_email=1">{{ t('profile.addEmail') }}</UiButton></div>
       <form v-else-if="mode !== 'done'" class="reservation-form" @submit.prevent="submit">
         <p class="reservation-hint">{{ wish.title }}</p>
         <TextField v-if="mode !== 'verify'" :id="`email-${wish.id}`" v-model="email" type="email" required autocomplete="email" :label="t('reservation.email')" :disabled="busy || (mode === 'start' && !!user)" />

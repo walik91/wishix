@@ -56,7 +56,26 @@ func (c *Auth) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/logout", c.mutation("logout", c.logout))
 	mux.HandleFunc("POST /api/auth/forgot-password", c.mutation("forgot-password", c.forgot))
 	mux.HandleFunc("POST /api/auth/reset-password", c.mutation("reset-password", c.reset))
+	mux.HandleFunc("POST /api/auth/add-email", c.mutation("add-email", c.addEmail))
+	mux.HandleFunc("POST /api/auth/confirm-added-email", c.mutation("confirm-added-email", c.confirmAddedEmail))
 	mux.HandleFunc("GET /api/auth/me", c.me)
+}
+
+func (c *Auth) addEmail(w http.ResponseWriter, r *http.Request, input authRequest) error {
+	challenge, err := c.service.StartAddEmail(r.Context(), c.token(r), input.Email, input.Locale)
+	if err != nil {
+		return err
+	}
+	c.write(w, http.StatusAccepted, map[string]any{"challenge": challenge, "resend_after": 60})
+	return nil
+}
+
+func (c *Auth) confirmAddedEmail(w http.ResponseWriter, r *http.Request, input authRequest) error {
+	if err := c.service.FinishAddEmail(r.Context(), c.token(r), input.Challenge, input.Code); err != nil {
+		return err
+	}
+	c.write(w, http.StatusOK, map[string]string{"status": "ok"})
+	return nil
 }
 
 func (c *Auth) mutation(action string, handler func(http.ResponseWriter, *http.Request, authRequest) error) http.HandlerFunc {

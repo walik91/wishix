@@ -1,10 +1,10 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { t } from '../i18n.js'
+import { locale, t } from '../i18n.js'
 import { getCollectionSetting, setCollectionSetting } from '../api/lists.js'
-import { googleStatus, startGoogle } from '../api/auth.js'
+import { googleStatus, startGoogle, facebookStatus, startFacebook, addEmail, confirmAddedEmail, resendCode } from '../api/auth.js'
 import { useSession } from '../composables/useSession.js'
-import { authError } from '../composables/useAuthForm.js'
+import { authError, useAuthForm } from '../composables/useAuthForm.js'
 import AppNavigation from '../components/navigation/AppNavigation.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
 import LanguagePicker from '../components/ui/LanguagePicker.vue'
@@ -12,13 +12,19 @@ import UserAvatar from '../components/ui/UserAvatar.vue'
 import UiDialog from '../components/ui/UiDialog.vue'
 import UiButton from '../components/ui/UiButton.vue'
 import SocialAuthButtons from '../components/auth/SocialAuthButtons.vue'
+import CodeVerification from '../components/auth/CodeVerification.vue'
+import TextField from '../components/ui/TextField.vue'
 import logo from '../assets/brand/logo-lockup.svg'
 
-const { user, checking, unavailable, signOut } = useSession()
+const { user, checking, unavailable, signOut, refresh } = useSession()
 const account = computed(() => !checking.value && !unavailable.value ? user.value : null)
 const googleResult = new URLSearchParams(window.location.search).get('google')
-const profileOpen = ref(googleResult === 'linked' || googleResult === 'error' || googleResult === 'conflict')
+const facebookResult = new URLSearchParams(window.location.search).get('facebook')
+const profileOpen = ref(['linked', 'error', 'conflict'].includes(googleResult) || ['linked', 'error', 'conflict'].includes(facebookResult) || new URLSearchParams(window.location.search).has('add_email'))
 const googleEnabled = ref(false), googleLinked = ref(false), googleBusy = ref(false), googleError = ref('')
+const facebookEnabled = ref(false), facebookLinked = ref(false), facebookBusy = ref(false), facebookError = ref('')
+const emailInput = ref(''), emailChallenge = ref('')
+const { busy: emailBusy, error: emailError, remaining: emailRemaining, cooldown: emailCooldown, run: emailRun } = useAuthForm()
 const signingOut = ref(false)
 const error = ref('')
 const collectionEnabled = ref(false), collectionLoading = ref(false), collectionReady = ref(false), collectionError = ref('')
@@ -26,6 +32,8 @@ watch(profileOpen, async open => {
   if (!open) return
   try { const status = await googleStatus(); googleEnabled.value = status.enabled; googleLinked.value = status.linked }
   catch { googleEnabled.value = false }
+  try { const status = await facebookStatus(); facebookEnabled.value = status.enabled; facebookLinked.value = status.linked }
+  catch { facebookEnabled.value = false }
   collectionLoading.value = true; collectionReady.value = false; collectionError.value = ''
   try { collectionEnabled.value = (await getCollectionSetting()).show_all_wishes; collectionReady.value = true }
   catch { collectionError.value = t('profile.settingsError') }
@@ -37,6 +45,15 @@ async function linkGoogle() {
   try { const result = await startGoogle('link'); window.location.assign(result.url) }
   catch (failure) { googleError.value = authError(failure); googleBusy.value = false }
 }
+async function linkFacebook() {
+  if (facebookBusy.value) return
+  facebookBusy.value = true; facebookError.value = ''
+  try { const result = await startFacebook('link'); window.location.assign(result.url) }
+  catch (failure) { facebookError.value = authError(failure); facebookBusy.value = false }
+}
+function sendEmailCode() { return emailRun(async () => { const result = await addEmail({ email: emailInput.value, locale: locale.value }); emailChallenge.value = result.challenge; emailCooldown(result.resend_after) }) }
+function resendEmailCode() { return emailRun(async () => { const result = await resendCode(emailChallenge.value); emailCooldown(result.resend_after) }) }
+function verifyAddedEmail(code) { return emailRun(async () => { await confirmAddedEmail(emailChallenge.value, code); emailChallenge.value = ''; await refresh() }) }
 async function changeCollection(event) {
   const next = event.target.checked
   collectionLoading.value = true; collectionError.value = ''
@@ -114,14 +131,30 @@ async function logout() {
           <dt>{{ t('register.username') }}</dt>
           <dd>{{ account.username }}</dd>
           <dt>{{ t('login.email') }}</dt>
-          <dd>{{ account.email }}</dd>
+          <dd>{{ account.email || t('profile.noEmail') }}</dd>
         </dl>
+        <div v-if="!account.email" class="email-setting">
+          <p>{{ t('profile.emailForMail') }}</p>
+          <template v-if="emailChallenge"><p>{{ t('reservation.codeSent') }} {{ emailInput }}</p><CodeVerification :busy="emailBusy" :remaining="emailRemaining" @verify="verifyAddedEmail" @resend="resendEmailCode" /></template>
+          <form v-else @submit.prevent="sendEmailCode">
+            <TextField id="profile-email" v-model="emailInput" type="email" required maxlength="254" autocomplete="email" :label="t('login.email')" />
+            <UiButton type="submit" :loading="emailBusy">{{ t('profile.addEmail') }}</UiButton>
+          </form>
+          <p v-if="emailError" class="auth-error" role="alert">{{ emailError }}</p>
+        </div>
         <div v-if="googleEnabled" class="google-setting">
           <strong>{{ t('google.methods') }}</strong>
           <p v-if="googleLinked" role="status">{{ t('google.linked') }}</p>
           <SocialAuthButtons v-else :busy="googleBusy" :label="t('google.connect')" @select="linkGoogle" />
           <p v-if="googleResult === 'error' || googleResult === 'conflict'" class="auth-error" role="alert">{{ t(googleResult === 'conflict' ? 'google.linkConflict' : 'google.error') }}</p>
           <p v-if="googleError" class="auth-error" role="alert">{{ googleError }}</p>
+        </div>
+        <div v-if="facebookEnabled" class="google-setting">
+          <strong v-if="!googleEnabled">{{ t('google.methods') }}</strong>
+          <p v-if="facebookLinked" role="status">{{ t('facebook.linked') }}</p>
+          <SocialAuthButtons v-else :google="false" facebook :busy="facebookBusy" :label="t('facebook.connect')" @select="linkFacebook" />
+          <p v-if="facebookResult === 'error' || facebookResult === 'conflict'" class="auth-error" role="alert">{{ t(facebookResult === 'conflict' ? 'facebook.linkConflict' : 'facebook.error') }}</p>
+          <p v-if="facebookError" class="auth-error" role="alert">{{ facebookError }}</p>
         </div>
         <div class="collection-setting">
           <label><input type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
@@ -165,6 +198,7 @@ dd + dt { margin-top: var(--wx-space-4); }
 .profile-note { margin-block: var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.6; }
 .collection-setting { margin-block: var(--wx-space-5); }.collection-setting label { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; }.collection-setting input { width: 20px; height: 20px; accent-color: var(--wx-primary); }.collection-setting p { margin: var(--wx-space-1) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
 .google-setting { display: grid; gap: var(--wx-space-3); margin-block: var(--wx-space-5); }.google-setting p { margin: 0; line-height: 1.5; }
+.email-setting, .email-setting form { display: grid; gap: var(--wx-space-3); margin-block: var(--wx-space-4); }.email-setting p { margin: 0; line-height: 1.5; }
 .logout-button { width: 100%; }
 .profile-public-link { width: 100%; margin-bottom: var(--wx-space-3); }
 @media (min-width: 48rem) {

@@ -47,12 +47,31 @@ func (r *Auth) UsernameExists(ctx context.Context, username string) (bool, error
 }
 
 func (r *Auth) CreateUser(ctx context.Context, user *models.User) error {
-	err := r.Ctx(ctx).Create(user).Error
+	query := r.Ctx(ctx)
+	if user.Email == "" {
+		query = query.Omit("Email", "EmailVerifiedAt")
+	}
+	err := query.Create(user).Error
 	var pgError *pgconn.PgError
 	if errors.As(err, &pgError) && pgError.Code == "23505" {
 		return services.ErrRegistrationUnavailable
 	}
 	return err
+}
+
+func (r *Auth) AddEmail(ctx context.Context, id, email string, verifiedAt time.Time) error {
+	result := r.Ctx(ctx).Model(&models.User{}).Where("id = ? AND email IS NULL", id).Updates(map[string]any{"email": email, "email_verified_at": verifiedAt})
+	var pgError *pgconn.PgError
+	if errors.As(result.Error, &pgError) && pgError.Code == "23505" {
+		return services.ErrRegistrationUnavailable
+	}
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return services.ErrRegistrationUnavailable
+	}
+	return nil
 }
 
 func (r *Auth) CreateChallenge(ctx context.Context, challenge *models.AuthChallenge) error {

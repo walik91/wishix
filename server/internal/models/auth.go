@@ -56,3 +56,26 @@ type AuthGooglePending struct {
 }
 
 func (AuthGooglePending) TableName() string { return "auth_google_pending" }
+
+type AuthFacebookIdentity struct {
+	Subject   string `gorm:"primaryKey"`
+	UserID    string
+	CreatedAt time.Time
+}
+
+type AuthFacebookFlow struct {
+	StateHash   string `gorm:"primaryKey"`
+	Verifier    string
+	Mode        string
+	SessionHash string
+	ExpiresAt   time.Time
+}
+
+type AuthFacebookPending struct {
+	TokenHash string `gorm:"primaryKey"`
+	Subject   string
+	Email     string
+	ExpiresAt time.Time
+}
+
+func (AuthFacebookPending) TableName() string { return "auth_facebook_pending" }

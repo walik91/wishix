@@ -1,7 +1,7 @@
 <script setup>
 import { nextTick, ref, watchEffect } from 'vue'
 import { t } from '../i18n.js'
-import { completeGoogle } from '../api/auth.js'
+import { completeGoogle, completeFacebook } from '../api/auth.js'
 import { useAuthForm } from '../composables/useAuthForm.js'
 import { consumeReservationReturn } from '../reservationReturn.js'
 import AuthLayout from '../layouts/AuthLayout.vue'
@@ -9,13 +9,14 @@ import UiButton from '../components/ui/UiButton.vue'
 import TextField from '../components/ui/TextField.vue'
 
 const username = ref('')
+const facebook = window.location.pathname.startsWith('/facebook/')
 const field = ref(null)
 const invalid = ref(false)
 const { busy, error, run } = useAuthForm()
 async function submit() {
   invalid.value = !/^[a-z0-9_]{3,30}$/i.test(username.value.trim())
   if (invalid.value) { await nextTick(); field.value.focus(); return }
-  await run(async () => { await completeGoogle(username.value); window.location.assign(consumeReservationReturn()) })
+  await run(async () => { await (facebook ? completeFacebook(username.value) : completeGoogle(username.value)); window.location.assign(consumeReservationReturn()) })
 }
 watchEffect(() => { document.title = `${t('google.finishTitle')} · ${t('appName')}` })
 </script>

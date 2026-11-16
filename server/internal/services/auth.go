@@ -44,6 +44,7 @@ type AuthRepository interface {
 	DeleteUserSessions(context.Context, string) error
 	DeleteUserChallenges(context.Context, string) error
 	UpdatePassword(context.Context, string, string) error
+	AddEmail(context.Context, string, string, time.Time) error
 	Allow(context.Context, string, int, time.Time, time.Time) (bool, error)
 	Cleanup(context.Context, time.Time) error
 }
@@ -222,6 +223,9 @@ func (a *Auth) consume(ctx context.Context, token, code, purpose string, success
 func (a *Auth) Verify(ctx context.Context, token, code string) (Authenticated, error) {
 	var result Authenticated
 	err := a.consume(ctx, token, code, "register", func(txCtx context.Context, challenge *models.AuthChallenge) error {
+		if challenge.UserID != nil {
+			return ErrCode
+		}
 		now := a.now()
 		user := &models.User{ID: security.UUID(), Username: challenge.Username, Email: challenge.Email, PasswordHash: challenge.PasswordHash, EmailVerifiedAt: now, CreatedAt: now}
 		if err := a.repo.CreateUser(txCtx, user); err != nil {
@@ -232,6 +236,54 @@ func (a *Auth) Verify(ctx context.Context, token, code string) (Authenticated, e
 		return a.repo.CreateSession(txCtx, session)
 	})
 	return result, err
+}
+
+// An email added to a social account is usable only after proof of control.
+func (a *Auth) StartAddEmail(ctx context.Context, session, email, locale string) (string, error) {
+	user, err := a.Current(ctx, session)
+	if err != nil {
+		return "", err
+	}
+	if user.Email != "" {
+		return "", ErrRegistrationUnavailable
+	}
+	email, err = normalizeEmail(email)
+	if err != nil {
+		return "", err
+	}
+	if err = a.limit(ctx, "send-email", email, 5, time.Hour); err != nil {
+		return "", err
+	}
+	if existing, err := a.repo.UserByEmail(ctx, email); err != nil {
+		return "", err
+	} else if existing != nil {
+		return "", ErrRegistrationUnavailable
+	}
+	challenge, token, code := a.newChallenge("register", email, "", "", locale, &user.ID)
+	if err = a.repo.CreateChallenge(ctx, challenge); err != nil {
+		return "", err
+	}
+	if err = a.mail.SendCode(ctx, email, challenge.Locale, challenge.Purpose, code); err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+func (a *Auth) FinishAddEmail(ctx context.Context, session, token, code string) error {
+	user, err := a.Current(ctx, session)
+	if err != nil {
+		return err
+	}
+	return a.consume(ctx, token, code, "register", func(txCtx context.Context, challenge *models.AuthChallenge) error {
+		current, err := a.Current(txCtx, session)
+		if err != nil {
+			return err
+		}
+		if challenge.UserID == nil || *challenge.UserID != user.ID || current.ID != user.ID {
+			return ErrCode
+		}
+		return a.repo.AddEmail(txCtx, user.ID, challenge.Email, a.now())
+	})
 }
 
 func (a *Auth) Resend(ctx context.Context, token string) error {

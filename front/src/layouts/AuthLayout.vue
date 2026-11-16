@@ -12,6 +12,8 @@ defineProps({
   notice: { type: String, default: '' },
   showSocial: { type: Boolean, default: true },
   socialBusy: Boolean,
+  google: { type: Boolean, default: true },
+  facebook: Boolean,
 })
 defineEmits(['social'])
 </script>
@@ -36,7 +38,7 @@ defineEmits(['social'])
           <h1 :id="titleId" tabindex="-1">{{ title }}</h1>
           <p>{{ description }}</p>
         </div>
-        <SocialAuthButtons v-if="showSocial" :busy="socialBusy" @select="$emit('social', $event)" />
+        <SocialAuthButtons v-if="showSocial" :busy="socialBusy" :google="google" :facebook="facebook" @select="$emit('social', $event)" />
         <div v-if="showSocial" class="divider"><span>{{ dividerLabel }}</span></div>
         <slot />
         <p class="auth-switch"><slot name="switch" /></p>

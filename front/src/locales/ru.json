@@ -380,5 +380,14 @@
   "google.linkConflict": "Этот Google уже подключён к другому аккаунту или к вашему аккаунту уже подключён другой Google.",
   "google.methods": "Способы входа",
   "google.linked": "Google подключён",
-  "google.connect": "Подключить Google"
+  "google.connect": "Подключить Google",
+  "facebook.error": "Не удалось завершить вход через Facebook. Попробуйте ещё раз.",
+  "facebook.conflict": "Аккаунт с этим email уже существует. Войдите в него и подключите Facebook в профиле.",
+  "facebook.linkConflict": "Этот аккаунт Facebook уже подключён к другому аккаунту или здесь подключён другой Facebook.",
+  "facebook.linked": "Facebook подключён",
+  "facebook.connect": "Подключить Facebook",
+  "profile.noEmail": "Не указан",
+  "profile.emailForMail": "Укажите и подтвердите email, чтобы получать письма от Wishix.",
+  "profile.addEmail": "Добавить email",
+  "reservation.addEmailFirst": "Чтобы забронировать подарок, добавьте и подтвердите email в профиле."
 }

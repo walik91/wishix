@@ -51,7 +51,7 @@ onMounted(async () => {
   <component :is="privatePage ? AppShell : PublicLayout">
     <GuestHomePage v-if="page === '/'" />
     <LoginPage v-else-if="page === '/login'" />
-    <GoogleFinishPage v-else-if="page === '/google/finish'" />
+    <GoogleFinishPage v-else-if="page === '/google/finish' || page === '/facebook/finish'" />
     <RegisterPage v-else-if="page === '/register'" />
     <RecoveryPage v-else-if="page === '/forgot-password'" />
     <ReservationPage v-else-if="page === '/reservation'" />

@@ -22,11 +22,17 @@ type Config struct {
 	SMTPSecurity       string
 	GoogleClientID     string
 	GoogleClientSecret string
+	FacebookAppID      string
+	FacebookAppSecret  string
 }
 
 func LoadConfig() (*Config, error) {
 	c := &Config{Origin: os.Getenv("APP_ORIGIN"), Secret: os.Getenv("AUTH_SECRET"), SMTPHost: os.Getenv("SMTP_HOST"), SMTPPort: os.Getenv("SMTP_PORT"), SMTPFrom: os.Getenv("SMTP_FROM"), SMTPUsername: os.Getenv("SMTP_USERNAME"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), SMTPSecurity: os.Getenv("SMTP_SECURITY")}
 	c.GoogleClientID, c.GoogleClientSecret = os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET")
+	c.FacebookAppID, c.FacebookAppSecret = os.Getenv("FACEBOOK_APP_ID"), os.Getenv("FACEBOOK_APP_SECRET")
+	if (c.FacebookAppID == "") != (c.FacebookAppSecret == "") {
+		return nil, errors.New("FACEBOOK_APP_ID and FACEBOOK_APP_SECRET must be configured together")
+	}
 	if (c.GoogleClientID == "") != (c.GoogleClientSecret == "") {
 		return nil, errors.New("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together")
 	}

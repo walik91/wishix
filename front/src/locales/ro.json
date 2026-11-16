@@ -380,5 +380,14 @@
   "google.linkConflict": "Acest cont Google este deja conectat la un cont sau un alt cont Google este conectat aici.",
   "google.methods": "Metode de autentificare",
   "google.linked": "Google este conectat",
-  "google.connect": "Conectează Google"
+  "google.connect": "Conectează Google",
+  "facebook.error": "Autentificarea cu Facebook nu a putut fi finalizată. Încearcă din nou.",
+  "facebook.conflict": "Există deja un cont cu acest email. Autentifică-te în acel cont și conectează Facebook din profil.",
+  "facebook.linkConflict": "Acest cont Facebook este deja conectat la un cont sau un alt cont Facebook este conectat aici.",
+  "facebook.linked": "Facebook este conectat",
+  "facebook.connect": "Conectează Facebook",
+  "profile.noEmail": "Nu este adăugat",
+  "profile.emailForMail": "Adaugă și confirmă o adresă de email pentru a primi mesaje de la Wishix.",
+  "profile.addEmail": "Adaugă email",
+  "reservation.addEmailFirst": "Adaugă și confirmă o adresă de email în profil înainte de a rezerva un cadou."
 }

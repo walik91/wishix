@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watchEffect } from 'vue'
 import { t } from '../i18n.js'
-import { login, googleStatus, startGoogle } from '../api/auth.js'
+import { login, googleStatus, startGoogle, facebookStatus, startFacebook } from '../api/auth.js'
 import { useAuthForm } from '../composables/useAuthForm.js'
 import { consumeReservationReturn } from '../reservationReturn.js'
 import AuthLayout from '../layouts/AuthLayout.vue'
@@ -18,10 +18,12 @@ const passwordField = ref(null)
 const form = ref(null)
 const passwordReset = new URLSearchParams(window.location.search).has('reset')
 const googleResult = new URLSearchParams(window.location.search).get('google')
+const facebookResult = new URLSearchParams(window.location.search).get('facebook')
 const googleEnabled = ref(false)
+const facebookEnabled = ref(false)
 const { busy, error, run } = useAuthForm()
-onMounted(async () => { try { googleEnabled.value = (await googleStatus()).enabled } catch { /* Email sign-in remains available. */ } })
-function googleSignIn() { return run(async () => { const result = await startGoogle('login'); window.location.assign(result.url) }) }
+onMounted(() => { googleStatus().then(s => { googleEnabled.value = s.enabled }).catch(() => {}); facebookStatus().then(s => { facebookEnabled.value = s.enabled }).catch(() => {}) })
+function socialSignIn(provider) { return run(async () => { const result = await (provider === 'google' ? startGoogle('login') : startFacebook('login')); window.location.assign(result.url) }) }
 
 const emailError = computed(() => {
   if (!submitted.value) return ''
@@ -47,9 +49,10 @@ watchEffect(() => { document.title = `${t('login.submit')} · ${t('appName')}` }
 </script>
 
 <template>
-  <AuthLayout :title="t('login.title')" :description="t('login.description')" title-id="login-title" :divider-label="t('login.orEmail')" :show-social="googleEnabled" :social-busy="busy" @social="googleSignIn">
+  <AuthLayout :title="t('login.title')" :description="t('login.description')" title-id="login-title" :divider-label="t('login.orEmail')" :show-social="googleEnabled || facebookEnabled" :google="googleEnabled" :facebook="facebookEnabled" :social-busy="busy" @social="socialSignIn">
     <p v-if="passwordReset" class="auth-notice" role="status">{{ t('auth.resetSuccess') }}</p>
     <p v-if="googleResult === 'error' || googleResult === 'conflict'" class="auth-error" role="alert">{{ t(googleResult === 'conflict' ? 'google.conflict' : 'google.error') }}</p>
+    <p v-if="facebookResult === 'error' || facebookResult === 'conflict'" class="auth-error" role="alert">{{ t(facebookResult === 'conflict' ? 'facebook.conflict' : 'facebook.error') }}</p>
     <form ref="form" class="login-form" novalidate :aria-busy="busy" @submit.prevent="submit">
       <TextField id="email" ref="emailField" v-model="email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" :spellcheck="false" required maxlength="254" :label="t('login.email')" :placeholder="t('login.emailPlaceholder')" :error="emailError" />
       <div class="password-field">

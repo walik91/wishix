@@ -53,7 +53,7 @@ export default defineConfig({
           // Vite includes the original request URL in proxy error logs. The
           // Google callback contains a one-time authorization code and state.
           proxy.on('error', (_error, request) => {
-            if (request?.url?.startsWith('/api/auth/google/callback?')) request.url = '/api/auth/google/callback?[redacted]'
+            if (/^\/api\/auth\/(google|facebook)\/callback\?/.test(request?.url || '')) request.url = request.url.split('?')[0] + '?[redacted]'
           })
           proxy.on('proxyReq', (proxyRequest, request) => {
             proxyRequest.setHeader('X-Real-IP', request.socket.remoteAddress)
