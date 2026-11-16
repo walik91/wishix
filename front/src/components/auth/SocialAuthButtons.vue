@@ -13,7 +13,12 @@ defineProps({ busy: Boolean, label: { type: String, default: '' }, google: { typ
       <img class="provider-icon" :src="googleMark" alt="" width="20" height="20" />
       {{ label || t('login.google') }}
     </UiButton>
-    <UiButton v-if="facebook" variant="secondary" :loading="busy" @click="$emit('select', 'facebook')">{{ label || t('login.facebook') }}</UiButton>
+    <UiButton v-if="facebook" variant="secondary" :loading="busy" @click="$emit('select', 'facebook')">
+      <svg class="provider-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path fill="#1877f2" d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073c0 6.026 4.388 11.021 10.125 11.927v-8.436H7.078v-3.49h3.047V9.412c0-3.027 1.792-4.7 4.533-4.7 1.313 0 2.686.235 2.686.235v2.97h-1.513c-1.49 0-1.956.93-1.956 1.886v2.268h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z" />
+      </svg>
+      {{ label || t('login.facebook') }}
+    </UiButton>
   </div>
 </template>
 
