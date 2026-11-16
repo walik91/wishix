@@ -5,17 +5,16 @@ name: wishix-auth-test
 x-test-database: &test-database
   DB_NAME: wishix_auth_test
   DB_USER: wishix_auth_test
-  DB_PASSWORD: local-test-password-only
 
 services:
   db:
     image: cockroachdb/cockroach:v26.2.10
-    command: [start-single-node, --advertise-addr=db, --store=/cockroach/cockroach-data]
+    entrypoint: [/cockroach/cockroach]
+    command: [start-single-node, --insecure, --listen-addr=0.0.0.0:26257, --advertise-addr=db, --store=/cockroach/cockroach-data]
     volumes:
       - db-data:/cockroach/cockroach-data
-      - db-node-certs:/cockroach/certs
     healthcheck:
-      test: [CMD, /cockroach/cockroach, sql, --certs-dir=/cockroach/certs, --host=db:26257, --execute=SELECT 1]
+      test: [CMD, /cockroach/cockroach, sql, --insecure, --host=db:26257, --execute=SELECT 1]
       interval: 3s
       timeout: 5s
       retries: 30
@@ -26,8 +25,6 @@ services:
     environment: *test-database
     volumes:
       - ./docker/db/init.sh:/init/db.sh:ro
-      - db-node-certs:/cockroach/certs:ro
-      - db-client-ca:/db-certs
     depends_on:
       db:
         condition: service_healthy
@@ -48,8 +45,6 @@ services:
       SMTP_PORT: "1025"
       SMTP_FROM: support@example.test
       SMTP_SECURITY: none
-    volumes:
-      - db-client-ca:/db-certs:ro
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -81,8 +76,6 @@ services:
     entrypoint: ["./migrate"]
     command: ["status"]
     environment: *test-database
-    volumes:
-      - db-client-ca:/db-certs:ro
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -95,7 +88,6 @@ services:
     environment: *test-database
     volumes:
       - ./server:/app:ro
-      - db-client-ca:/db-certs:ro
       - go-test-cache:/go/pkg/mod
     depends_on:
       db-init:
@@ -103,6 +95,4 @@ services:
 
 volumes:
   db-data:
-  db-node-certs:
-  db-client-ca:
   go-test-cache:

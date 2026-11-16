@@ -78,12 +78,12 @@ func (r *Auth) UserByEmail(ctx context.Context, email string) (*models.User, err
 
 Обычные тесты входят в сборку Go-образа: проверяют вложенность, rollback, повторы и их лимит, panic, отменённый и дочерний контексты, неопределённый commit, изоляцию параллельных транзакций и защиту от чужого или завершённого контекста.
 
-Отдельные интеграционные тесты подключаются к настоящей CockroachDB по TLS. Они используют случайные тестовые схемы `tx_test_*` и удаляют только созданные ими схемы после проверки; `public` и продуктовые данные не меняются. Проверяются commit/rollback нескольких репозиториев, вложенность, отмена и реальный конфликт двух соединений: вторая операция меняет уже прочитанную первой запись, после чего первая повторяет callback и сохраняет оба изменения. Дополнительные административные права для тестов не нужны.
+Отдельные интеграционные тесты подключаются к настоящей CockroachDB без TLS. Они используют случайные тестовые схемы `tx_test_*` и удаляют только созданные ими схемы после проверки; `public` и продуктовые данные не меняются. Проверяются commit/rollback нескольких репозиториев, вложенность, отмена и реальный конфликт двух соединений: вторая операция меняет уже прочитанную первой запись, после чего первая повторяет callback и сохраняет оба изменения. Дополнительные административные права для тестов не нужны.
 
 При уже запущенном проекте, из корня (PowerShell или bash):
 
 ```sh
-docker run --rm --network wishix_default --env-file .env --mount "type=bind,source=${PWD}/server,target=/app" --mount type=volume,source=wishix_db-client-ca,target=/db-certs,readonly --workdir /app golang:1.27.3-alpine3.24 go test -tags=integration -timeout 60s -v ./internal/db
+docker run --rm --network wishix_default --env-file .env --mount "type=bind,source=${PWD}/server,target=/app" --workdir /app golang:1.27.3-alpine3.24 go test -tags=integration -timeout 60s -v ./internal/db
 ```
 
 Имена сети и тома соответствуют текущему `name: wishix`; при запуске с другим `-p` их нужно заменить.

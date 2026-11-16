@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -93,8 +92,17 @@ func newAuthFixture(t *testing.T) *authFixture {
 			}
 		}
 	})
-	dsn := url.URL{Scheme: "postgresql", Host: "db:26257", Path: "/" + os.Getenv("DB_NAME"), User: url.UserPassword(os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"))}
-	dsn.RawQuery = url.Values{"sslmode": {"verify-full"}, "sslrootcert": {"/db-certs/ca.crt"}, "search_path": {schema}, "connect_timeout": {"5"}}.Encode()
+	connectionString, err := db.ConnectionString()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dsn, err := url.Parse(connectionString)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := dsn.Query()
+	query.Set("search_path", schema)
+	dsn.RawQuery = query.Encode()
 	database, err := gorm.Open(postgres.Open(dsn.String()), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		t.Fatal("connect to isolated test schema:", err)

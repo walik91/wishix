@@ -46,15 +46,15 @@ func New(lifecycle fx.Lifecycle) (*gorm.DB, error) {
 	return database, nil
 }
 
-// ConnectionString shares TLS and credential encoding between the API and CLI.
+// ConnectionString shares connection settings between the API and CLI.
 // The resulting connection string must never be printed or passed in argv.
 func ConnectionString() (string, error) {
-	name, user, password := os.Getenv("DB_NAME"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD")
-	if name == "" || user == "" || password == "" {
-		return "", errors.New("DB_NAME, DB_USER and DB_PASSWORD are required")
+	name, user := os.Getenv("DB_NAME"), os.Getenv("DB_USER")
+	if name == "" || user == "" {
+		return "", errors.New("DB_NAME and DB_USER are required")
 	}
-	dsn := url.URL{Scheme: "postgresql", Host: "db:26257", Path: "/" + name, User: url.UserPassword(user, password)}
-	query := url.Values{"sslmode": {"verify-full"}, "sslrootcert": {"/db-certs/ca.crt"}, "connect_timeout": {"5"}}
+	dsn := url.URL{Scheme: "postgresql", Host: "db:26257", Path: "/" + name, User: url.User(user)}
+	query := url.Values{"sslmode": {"disable"}, "connect_timeout": {"5"}}
 	dsn.RawQuery = query.Encode()
 	return dsn.String(), nil
 }

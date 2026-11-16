@@ -10,7 +10,6 @@ services:
     environment:
       DB_NAME: ${DB_NAME:?Укажите DB_NAME в .env}
       DB_USER: ${DB_USER:?Укажите DB_USER в .env}
-      DB_PASSWORD: ${DB_PASSWORD:?Укажите DB_PASSWORD в .env}
       APP_ENV: development
       APP_ORIGIN: ${APP_ORIGIN:?Укажите APP_ORIGIN в .env}
       AUTH_SECRET: ${AUTH_SECRET:?Укажите AUTH_SECRET в .env}
@@ -23,8 +22,6 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_SECURITY: ${SMTP_SECURITY:?Укажите SMTP_SECURITY в .env}
-    volumes:
-      - db-client-ca:/db-certs:ro
     depends_on:
       db-init:
         condition: service_completed_successfully

@@ -1,8 +1,11 @@
 services:
   db:
     image: ${COCKROACH_IMAGE:?Укажите COCKROACH_IMAGE в .env}
+    entrypoint: ["/cockroach/cockroach"]
     command:
       - start-single-node
+      - --insecure
+      - --listen-addr=0.0.0.0:26257
       - --advertise-addr=db
       - --store=/cockroach/cockroach-data
     restart: unless-stopped
@@ -10,9 +13,8 @@ services:
       - "127.0.0.1:26257:26257"
     volumes:
       - db-data:/cockroach/cockroach-data
-      - db-node-certs:/cockroach/certs
     healthcheck:
-      test: ["CMD", "/cockroach/cockroach", "sql", "--certs-dir=/cockroach/certs", "--host=db:26257", "--execute=SELECT 1"]
+      test: ["CMD", "/cockroach/cockroach", "sql", "--insecure", "--host=db:26257", "--execute=SELECT 1"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -24,11 +26,8 @@ services:
     environment:
       DB_NAME: ${DB_NAME:?Укажите DB_NAME в .env}
       DB_USER: ${DB_USER:?Укажите DB_USER в .env}
-      DB_PASSWORD: ${DB_PASSWORD:?Укажите DB_PASSWORD в .env}
     volumes:
       - ./docker/db/init.sh:/init/db.sh:ro
-      - db-node-certs:/cockroach/certs:ro
-      - db-client-ca:/db-certs
     depends_on:
       db:
         condition: service_healthy
@@ -42,14 +41,9 @@ services:
     environment:
       DB_NAME: ${DB_NAME:?Укажите DB_NAME в .env}
       DB_USER: ${DB_USER:?Укажите DB_USER в .env}
-      DB_PASSWORD: ${DB_PASSWORD:?Укажите DB_PASSWORD в .env}
-    volumes:
-      - db-client-ca:/db-certs:ro
     depends_on:
       db-init:
         condition: service_completed_successfully
 
 volumes:
   db-data:
-  db-node-certs:
-  db-client-ca:
