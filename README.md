@@ -51,6 +51,19 @@ Username и email берутся из текущей серверной сесс
 
 После изменения `.env`, Docker-конфигурации или зависимостей остановить и повторить команду запуска.
 
+## Подключение DBeaver на этом компьютере
+
+В режиме разработки `compose.override.yaml` публикует SQL-порт CockroachDB только на `127.0.0.1:26257`. При уже запущенном проекте применить настройку можно командой `docker compose up -d --no-deps db`: контейнер БД будет пересоздан, данные в томе сохранятся, а соединения кратковременно прервутся.
+
+Скопировать публичный сертификат CA после запуска БД (PowerShell, из корня проекта):
+
+```powershell
+New-Item -ItemType Directory -Force .cache\dbeaver | Out-Null
+docker compose cp db:/cockroach/certs/ca.crt .cache/dbeaver/ca.crt
+```
+
+В DBeaver создать подключение CockroachDB: host `127.0.0.1`, port `26257`, database, username и password взять из `DB_NAME`, `DB_USER`, `DB_PASSWORD` в `.env`. В настройках SSL выбрать `verify-full` и указать `.cache/dbeaver/ca.crt` как сертификат CA. SSH не нужен. Если сертификаты базы пересоздавались, скопировать CA заново. Не копировать и не передавать закрытые ключи. Для `compose.prod.yaml` эта настройка не применяется.
+
 ## Тестирование через Cloudflare Tunnel
 
 Для туннеля укажите в `.env` его публичный HTTPS-адрес в `APP_ORIGIN` и секретный токен в `CLOUDFLARE_TUNNEL_TOKEN`. Файл `.env` исключён из Git; не публикуйте токен и не передавайте его в чат. Затем запустите обычный режим разработки:
