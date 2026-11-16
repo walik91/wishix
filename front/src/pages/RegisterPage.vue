@@ -1,7 +1,7 @@
 <script setup>
-import { computed, nextTick, ref, watchEffect } from 'vue'
+import { computed, nextTick, onMounted, ref, watchEffect } from 'vue'
 import { locale, t } from '../i18n.js'
-import { register, verifyEmail, resendCode } from '../api/auth.js'
+import { register, verifyEmail, resendCode, googleStatus, startGoogle } from '../api/auth.js'
 import { useAuthForm } from '../composables/useAuthForm.js'
 import AuthLayout from '../layouts/AuthLayout.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
@@ -20,6 +20,9 @@ const usernameField = ref(null)
 const emailField = ref(null)
 const passwordField = ref(null)
 const { busy, error, remaining, cooldown, run } = useAuthForm()
+const googleEnabled = ref(false)
+onMounted(async () => { try { googleEnabled.value = (await googleStatus()).enabled } catch { /* Email registration remains available. */ } })
+function googleSignIn() { return run(async () => { const result = await startGoogle('login'); window.location.assign(result.url) }) }
 
 const usernameError = computed(() => {
   if (!submitted.value) return ''
@@ -60,7 +63,7 @@ watchEffect(() => { document.title = `${t(challenge.value ? 'auth.verifyTitle' :
 </script>
 
 <template>
-  <AuthLayout :title="t(challenge ? 'auth.verifyTitle' : 'register.title')" :description="t(challenge ? 'auth.verifyDescription' : 'register.description')" title-id="register-title" :divider-label="t('register.orEmail')" :show-social="false">
+  <AuthLayout :title="t(challenge ? 'auth.verifyTitle' : 'register.title')" :description="t(challenge ? 'auth.verifyDescription' : 'register.description')" title-id="register-title" :divider-label="t('register.orEmail')" :show-social="googleEnabled && !challenge" :social-busy="busy" @social="googleSignIn">
     <CodeVerification v-if="challenge" :busy="busy" :remaining="remaining" @verify="verify" @resend="resend" />
     <form v-else ref="form" class="register-form" novalidate :aria-busy="busy" @submit.prevent="submit">
       <TextField id="username" ref="usernameField" v-model="username" name="username" autocomplete="username" autocapitalize="none" :spellcheck="false" required maxlength="30" :label="t('register.username')" :placeholder="t('register.usernamePlaceholder')" :hint="t('register.usernameHint')" :error="usernameError" />

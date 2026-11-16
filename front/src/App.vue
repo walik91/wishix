@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted } from 'vue'
 import LoginPage from './pages/LoginPage.vue'
+import GoogleFinishPage from './pages/GoogleFinishPage.vue'
 import RegisterPage from './pages/RegisterPage.vue'
 import GuestHomePage from './pages/GuestHomePage.vue'
 import StartPage from './pages/StartPage.vue'
@@ -50,6 +51,7 @@ onMounted(async () => {
   <component :is="privatePage ? AppShell : PublicLayout">
     <GuestHomePage v-if="page === '/'" />
     <LoginPage v-else-if="page === '/login'" />
+    <GoogleFinishPage v-else-if="page === '/google/finish'" />
     <RegisterPage v-else-if="page === '/register'" />
     <RecoveryPage v-else-if="page === '/forgot-password'" />
     <ReservationPage v-else-if="page === '/reservation'" />

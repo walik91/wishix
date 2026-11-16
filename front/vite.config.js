@@ -50,6 +50,11 @@ export default defineConfig({
       '/api': {
         target: process.env.API_PROXY_TARGET || 'http://server:8080',
         configure(proxy) {
+          // Vite includes the original request URL in proxy error logs. The
+          // Google callback contains a one-time authorization code and state.
+          proxy.on('error', (_error, request) => {
+            if (request?.url?.startsWith('/api/auth/google/callback?')) request.url = '/api/auth/google/callback?[redacted]'
+          })
           proxy.on('proxyReq', (proxyRequest, request) => {
             proxyRequest.setHeader('X-Real-IP', request.socket.remoteAddress)
             proxyRequest.removeHeader('X-Forwarded-For')

@@ -371,5 +371,14 @@
   "profile.allWishes": "All wishes",
   "profile.showAll": "Show all wishes in my public profile",
   "profile.showAllWarning": "Everyone can see every wish in your collection, including wishes in private lists, when this is enabled.",
-  "profile.settingsError": "Could not load or save the setting. Close and reopen the profile to try again."
+  "profile.settingsError": "Could not load or save the setting. Close and reopen the profile to try again.",
+  "google.finishTitle": "Choose your username",
+  "google.finishDescription": "Choose a username to complete your Wishix account.",
+  "google.finishButton": "Create account",
+  "google.error": "Google sign-in could not be completed. Please try again.",
+  "google.conflict": "An account already exists with this email. Sign in to that account and connect Google in your profile.",
+  "google.linkConflict": "This Google account is already connected to an account, or another Google account is connected here.",
+  "google.methods": "Sign-in methods",
+  "google.linked": "Google is connected",
+  "google.connect": "Connect Google"
 }

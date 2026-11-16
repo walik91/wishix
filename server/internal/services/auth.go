@@ -292,11 +292,11 @@ func (a *Auth) Login(ctx context.Context, email, password string) (Authenticated
 		return Authenticated{}, err
 	}
 	encoded := a.dummyPassword
-	if user != nil {
+	if user != nil && user.PasswordHash != "" {
 		encoded = user.PasswordHash
 	}
 	valid := security.CheckPassword(password, encoded)
-	if !valid || user == nil {
+	if !valid || user == nil || user.PasswordHash == "" {
 		return Authenticated{}, ErrCredentials
 	}
 	var result Authenticated
@@ -351,14 +351,14 @@ func (a *Auth) ForgotPassword(ctx context.Context, email, locale string) (string
 		return "", err
 	}
 	var userID *string
-	if user != nil {
+	if user != nil && user.PasswordHash != "" {
 		userID = &user.ID
 	}
 	challenge, token, code := a.newChallenge("reset", email, "", "", locale, userID)
 	if err := a.repo.CreateChallenge(ctx, challenge); err != nil {
 		return "", err
 	}
-	if user == nil {
+	if userID == nil {
 		return token, nil
 	}
 	if err := a.mail.SendCode(ctx, email, challenge.Locale, challenge.Purpose, code); err != nil {
@@ -380,7 +380,7 @@ func (a *Auth) ResetPassword(ctx context.Context, token, code, password string) 
 		if err != nil {
 			return err
 		}
-		if user == nil {
+		if user == nil || user.PasswordHash == "" {
 			return ErrCode
 		}
 		if err := a.repo.UpdatePassword(txCtx, user.ID, hash); err != nil {

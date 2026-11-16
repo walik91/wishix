@@ -9,7 +9,7 @@ import (
 	"wishix/server/internal/services"
 )
 
-func StartAuthMaintenance(lifecycle fx.Lifecycle, auth *services.Auth, logger *slog.Logger) {
+func StartAuthMaintenance(lifecycle fx.Lifecycle, auth *services.Auth, google *services.Google, logger *slog.Logger) {
 	var cancel context.CancelFunc
 	done := make(chan struct{})
 	lifecycle.Append(fx.Hook{
@@ -25,6 +25,9 @@ func StartAuthMaintenance(lifecycle fx.Lifecycle, auth *services.Auth, logger *s
 					task, stop := context.WithTimeout(ctx, 30*time.Second)
 					if err := auth.Cleanup(task); err != nil && ctx.Err() == nil {
 						logger.Error("authentication maintenance failed")
+					}
+					if err := google.Cleanup(task); err != nil && ctx.Err() == nil {
+						logger.Error("Google authentication maintenance failed")
 					}
 					stop()
 					select {

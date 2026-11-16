@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { t } from '../i18n.js'
 import { getCollectionSetting, setCollectionSetting } from '../api/lists.js'
+import { googleStatus, startGoogle } from '../api/auth.js'
 import { useSession } from '../composables/useSession.js'
 import { authError } from '../composables/useAuthForm.js'
 import AppNavigation from '../components/navigation/AppNavigation.vue'
@@ -10,21 +11,32 @@ import LanguagePicker from '../components/ui/LanguagePicker.vue'
 import UserAvatar from '../components/ui/UserAvatar.vue'
 import UiDialog from '../components/ui/UiDialog.vue'
 import UiButton from '../components/ui/UiButton.vue'
+import SocialAuthButtons from '../components/auth/SocialAuthButtons.vue'
 import logo from '../assets/brand/logo-lockup.svg'
 
 const { user, checking, unavailable, signOut } = useSession()
 const account = computed(() => !checking.value && !unavailable.value ? user.value : null)
-const profileOpen = ref(false)
+const googleResult = new URLSearchParams(window.location.search).get('google')
+const profileOpen = ref(googleResult === 'linked' || googleResult === 'error' || googleResult === 'conflict')
+const googleEnabled = ref(false), googleLinked = ref(false), googleBusy = ref(false), googleError = ref('')
 const signingOut = ref(false)
 const error = ref('')
 const collectionEnabled = ref(false), collectionLoading = ref(false), collectionReady = ref(false), collectionError = ref('')
 watch(profileOpen, async open => {
   if (!open) return
+  try { const status = await googleStatus(); googleEnabled.value = status.enabled; googleLinked.value = status.linked }
+  catch { googleEnabled.value = false }
   collectionLoading.value = true; collectionReady.value = false; collectionError.value = ''
   try { collectionEnabled.value = (await getCollectionSetting()).show_all_wishes; collectionReady.value = true }
   catch { collectionError.value = t('profile.settingsError') }
   finally { collectionLoading.value = false }
-})
+}, { immediate: true })
+async function linkGoogle() {
+  if (googleBusy.value) return
+  googleBusy.value = true; googleError.value = ''
+  try { const result = await startGoogle('link'); window.location.assign(result.url) }
+  catch (failure) { googleError.value = authError(failure); googleBusy.value = false }
+}
 async function changeCollection(event) {
   const next = event.target.checked
   collectionLoading.value = true; collectionError.value = ''
@@ -104,6 +116,13 @@ async function logout() {
           <dt>{{ t('login.email') }}</dt>
           <dd>{{ account.email }}</dd>
         </dl>
+        <div v-if="googleEnabled" class="google-setting">
+          <strong>{{ t('google.methods') }}</strong>
+          <p v-if="googleLinked" role="status">{{ t('google.linked') }}</p>
+          <SocialAuthButtons v-else :busy="googleBusy" :label="t('google.connect')" @select="linkGoogle" />
+          <p v-if="googleResult === 'error' || googleResult === 'conflict'" class="auth-error" role="alert">{{ t(googleResult === 'conflict' ? 'google.linkConflict' : 'google.error') }}</p>
+          <p v-if="googleError" class="auth-error" role="alert">{{ googleError }}</p>
+        </div>
         <div class="collection-setting">
           <label><input type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
           <p>{{ t('profile.showAllWarning') }}</p>
@@ -145,6 +164,7 @@ dd { margin: 0; line-height: 1.5; }
 dd + dt { margin-top: var(--wx-space-4); }
 .profile-note { margin-block: var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.6; }
 .collection-setting { margin-block: var(--wx-space-5); }.collection-setting label { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; }.collection-setting input { width: 20px; height: 20px; accent-color: var(--wx-primary); }.collection-setting p { margin: var(--wx-space-1) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
+.google-setting { display: grid; gap: var(--wx-space-3); margin-block: var(--wx-space-5); }.google-setting p { margin: 0; line-height: 1.5; }
 .logout-button { width: 100%; }
 .profile-public-link { width: 100%; margin-bottom: var(--wx-space-3); }
 @media (min-width: 48rem) {

@@ -57,7 +57,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("version: got %d, want %d; %v", version, want, err)
 		}
 	}
-	assertVersion(7)
+	assertVersion(8)
 	if _, err := pool.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'migration_test', 'migration@example.test', 'test-hash', now(), now())`); err != nil {
 		t.Fatal(err)
 	}
@@ -78,9 +78,13 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 		t.Fatal("repeated up lost wishes or shop links")
 	}
 	statuses, err := migrator.Status(ctx)
-	if err != nil || len(statuses) != 7 || statuses[0].State != goose.StateApplied || statuses[1].State != goose.StateApplied || statuses[2].State != goose.StateApplied || statuses[3].State != goose.StateApplied || statuses[4].State != goose.StateApplied || statuses[5].State != goose.StateApplied || statuses[6].State != goose.StateApplied {
+	if err != nil || len(statuses) != 8 || statuses[0].State != goose.StateApplied || statuses[1].State != goose.StateApplied || statuses[2].State != goose.StateApplied || statuses[3].State != goose.StateApplied || statuses[4].State != goose.StateApplied || statuses[5].State != goose.StateApplied || statuses[6].State != goose.StateApplied || statuses[7].State != goose.StateApplied {
 		t.Fatal("incorrect Goose status:", err)
 	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("google down:", err)
+	}
+	assertVersion(7)
 	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("down:", err)
 	}
@@ -167,6 +171,9 @@ func TestIntegrationListsUpgradePreservesExistingCollection(t *testing.T) {
 	}
 	assertData()
 	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("google rollback", err)
+	}
+	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("reservation message rollback", err)
 	}
 	if _, err := migrator.Down(ctx); err != nil {
@@ -217,7 +224,7 @@ func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 		t.Fatal("legacy history was changed")
 	}
 	version, err := fresh.GetDBVersion(ctx)
-	if err != nil || version != 7 {
+	if err != nil || version != 8 {
 		t.Fatal("Goose did not record the adopted version")
 	}
 }

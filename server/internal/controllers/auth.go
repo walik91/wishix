@@ -34,6 +34,7 @@ type authRequest struct {
 	Locale    string `json:"locale"`
 	Challenge string `json:"challenge"`
 	Code      string `json:"code"`
+	Mode      string `json:"mode"`
 }
 
 // Explicit private account DTO: never serialize persistence models or hashes.
@@ -191,8 +192,11 @@ func (c *Auth) token(r *http.Request) string {
 	return cookie.Value
 }
 func (c *Auth) authenticated(w http.ResponseWriter, result services.Authenticated) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: result.Token, Path: "/", HttpOnly: true, Secure: c.config.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 7 * 24 * 60 * 60, Expires: result.ExpiresAt})
+	c.setSessionCookie(w, result)
 	c.write(w, http.StatusOK, map[string]any{"user": privateAccount(result.User)})
+}
+func (c *Auth) setSessionCookie(w http.ResponseWriter, result services.Authenticated) {
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: result.Token, Path: "/", HttpOnly: true, Secure: c.config.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 7 * 24 * 60 * 60, Expires: result.ExpiresAt})
 }
 func (c *Auth) clearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: c.config.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0)})

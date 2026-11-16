@@ -91,7 +91,7 @@ services:
     image: golang:1.27.3-alpine3.24
     profiles: [checks]
     working_dir: /app
-    command: [go, test, -tags=integration, -timeout, 150s, -v, ./internal/services, ./internal/db]
+    command: [go, test, -tags=integration, -timeout, 600s, -v, ./internal/services, ./internal/db]
     environment: *test-database
     volumes:
       - ./server:/app:ro

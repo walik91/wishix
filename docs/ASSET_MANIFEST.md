@@ -15,6 +15,8 @@
 | `design/tokens.css` | CSS | **утверждённые цвета + практические UI-токены** | реализация |
 | `design/tokens.json` | JSON | эквивалент токенов | интеграции/другие платформы |
 | `../front/src/assets/fonts/InterVariable.woff2` | WOFF2 | локальный исходный Inter, SIL OFL 1.1 | интерфейс приложения; источник и hash в README рядом |
+| `../front/src/assets/brand/google-g.png` | PNG | [официальный знак Google](https://developers.google.com/identity/branding-guidelines) | кнопка входа и подключения Google |
+| `../front/src/assets/fonts/GoogleSans-*.woff2` | WOFF2 | Google Sans Medium, SIL OFL 1.1 | только кнопка Google; источник и лицензия рядом |
 | `design/preview/my-390.png`, `my-1440.png` | PNG | контрольные скриншоты `/my`, 04.11.2026 | визуальная приёмка; аккаунт подставлен только в проверочном браузере |
 | `design/preview/wishes-390.png`, `wishes-1440.png` | PNG | текущая общая коллекция, 04.11.2026 | реальные записи только из изолированной тестовой БД |
 | `design/preview/new-wish-390.png`, `new-wish-1440.png` | PNG | отдельная форма добавления, 04.11.2026 | визуальная приёмка EN/RU/RO и адаптивности |

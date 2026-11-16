@@ -10,20 +10,26 @@ import (
 )
 
 type Config struct {
-	Origin         string
-	SecureCookie   bool
-	Secret         string
-	TrustedProxies []*net.IPNet
-	SMTPHost       string
-	SMTPPort       string
-	SMTPFrom       string
-	SMTPUsername   string
-	SMTPPassword   string
-	SMTPSecurity   string
+	Origin             string
+	SecureCookie       bool
+	Secret             string
+	TrustedProxies     []*net.IPNet
+	SMTPHost           string
+	SMTPPort           string
+	SMTPFrom           string
+	SMTPUsername       string
+	SMTPPassword       string
+	SMTPSecurity       string
+	GoogleClientID     string
+	GoogleClientSecret string
 }
 
 func LoadConfig() (*Config, error) {
 	c := &Config{Origin: os.Getenv("APP_ORIGIN"), Secret: os.Getenv("AUTH_SECRET"), SMTPHost: os.Getenv("SMTP_HOST"), SMTPPort: os.Getenv("SMTP_PORT"), SMTPFrom: os.Getenv("SMTP_FROM"), SMTPUsername: os.Getenv("SMTP_USERNAME"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), SMTPSecurity: os.Getenv("SMTP_SECURITY")}
+	c.GoogleClientID, c.GoogleClientSecret = os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET")
+	if (c.GoogleClientID == "") != (c.GoogleClientSecret == "") {
+		return nil, errors.New("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together")
+	}
 	origin, err := url.Parse(c.Origin)
 	if err != nil || origin.Host == "" || origin.User != nil || origin.RawQuery != "" || origin.Fragment != "" || origin.Path != "" || (origin.Scheme != "http" && origin.Scheme != "https") {
 		return nil, errors.New("APP_ORIGIN must be an http(s) origin without a path")

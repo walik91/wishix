@@ -371,5 +371,14 @@
   "profile.allWishes": "Toate dorințele",
   "profile.showAll": "Arată toate dorințele în profilul meu public",
   "profile.showAllWarning": "Dacă activezi această opțiune, oricine poate vedea toate dorințele din colecție, inclusiv cele din listele private.",
-  "profile.settingsError": "Setarea nu a putut fi încărcată sau salvată. Închide și redeschide profilul pentru a încerca din nou."
+  "profile.settingsError": "Setarea nu a putut fi încărcată sau salvată. Închide și redeschide profilul pentru a încerca din nou.",
+  "google.finishTitle": "Alege numele de utilizator",
+  "google.finishDescription": "Alege un nume de utilizator pentru a crea contul Wishix.",
+  "google.finishButton": "Creează contul",
+  "google.error": "Autentificarea cu Google nu a putut fi finalizată. Încearcă din nou.",
+  "google.conflict": "Există deja un cont cu acest email. Autentifică-te în acel cont și conectează Google din profil.",
+  "google.linkConflict": "Acest cont Google este deja conectat la un cont sau un alt cont Google este conectat aici.",
+  "google.methods": "Metode de autentificare",
+  "google.linked": "Google este conectat",
+  "google.connect": "Conectează Google"
 }

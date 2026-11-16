@@ -33,3 +33,26 @@ type AuthSession struct {
 	ExpiresAt time.Time
 	CreatedAt time.Time
 }
+
+type AuthGoogleIdentity struct {
+	Subject   string `gorm:"primaryKey"`
+	UserID    string
+	CreatedAt time.Time
+}
+
+type AuthGoogleFlow struct {
+	StateHash   string `gorm:"primaryKey"`
+	Verifier    string
+	Mode        string
+	SessionHash string
+	ExpiresAt   time.Time
+}
+
+type AuthGooglePending struct {
+	TokenHash string `gorm:"primaryKey"`
+	Subject   string
+	Email     string
+	ExpiresAt time.Time
+}
+
+func (AuthGooglePending) TableName() string { return "auth_google_pending" }
