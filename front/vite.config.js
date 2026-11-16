@@ -41,6 +41,7 @@ function sharedListRouting() {
 export default defineConfig({
   plugins: [sharedListRouting(), vue()],
   server: {
+    allowedHosts: process.env.APP_ORIGIN ? [new URL(process.env.APP_ORIGIN).hostname] : [],
     watch: {
       // File changes in Windows bind mounts must also trigger HMR.
       usePolling: true,
