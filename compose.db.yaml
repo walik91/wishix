@@ -6,6 +6,8 @@ services:
       - --advertise-addr=db
       - --store=/cockroach/cockroach-data
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:26257:26257"
     volumes:
       - db-data:/cockroach/cockroach-data
       - db-node-certs:/cockroach/certs
