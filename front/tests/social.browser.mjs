@@ -1,0 +1,90 @@
+import assert from 'node:assert/strict'
+import { readFile, mkdir } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
+const origin = process.env.WISHIX_TEST_ORIGIN || 'http://localhost:5173'
+const texts = Object.fromEntries(await Promise.all(['en', 'ru', 'ro'].map(async lang => [lang, JSON.parse(await readFile(new URL(`../src/locales/${lang}.json`, import.meta.url)))])))
+const indexHTML = await readFile(new URL('../index.html', import.meta.url), 'utf8')
+const browser = await chromium.launch({ channel: 'chrome', headless: true })
+const errors = []
+await mkdir(new URL('../../.cache/social-screens/', import.meta.url), { recursive: true })
+try {
+  for (const lang of ['en', 'ru', 'ro']) for (const width of [320, 390, 768, 1024, 1440]) {
+    const context = await browser.newContext({ locale: lang, viewport: { width, height: 900 } })
+    const page = await context.newPage()
+    page.on('pageerror', e => errors.push(e.message))
+    page.on('console', m => { if (m.text().includes('[Vue warn]')) errors.push(m.text()) })
+    let username = 'example', name = { display_name: '', show_display_name: false }, state = { self: false, following: false, blocked: false, can_follow: true }
+    let details = { username, biography: '', birth_date: null, show_age: false, show_biography: false, show_avatar: false, show_followers: false, show_following: false, has_avatar: false, username_changed_at: null }
+    let reports = [], failDetails = false, failState = false
+    await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { username, email: 'owner@example.test' } } }))
+    await page.route('**/u/bob', route => route.fulfill({ contentType: 'text/html', body: indexHTML }))
+    await page.route('**/api/profile/name', route => { if (route.request().method() === 'PUT') name = route.request().postDataJSON(); return route.fulfill({ json: name }) })
+    await page.route('**/api/profile/details', route => { if (route.request().method() === 'PUT') details = { ...details, ...route.request().postDataJSON() }; return route.fulfill({ json: details }) })
+    await page.route('**/api/profile/username', route => { username = route.request().postDataJSON().username; details.username = username; return route.fulfill({ json: details }) })
+    await page.route('**/api/profile/avatar*', route => {
+      if (route.request().method() === 'PUT') { details.has_avatar = true; return route.fulfill({ json: { status: 'ok' } }) }
+      if (route.request().method() === 'DELETE') { details.has_avatar = false; return route.fulfill({ json: { status: 'ok' } }) }
+      return route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aXcAAAAASUVORK5CYII=', 'base64') })
+    })
+    await page.route('**/api/public/profiles/bob', route => route.fulfill({ json: { username: 'bob', display_name: 'Bob Example', show_all_wishes: false, lists: [] } }))
+    await page.route('**/api/public/profiles/bob/details', route => { if (failDetails) { failDetails = false; return route.fulfill({ status: 503, json: { error: 'unavailable' } }) }; return route.fulfill({ json: { username: 'bob', biography: 'A public description', age: 25, has_avatar: false, show_followers: true, show_following: true } }) })
+    await page.route('**/api/social/bob/state', route => { if (failState) { failState = false; return route.fulfill({ status: 503, json: { error: 'unavailable' } }) }; return route.fulfill({ json: state }) })
+    await page.route('**/api/social/bob/follow', route => { state = { ...state, following: route.request().postDataJSON().follow }; return route.fulfill({ json: state }) })
+    await page.route('**/api/social/bob/block', route => { const blocked = route.request().postDataJSON().block; state = { ...state, blocked, following: false, can_follow: !blocked }; return route.fulfill({ json: state }) })
+    await page.route('**/api/social/bob/report', route => { reports.push(route.request().postDataJSON().message); return route.fulfill({ json: { status: 'ok' } }) })
+    await page.route('**/api/social/*/people/*?*', route => route.fulfill({ json: { people: [{ username: 'bob', display_name: 'Bob Example' }], next_cursor: '' } }))
+    await page.goto(`${origin}/my/profile`)
+    await page.getByRole('heading', { name: texts[lang]['profile.editProfile'] }).waitFor()
+    await page.locator('input[type=file]').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aXcAAAAASUVORK5CYII=', 'base64') })
+    await page.getByRole('button', { name: texts[lang]['profile.removeAvatar'] }).waitFor()
+    await page.getByLabel(texts[lang]['profile.birthDate'], { exact: true }).fill('2000-02-29')
+    await page.getByRole('checkbox', { name: texts[lang]['profile.showAge'] }).check()
+    await page.getByLabel(texts[lang]['profile.biography'], { exact: true }).fill('About me')
+    await page.getByRole('checkbox', { name: texts[lang]['profile.showBiography'] }).check()
+    await page.getByRole('checkbox', { name: texts[lang]['profile.showFollowers'] }).check()
+    await page.getByRole('button', { name: texts[lang]['profile.saveSettings'] }).click()
+    await page.getByText(texts[lang]['profile.saved'], { exact: true }).waitFor()
+    assert.equal(details.birth_date, '2000-02-29'); assert.equal(details.show_age, true); assert.equal(details.show_followers, true)
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `${lang}/${width}/profile`)
+    if (width < 1024) assert.equal(await page.locator('.bottom-navigation a, .bottom-navigation button').evaluateAll(nodes => nodes.every(node => { const rect = node.getBoundingClientRect(); return !rect.width || (rect.width >= 44 && rect.height >= 44) })), true, `${lang}/${width}/navigation`)
+    if (lang === 'ru' && [390, 1440].includes(width)) await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/profile-${width}.png`, import.meta.url)), fullPage: true })
+    await page.locator('#profile-username').fill('example_new')
+    await page.getByRole('button', { name: texts[lang]['profile.changeUsername'], exact: true }).first().click()
+    await page.getByRole('dialog', { name: texts[lang]['profile.changeUsername'] }).getByRole('button', { name: texts[lang]['profile.changeUsername'], exact: true }).click()
+    await page.getByText(texts[lang]['profile.usernameSaved']).waitFor()
+    assert.equal(username, 'example_new')
+    await page.goto(`${origin}/my/following`)
+    await page.getByRole('heading', { name: texts[lang]['social.title'] }).waitFor()
+    await page.getByRole('link', { name: /Bob Example/ }).waitFor()
+    await page.locator('.people-tabs').getByRole('button', { name: texts[lang]['social.blocked'], exact: true }).click()
+    await page.getByRole('link', { name: /Bob Example/ }).waitFor()
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `${lang}/${width}/following`)
+    await page.goto(`${origin}/u/bob`)
+    await page.getByRole('heading', { name: 'Bob Example' }).waitFor()
+    await page.getByRole('button', { name: texts[lang]['social.follow'], exact: true }).click()
+    await page.getByRole('button', { name: texts[lang]['social.unfollow'], exact: true }).waitFor()
+    await page.getByRole('button', { name: texts[lang]['social.block'], exact: true }).click()
+    await page.getByRole('dialog', { name: texts[lang]['social.block'] }).getByRole('button', { name: texts[lang]['social.block'], exact: true }).click()
+    await page.getByRole('button', { name: texts[lang]['social.unblock'], exact: true }).waitFor()
+    await page.getByRole('button', { name: texts[lang]['social.unblock'], exact: true }).click()
+    await page.getByRole('button', { name: texts[lang]['social.report'], exact: true }).click()
+    const reportDialog = page.getByRole('dialog', { name: texts[lang]['social.report'] })
+    await reportDialog.getByLabel(texts[lang]['social.reportReason']).fill('Problem')
+    await reportDialog.getByRole('button', { name: texts[lang]['social.report'], exact: true }).click()
+    await page.getByText(texts[lang]['social.reportSaved']).waitFor()
+    assert.deepEqual(reports, ['Problem'])
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `${lang}/${width}/public`)
+    if (lang === 'en' && width === 320) {
+      failDetails = true; await page.reload(); await page.getByText(texts[lang]['social.detailsError']).waitFor()
+      await page.getByRole('button', { name: texts[lang]['checkAgain'] }).click()
+      await page.getByText('A public description').waitFor()
+      failState = true; await page.reload(); await page.getByText(texts[lang]['social.stateError']).waitFor()
+      await page.getByRole('button', { name: texts[lang]['checkAgain'] }).click()
+      await page.getByRole('button', { name: texts[lang]['social.follow'], exact: true }).waitFor()
+    }
+    await context.close()
+  }
+  assert.deepEqual(errors, [])
+  console.log('Profile and social: EN/RU/RO × 320/390/768/1024/1440 passed.')
+} finally { await browser.close() }

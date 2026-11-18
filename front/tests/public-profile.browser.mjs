@@ -3,6 +3,7 @@ import { readFile, mkdir } from 'node:fs/promises'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const origin = process.env.WISHIX_TEST_ORIGIN || 'http://localhost:5173'
 const texts = Object.fromEntries(await Promise.all(['en', 'ru', 'ro'].map(async lang => [lang, JSON.parse(await readFile(new URL(`../src/locales/${lang}.json`, import.meta.url)))])))
+const indexHTML = await readFile(new URL('../index.html', import.meta.url), 'utf8')
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const errors = []
 try {
@@ -14,6 +15,7 @@ try {
     page.on('console', m => { if (m.text().includes('[Vue warn]')) errors.push(m.text()) })
     let enabled = false
     await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { username: 'example', email: 'private@example.test' } } }))
+    await page.route('**/u/example', route => route.fulfill({ contentType: 'text/html', body: indexHTML }))
     await page.route('**/api/auth/google/status', route => route.fulfill({ json: { enabled: false } }))
     await page.route('**/api/auth/facebook/status', route => route.fulfill({ json: { enabled: false } }))
     await page.route('**/api/profile/name', route => route.fulfill({ json: { display_name: '', show_display_name: false } }))
@@ -24,6 +26,8 @@ try {
       return route.fulfill({ json: { show_all_wishes: enabled } })
     })
     await page.route('**/api/public/profiles/example', route => route.fulfill({ json: { username: 'example', show_all_wishes: enabled, lists: [{ id: '00000000-0000-4000-8000-000000000001', title: 'Public list', visibility: 'public', wish_count: 1, share_path: '/00000000-0000-4000-8000-000000000001' }] } }))
+    await page.route('**/api/public/profiles/example/details', route => route.fulfill({ json: { username: 'example', has_avatar: false, show_followers: false, show_following: false } }))
+    await page.route('**/api/social/example/state', route => route.fulfill({ json: { self: true, following: false, blocked: false, can_follow: false } }))
     await page.route('**/api/public/profiles/example/wishes', route => enabled ? route.fulfill({ json: { username: 'example', wishes: [{ id: 'wish', title: 'A very long wish '.repeat(8), description: '', price: null, currency: '', priority: 'medium', shop_links: [], has_image: false }] } }) : route.fulfill({ status: 404, json: { error: 'list_not_found' } }))
     await page.goto(`${origin}/u/example`)
     await page.getByRole('heading', { name: 'example' }).waitFor()

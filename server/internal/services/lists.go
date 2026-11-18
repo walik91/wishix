@@ -615,6 +615,7 @@ func (s *Lists) SharedImage(ctx context.Context, token, wishID string) (*models.
 type PublicPerson struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name,omitempty"`
+	HasAvatar   bool   `json:"has_avatar,omitempty"`
 }
 
 func validProfileText(value string) bool {

@@ -42,7 +42,7 @@ func (r *Auth) UserByID(ctx context.Context, id string, lock bool) (*models.User
 
 func (r *Auth) UsernameExists(ctx context.Context, username string) (bool, error) {
 	var count int64
-	err := r.Ctx(ctx).Model(&models.User{}).Where("username = ?", username).Count(&count).Error
+	err := r.Ctx(ctx).Raw(`SELECT count(*) FROM (SELECT username FROM users WHERE username = ? UNION ALL SELECT username FROM username_registry WHERE username = ?) AS occupied`, username, username).Scan(&count).Error
 	return count > 0, err
 }
 
@@ -56,7 +56,19 @@ func (r *Auth) CreateUser(ctx context.Context, user *models.User) error {
 	if errors.As(err, &pgError) && pgError.Code == "23505" {
 		return services.ErrRegistrationUnavailable
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	// Account creation is called inside a serializable transaction: claiming the
+	// name and inserting the user must commit together, including OAuth signup.
+	claim := r.Ctx(ctx).Exec(`INSERT INTO username_registry (username, user_id, expires_at) VALUES (?, ?, NULL) ON CONFLICT (username) DO NOTHING`, user.Username, user.ID)
+	if claim.Error != nil {
+		return claim.Error
+	}
+	if claim.RowsAffected != 1 {
+		return services.ErrRegistrationUnavailable
+	}
+	return nil
 }
 
 func (r *Auth) AddEmail(ctx context.Context, id, email string, verifiedAt time.Time) error {

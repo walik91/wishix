@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const origin = process.env.WISHIX_TEST_ORIGIN || 'http://localhost:5173'
 const texts = Object.fromEntries(await Promise.all(['en', 'ru', 'ro'].map(async lang => [lang, JSON.parse(await readFile(new URL(`../src/locales/${lang}.json`, import.meta.url)))])))
+const indexHTML = await readFile(new URL('../index.html', import.meta.url), 'utf8')
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const errors = []
 await mkdir(new URL('../../.cache/search-screens/', import.meta.url), { recursive: true })
@@ -15,6 +16,7 @@ try {
     page.on('console', m => { if (m.text().includes('[Vue warn]')) errors.push(m.text()) })
     let name = { display_name: '', show_display_name: false }
     await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { username: 'example', email: 'owner@example.test' } } }))
+    await page.route('**/u/alice', route => route.fulfill({ contentType: 'text/html', body: indexHTML }))
     await page.route('**/api/auth/google/status', route => route.fulfill({ json: { enabled: false } }))
     await page.route('**/api/auth/facebook/status', route => route.fulfill({ json: { enabled: false } }))
     await page.route('**/api/profile/collection', route => route.fulfill({ json: { show_all_wishes: false } }))
@@ -28,6 +30,8 @@ try {
       return route.fulfill({ json: { people, next_cursor: params.get('q') !== 'nobody' && !params.get('after') ? 'alice' : '' } })
     })
     await page.route('**/api/public/profiles/alice', route => route.fulfill({ json: { username: 'alice', display_name: 'Alexandra Long Name', show_all_wishes: false, lists: [] } }))
+    await page.route('**/api/public/profiles/alice/details', route => route.fulfill({ json: { username: 'alice', has_avatar: false, show_followers: false, show_following: false } }))
+    await page.route('**/api/social/alice/state', route => route.fulfill({ json: { self: false, following: false, blocked: false, can_follow: true } }))
     await page.goto(`${origin}/my/search`)
     await page.getByRole('heading', { name: texts[lang]['search.title'] }).waitFor()
     const input = page.getByLabel(texts[lang]['search.label'])

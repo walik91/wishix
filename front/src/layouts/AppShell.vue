@@ -185,7 +185,8 @@ async function logout() {
           <p>{{ t('profile.showAllWarning') }}</p>
           <p v-if="collectionError" class="auth-error" role="alert">{{ collectionError }}</p>
         </div>
-        <p class="profile-note">{{ t('my.profileSoon') }}</p>
+        <UiButton class="profile-public-link" variant="secondary" href="/my/following">{{ t('social.title') }}</UiButton>
+        <UiButton class="profile-public-link" variant="secondary" href="/my/profile">{{ t('profile.editProfile') }}</UiButton>
         <UiButton class="profile-public-link" variant="secondary" :href="`/u/${encodeURIComponent(account.username)}`">{{ t('lists.publicProfile') }}</UiButton>
         <UiButton class="logout-button" variant="secondary" :loading="signingOut" @click="logout">
           <AppIcon name="logout" />{{ t('auth.logout') }}

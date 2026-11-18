@@ -97,11 +97,34 @@ func (c *Lists) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/search/people", c.authorized(c.searchPeople))
 	mux.HandleFunc("GET /{username}/wishlist/shared", c.sharePage)
 	mux.HandleFunc("GET /{username}/wishlist/shared/{$}", c.sharePage)
+	mux.HandleFunc("GET /u/{username}", c.profilePage)
+	mux.HandleFunc("GET /u/{username}/{$}", c.profilePage)
 	mux.HandleFunc("GET /u/{username}/wishlist/{id}", c.guestPage)
 	mux.HandleFunc("GET /u/{username}/wishlist/{id}/{token}", c.guestPage)
 }
 
 var shareUsername = regexp.MustCompile(`^[A-Za-z0-9_]{3,30}$`)
+
+// Redirects for former usernames are temporary and must never be cached past
+// their 60-day lifetime. Unknown profiles are rendered by the SPA as before.
+func (c *Lists) profilePage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	name, _, _, _, err := c.service.PublicProfile(r.Context(), r.PathValue("username"))
+	if err != nil {
+		if services.ListErrorCode(err) != "list_not_found" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("X-Accel-Redirect", "/_shared_index")
+		return
+	}
+	if name != strings.ToLower(r.PathValue("username")) {
+		w.Header().Set("Location", "/u/"+url.PathEscape(name))
+		w.WriteHeader(http.StatusFound)
+		return
+	}
+	w.Header().Set("X-Accel-Redirect", "/_shared_index")
+}
 
 // The front proxy serves the SPA when this returns X-Accel-Redirect.
 // Do not log the request URL: it contains a bearer capability.
@@ -374,6 +397,8 @@ func (c *Lists) failure(w http.ResponseWriter, err error) {
 		status = 409
 	} else if code == "unauthorized" {
 		status = 401
+	} else if code == "rate_limited" {
+		status = 429
 	} else if code == "unavailable" {
 		status = 503
 		c.auth.logger.Error("list operation unavailable")

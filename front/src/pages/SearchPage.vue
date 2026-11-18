@@ -2,6 +2,7 @@
 import { ref, watchEffect } from 'vue'
 import { t } from '../i18n.js'
 import { searchPeople } from '../api/search.js'
+import { publicAvatarURL } from '../api/social.js'
 import AppIcon from '../components/ui/AppIcon.vue'
 import UserAvatar from '../components/ui/UserAvatar.vue'
 import TextField from '../components/ui/TextField.vue'
@@ -39,7 +40,7 @@ async function find(more = false) {
     <p v-if="error" class="search-error" role="alert">{{ error }}</p>
     <ul v-if="people.length" class="search-results" :aria-label="t('search.results')">
       <li v-for="person in people" :key="person.username"><a class="person-card" :href="`/u/${encodeURIComponent(person.username)}`">
-        <UserAvatar :username="person.display_name || person.username" />
+        <UserAvatar :username="person.display_name || person.username" :src="person.has_avatar ? publicAvatarURL(person.username) : ''" />
         <span class="person-details"><strong>{{ person.display_name || person.username }}</strong><span v-if="person.display_name">@{{ person.username }}</span></span>
         <AppIcon name="arrow" />
       </a></li>

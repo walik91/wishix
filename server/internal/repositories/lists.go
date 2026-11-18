@@ -252,7 +252,7 @@ func (r *Lists) GuestImage(ctx context.Context, id, token, wishID string) (*mode
 }
 func (r *Lists) PublicProfile(ctx context.Context, username string) (string, string, bool, []models.Wishlist, error) {
 	var users []models.User
-	err := r.Ctx(ctx).Select("id, username, show_all_wishes, CASE WHEN show_display_name THEN display_name ELSE '' END AS display_name").Where("username = ?", username).Limit(1).Find(&users).Error
+	err := r.Ctx(ctx).Select("id, username, show_all_wishes, CASE WHEN show_display_name THEN display_name ELSE '' END AS display_name").Where("username = ? OR id = (SELECT user_id FROM username_registry WHERE username = ? AND expires_at > now())", username, username).Limit(1).Find(&users).Error
 	if err != nil || len(users) == 0 {
 		return "", "", false, nil, err
 	}
@@ -263,7 +263,7 @@ func (r *Lists) PublicProfile(ctx context.Context, username string) (string, str
 
 func (r *Lists) SearchPeople(ctx context.Context, query, cursor string, limit int) ([]services.PublicPerson, error) {
 	people := make([]services.PublicPerson, 0)
-	err := r.Ctx(ctx).Table("users").Select("username, CASE WHEN show_display_name THEN display_name ELSE '' END AS display_name").
+	err := r.Ctx(ctx).Table("users").Select("username, CASE WHEN show_display_name THEN display_name ELSE '' END AS display_name, (show_avatar AND EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id)) AS has_avatar").
 		Where("username > ? AND (strpos(lower(username), lower(?)) > 0 OR (show_display_name = true AND strpos(lower(display_name), lower(?)) > 0))", cursor, query, query).
 		Order("username ASC").Limit(limit).Scan(&people).Error
 	return people, err

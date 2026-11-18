@@ -57,7 +57,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("version: got %d, want %d; %v", version, want, err)
 		}
 	}
-	assertVersion(11)
+	assertVersion(12)
 	if _, err := pool.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'migration_test', 'migration@example.test', 'test-hash', now(), now())`); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 		t.Fatal("repeated up lost wishes or shop links")
 	}
 	statuses, err := migrator.Status(ctx)
-	if err != nil || len(statuses) != 11 {
+	if err != nil || len(statuses) != 12 {
 		t.Fatal("incorrect Goose status:", err)
 	}
 	for _, status := range statuses {
@@ -86,6 +86,10 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("migration not applied: %v", status)
 		}
 	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("social profiles down:", err)
+	}
+	assertVersion(11)
 	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("profile name down:", err)
 	}
@@ -244,7 +248,7 @@ func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 		t.Fatal("legacy history was changed")
 	}
 	version, err := fresh.GetDBVersion(ctx)
-	if err != nil || version != 11 {
+	if err != nil || version != 12 {
 		t.Fatal("Goose did not record the adopted version")
 	}
 }
