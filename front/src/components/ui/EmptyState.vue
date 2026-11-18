@@ -1,13 +1,13 @@
 <script setup>
 import AppIcon from './AppIcon.vue'
-defineProps({ icon: { type: String, default: 'heart' }, title: { type: String, required: true }, description: { type: String, required: true } })
+defineProps({ icon: { type: String, default: 'heart' }, title: { type: String, required: true }, description: { type: String, default: '' } })
 </script>
 
 <template>
   <div class="empty-state">
     <span class="empty-icon" aria-hidden="true"><AppIcon :name="icon" /></span>
     <h3>{{ title }}</h3>
-    <p>{{ description }}</p>
+    <p v-if="description">{{ description }}</p>
     <div v-if="$slots.default" class="empty-action"><slot /></div>
   </div>
 </template>

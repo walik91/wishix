@@ -21,6 +21,7 @@ import SharedListPage from './pages/SharedListPage.vue'
 import PublicProfilePage from './pages/PublicProfilePage.vue'
 import PublicCollectionPage from './pages/PublicCollectionPage.vue'
 import ReservationPage from './pages/ReservationPage.vue'
+import SearchPage from './pages/SearchPage.vue'
 import { useSession } from './composables/useSession.js'
 import { isNamedSharedListPath } from './sharedListPath.js'
 import { consumeReservationReturn } from './reservationReturn.js'
@@ -33,7 +34,7 @@ const listMatch = page.match(/^\/my\/lists\/([^/]+)$/)
 const editWishMatch = page.match(/^\/my\/wishes\/([^/]+)\/edit$/)
 const profileMatch = page.match(/^\/u\/([A-Za-z0-9_]{3,30})$/)
 const collectionMatch = page.match(/^\/u\/([A-Za-z0-9_]{3,30})\/wishes$/)
-const privatePage = page === '/my' || page === '/my/wishes' || page === '/my/wishes/new' || page === '/my/lists' || !!listMatch || !!editWishMatch
+const privatePage = page === '/my' || page === '/my/search' || page === '/my/wishes' || page === '/my/wishes/new' || page === '/my/lists' || !!listMatch || !!editWishMatch
 
 if (aliases[path]) {
   window.history.replaceState(null, '', `${page}${window.location.search}${window.location.hash}`)
@@ -56,6 +57,7 @@ onMounted(async () => {
     <RecoveryPage v-else-if="page === '/forgot-password'" />
     <ReservationPage v-else-if="page === '/reservation'" />
     <MyPage v-else-if="page === '/my'" />
+    <SearchPage v-else-if="page === '/my/search'" />
     <WishesPage v-else-if="page === '/my/wishes'" />
     <NewWishPage v-else-if="page === '/my/wishes/new'" />
     <EditWishPage v-else-if="editWishMatch" :id="editWishMatch[1]" />

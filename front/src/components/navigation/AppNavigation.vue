@@ -5,14 +5,16 @@ defineProps({ profileAvailable: Boolean })
 defineEmits(['profile'])
 const inWishes = window.location.pathname.startsWith('/my/wishes')
 const inLists = window.location.pathname.startsWith('/my/lists')
+const inSearch = window.location.pathname === '/my/search'
 </script>
 
 <template>
   <nav class="app-navigation" :aria-label="t('my.navigation')">
-    <a class="nav-item" :class="{ active: !inLists && !inWishes }" href="/my" :aria-current="!inLists && !inWishes ? 'page' : undefined"><AppIcon name="home" /><span>{{ t('auth.my') }}</span></a>
+    <a class="nav-item" :class="{ active: !inLists && !inWishes && !inSearch }" href="/my" :aria-current="!inLists && !inWishes && !inSearch ? 'page' : undefined"><AppIcon name="home" /><span>{{ t('auth.my') }}</span></a>
     <a class="nav-item" :class="{ active: inWishes }" href="/my/wishes" :aria-current="inWishes ? 'page' : undefined"><AppIcon name="heart" /><span>{{ t('my.myWishes') }}</span></a>
     <a class="nav-item" :class="{ active: inLists }" href="/my/lists" :aria-current="inLists ? 'page' : undefined"><AppIcon name="list" /><span>{{ t('lists.nav') }}</span></a>
-    <button class="nav-item" type="button" disabled :title="t('my.sectionSoon')"><AppIcon name="users" /><span>{{ t('my.following') }}</span><small>{{ t('my.soon') }}</small></button>
+    <a class="nav-item" :class="{ active: inSearch }" href="/my/search" :aria-current="inSearch ? 'page' : undefined"><AppIcon name="search" /><span>{{ t('my.search') }}</span></a>
+    <button class="nav-item following" type="button" disabled :title="t('my.sectionSoon')"><AppIcon name="users" /><span>{{ t('my.following') }}</span><small>{{ t('my.soon') }}</small></button>
     <button class="nav-item" type="button" :disabled="!profileAvailable" @click="$emit('profile')"><AppIcon name="user" /><span>{{ t('my.profile') }}</span></button>
   </nav>
 </template>
@@ -26,9 +28,11 @@ const inLists = window.location.pathname.startsWith('/my/lists')
 .nav-item:active:not(:disabled) { background: var(--wx-lavender); }
 .nav-item:disabled { opacity: .55; cursor: not-allowed; }
 small { display: none; }
+.following { display: none; }
 @media (min-width: 64rem) {
   .app-navigation { grid-template-columns: 1fr; gap: var(--wx-space-2); }
   .nav-item { flex-direction: row; justify-content: flex-start; gap: var(--wx-space-3); min-height: 48px; padding: var(--wx-space-3); font-size: var(--wx-text-sm); }
   small { display: inline; margin-left: auto; font-size: var(--wx-text-xs); font-weight: 400; }
+  .following { display: flex; }
 }
 </style>

@@ -92,6 +92,9 @@ func (c *Lists) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/public/profiles/{username}/wishes/{wishID}/image", c.collectionImage)
 	mux.HandleFunc("GET /api/profile/collection", c.authorized(c.collectionSetting))
 	mux.HandleFunc("PUT /api/profile/collection", c.authorized(c.setCollectionSetting))
+	mux.HandleFunc("GET /api/profile/name", c.authorized(c.getProfileName))
+	mux.HandleFunc("PUT /api/profile/name", c.authorized(c.setProfileName))
+	mux.HandleFunc("GET /api/search/people", c.authorized(c.searchPeople))
 	mux.HandleFunc("GET /{username}/wishlist/shared", c.sharePage)
 	mux.HandleFunc("GET /{username}/wishlist/shared/{$}", c.sharePage)
 	mux.HandleFunc("GET /u/{username}/wishlist/{id}", c.guestPage)
@@ -511,7 +514,7 @@ func (c *Lists) sharedImage(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 func (c *Lists) profile(w http.ResponseWriter, r *http.Request) {
-	username, enabled, lists, err := c.service.PublicProfile(r.Context(), r.PathValue("username"))
+	username, displayName, enabled, lists, err := c.service.PublicProfile(r.Context(), r.PathValue("username"))
 	if err != nil {
 		c.failure(w, err)
 		return
@@ -520,7 +523,45 @@ func (c *Lists) profile(w http.ResponseWriter, r *http.Request) {
 	for i := range lists {
 		result = append(result, publicList(&lists[i], true))
 	}
-	c.auth.write(w, 200, map[string]any{"username": username, "show_all_wishes": enabled, "lists": result})
+	c.auth.write(w, 200, map[string]any{"username": username, "display_name": displayName, "show_all_wishes": enabled, "lists": result})
+}
+
+func (c *Lists) searchPeople(w http.ResponseWriter, r *http.Request, owner string) error {
+	people, cursor, err := c.service.SearchPeople(r.Context(), owner, r.URL.Query().Get("q"), r.URL.Query().Get("after"))
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]any{"people": people, "next_cursor": cursor})
+	return nil
+}
+func (c *Lists) getProfileName(w http.ResponseWriter, r *http.Request, owner string) error {
+	name, public, err := c.service.ProfileName(r.Context(), owner)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]any{"display_name": name, "show_display_name": public})
+	return nil
+}
+func (c *Lists) setProfileName(w http.ResponseWriter, r *http.Request, owner string) error {
+	var input struct {
+		Name   *string `json:"display_name"`
+		Public *bool   `json:"show_display_name"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	if input.Name == nil || input.Public == nil {
+		return services.ErrInvalidInput
+	}
+	if err := c.service.SetProfileName(r.Context(), owner, *input.Name, *input.Public); err != nil {
+		return err
+	}
+	name, public, err := c.service.ProfileName(r.Context(), owner)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]any{"display_name": name, "show_display_name": public})
+	return nil
 }
 
 func (c *Lists) collectionSetting(w http.ResponseWriter, r *http.Request, owner string) error {

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { locale, t } from '../i18n.js'
 import { getCollectionSetting, setCollectionSetting } from '../api/lists.js'
+import { getProfileName, setProfileName } from '../api/search.js'
 import { googleStatus, startGoogle, facebookStatus, startFacebook, addEmail, confirmAddedEmail, resendCode } from '../api/auth.js'
 import { useSession } from '../composables/useSession.js'
 import { authError, useAuthForm } from '../composables/useAuthForm.js'
@@ -28,8 +29,13 @@ const { busy: emailBusy, error: emailError, remaining: emailRemaining, cooldown:
 const signingOut = ref(false)
 const error = ref('')
 const collectionEnabled = ref(false), collectionLoading = ref(false), collectionReady = ref(false), collectionError = ref('')
+const displayName = ref(''), showDisplayName = ref(false), nameReady = ref(false), nameLoading = ref(false), nameError = ref(''), nameSaved = ref(false)
 watch(profileOpen, async open => {
   if (!open) return
+  nameLoading.value = true; nameReady.value = false; nameError.value = ''; nameSaved.value = false
+  try { const data = await getProfileName(); displayName.value = data.display_name; showDisplayName.value = data.show_display_name; nameReady.value = true }
+  catch { nameError.value = t('profile.nameError') }
+  finally { nameLoading.value = false }
   try { const status = await googleStatus(); googleEnabled.value = status.enabled; googleLinked.value = status.linked }
   catch { googleEnabled.value = false }
   try { const status = await facebookStatus(); facebookEnabled.value = status.enabled; facebookLinked.value = status.linked }
@@ -39,6 +45,16 @@ watch(profileOpen, async open => {
   catch { collectionError.value = t('profile.settingsError') }
   finally { collectionLoading.value = false }
 }, { immediate: true })
+watch(displayName, value => { if (!value.trim()) showDisplayName.value = false; nameSaved.value = false })
+async function saveName() {
+  if (nameLoading.value) return
+  nameError.value = ''; nameSaved.value = false
+  if ([...displayName.value.trim()].length > 100) { nameError.value = t('profile.nameTooLong'); return }
+  nameLoading.value = true
+  try { const data = await setProfileName(displayName.value, showDisplayName.value); displayName.value = data.display_name; showDisplayName.value = data.show_display_name; nameSaved.value = true }
+  catch { nameError.value = t('profile.nameError') }
+  finally { nameLoading.value = false }
+}
 async function linkGoogle() {
   if (googleBusy.value) return
   googleBusy.value = true; googleError.value = ''
@@ -133,6 +149,14 @@ async function logout() {
           <dt>{{ t('login.email') }}</dt>
           <dd>{{ account.email || t('profile.noEmail') }}</dd>
         </dl>
+        <form class="name-setting" @submit.prevent="saveName">
+          <TextField id="profile-display-name" v-model="displayName" :label="t('profile.displayName')" :hint="t('profile.nameHint')" maxlength="200" :disabled="nameLoading || !nameReady" />
+          <label class="name-visibility"><input v-model="showDisplayName" type="checkbox" :disabled="nameLoading || !nameReady || !displayName.trim()" /><strong>{{ t('profile.showName') }}</strong></label>
+          <p class="name-hint">{{ t('profile.showNameHint') }}</p>
+          <UiButton type="submit" variant="secondary" :loading="nameLoading" :disabled="!nameReady">{{ t('profile.saveName') }}</UiButton>
+          <p v-if="nameSaved" role="status">{{ t('profile.nameSaved') }}</p>
+          <p v-if="nameError" class="auth-error" role="alert">{{ nameError }}</p>
+        </form>
         <div v-if="!account.email" class="email-setting">
           <p>{{ t('profile.emailForMail') }}</p>
           <template v-if="emailChallenge"><p>{{ t('reservation.codeSent') }} {{ emailInput }}</p><CodeVerification :busy="emailBusy" :remaining="emailRemaining" @verify="verifyAddedEmail" @resend="resendEmailCode" /></template>
@@ -197,6 +221,7 @@ dd { margin: 0; line-height: 1.5; }
 dd + dt { margin-top: var(--wx-space-4); }
 .profile-note { margin-block: var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.6; }
 .collection-setting { margin-block: var(--wx-space-5); }.collection-setting label { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; }.collection-setting input { width: 20px; height: 20px; accent-color: var(--wx-primary); }.collection-setting p { margin: var(--wx-space-1) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
+.name-setting { display: grid; gap: var(--wx-space-3); margin-block: var(--wx-space-5); }.name-setting p { margin: 0; }.name-visibility { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; }.name-visibility input { width: 20px; height: 20px; accent-color: var(--wx-primary); }.name-hint { color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
 .google-setting { display: grid; gap: var(--wx-space-3); margin-block: var(--wx-space-5); }.google-setting p { margin: 0; line-height: 1.5; }
 .email-setting, .email-setting form { display: grid; gap: var(--wx-space-3); margin-block: var(--wx-space-4); }.email-setting p { margin: 0; line-height: 1.5; }
 .logout-button { width: 100%; }

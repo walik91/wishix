@@ -11,6 +11,8 @@ type User struct {
 	EmailVerifiedAt time.Time
 	CreatedAt       time.Time
 	ShowAllWishes   bool
+	DisplayName     string
+	ShowDisplayName bool
 }
 
 type AuthChallenge struct {

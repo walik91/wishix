@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	security "wishix/server/internal/auth"
@@ -61,7 +62,10 @@ type ListRepository interface {
 	GuestList(context.Context, string, string) (*models.Wishlist, string, error)
 	GuestWishes(context.Context, string, string) ([]models.Wish, error)
 	GuestImage(context.Context, string, string, string) (*models.WishImage, error)
-	PublicProfile(context.Context, string) (string, bool, []models.Wishlist, error)
+	PublicProfile(context.Context, string) (string, string, bool, []models.Wishlist, error)
+	SearchPeople(context.Context, string, string, int) ([]PublicPerson, error)
+	ProfileName(context.Context, string) (string, bool, error)
+	SetProfileName(context.Context, string, string, bool) error
 	CollectionSetting(context.Context, string) (bool, error)
 	SetCollectionSetting(context.Context, string, bool) error
 	PublicCollection(context.Context, string) (bool, []models.Wish, error)
@@ -607,15 +611,70 @@ func (s *Lists) SharedImage(ctx context.Context, token, wishID string) (*models.
 	}
 	return image, err
 }
-func (s *Lists) PublicProfile(ctx context.Context, username string) (string, bool, []models.Wishlist, error) {
-	if !regexp.MustCompile(`^[A-Za-z0-9_]{3,30}$`).MatchString(username) {
-		return "", false, nil, ErrListNotFound
+
+type PublicPerson struct {
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name,omitempty"`
+}
+
+func validProfileText(value string) bool {
+	if !utf8.ValidString(value) || utf8.RuneCountInString(value) > 100 {
+		return false
 	}
-	name, enabled, lists, err := s.repo.PublicProfile(ctx, strings.ToLower(username))
+	for _, r := range value {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Lists) SearchPeople(ctx context.Context, owner, query, cursor string) ([]PublicPerson, string, error) {
+	if owner == "" {
+		return nil, "", ErrSession
+	}
+	query = strings.TrimSpace(query)
+	if query == "" || !validProfileText(query) || (cursor != "" && !usernamePattern.MatchString(cursor)) {
+		return nil, "", ErrInvalidInput
+	}
+	people, err := s.repo.SearchPeople(ctx, query, cursor, 21)
+	if err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(people) > 20 {
+		people = people[:20]
+		next = people[len(people)-1].Username
+	}
+	return people, next, nil
+}
+
+func (s *Lists) ProfileName(ctx context.Context, owner string) (string, bool, error) {
+	if owner == "" {
+		return "", false, ErrSession
+	}
+	return s.repo.ProfileName(ctx, owner)
+}
+func (s *Lists) SetProfileName(ctx context.Context, owner, name string, public bool) error {
+	if owner == "" {
+		return ErrSession
+	}
+	name = strings.TrimSpace(name)
+	if !validProfileText(name) || (name == "" && public) {
+		return ErrInvalidInput
+	}
+	return s.repo.SetProfileName(ctx, owner, name, public)
+}
+
+func (s *Lists) PublicProfile(ctx context.Context, username string) (string, string, bool, []models.Wishlist, error) {
+	if !regexp.MustCompile(`^[A-Za-z0-9_]{3,30}$`).MatchString(username) {
+		return "", "", false, nil, ErrListNotFound
+	}
+	name, displayName, enabled, lists, err := s.repo.PublicProfile(ctx, strings.ToLower(username))
 	if err == nil && name == "" {
 		err = ErrListNotFound
 	}
-	return name, enabled, lists, err
+	return name, displayName, enabled, lists, err
 }
 func ListErrorCode(err error) string {
 	var listError ListError

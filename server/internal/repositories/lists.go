@@ -250,15 +250,31 @@ func (r *Lists) GuestImage(ctx context.Context, id, token, wishID string) (*mode
 	}
 	return &images[0], nil
 }
-func (r *Lists) PublicProfile(ctx context.Context, username string) (string, bool, []models.Wishlist, error) {
+func (r *Lists) PublicProfile(ctx context.Context, username string) (string, string, bool, []models.Wishlist, error) {
 	var users []models.User
-	err := r.Ctx(ctx).Select("id, username, show_all_wishes").Where("username = ?", username).Limit(1).Find(&users).Error
+	err := r.Ctx(ctx).Select("id, username, show_all_wishes, CASE WHEN show_display_name THEN display_name ELSE '' END AS display_name").Where("username = ?", username).Limit(1).Find(&users).Error
 	if err != nil || len(users) == 0 {
-		return "", false, nil, err
+		return "", "", false, nil, err
 	}
 	lists := make([]models.Wishlist, 0)
 	err = r.Ctx(ctx).Select(listColumns).Where("owner_id = ? AND visibility = 'public'", users[0].ID).Order("created_at DESC, id DESC").Find(&lists).Error
-	return users[0].Username, users[0].ShowAllWishes, lists, err
+	return users[0].Username, users[0].DisplayName, users[0].ShowAllWishes, lists, err
+}
+
+func (r *Lists) SearchPeople(ctx context.Context, query, cursor string, limit int) ([]services.PublicPerson, error) {
+	people := make([]services.PublicPerson, 0)
+	err := r.Ctx(ctx).Table("users").Select("username, CASE WHEN show_display_name THEN display_name ELSE '' END AS display_name").
+		Where("username > ? AND (strpos(lower(username), lower(?)) > 0 OR (show_display_name = true AND strpos(lower(display_name), lower(?)) > 0))", cursor, query, query).
+		Order("username ASC").Limit(limit).Scan(&people).Error
+	return people, err
+}
+func (r *Lists) ProfileName(ctx context.Context, owner string) (string, bool, error) {
+	var user models.User
+	err := r.Ctx(ctx).Select("display_name, show_display_name").Where("id = ?", owner).Take(&user).Error
+	return user.DisplayName, user.ShowDisplayName, err
+}
+func (r *Lists) SetProfileName(ctx context.Context, owner, name string, public bool) error {
+	return r.Ctx(ctx).Model(&models.User{}).Where("id = ?", owner).Updates(map[string]any{"display_name": name, "show_display_name": public}).Error
 }
 
 func (r *Lists) CollectionSetting(ctx context.Context, owner string) (bool, error) {

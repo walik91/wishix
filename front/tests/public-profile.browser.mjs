@@ -14,6 +14,9 @@ try {
     page.on('console', m => { if (m.text().includes('[Vue warn]')) errors.push(m.text()) })
     let enabled = false
     await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { username: 'example', email: 'private@example.test' } } }))
+    await page.route('**/api/auth/google/status', route => route.fulfill({ json: { enabled: false } }))
+    await page.route('**/api/auth/facebook/status', route => route.fulfill({ json: { enabled: false } }))
+    await page.route('**/api/profile/name', route => route.fulfill({ json: { display_name: '', show_display_name: false } }))
     await page.route('**/api/wishes', route => route.fulfill({ json: { wishes: [] } }))
     await page.route('**/api/lists', route => route.fulfill({ json: { lists: [] } }))
     await page.route('**/api/profile/collection', route => {
@@ -28,7 +31,9 @@ try {
     await page.goto(`${origin}/my`)
     await page.getByRole('button', { name: texts[lang]['my.openAccount'] }).first().click()
     const checkbox = page.getByRole('checkbox', { name: texts[lang]['profile.showAll'] })
+    let saving = page.waitForResponse(response => response.url().endsWith('/api/profile/collection') && response.request().method() === 'PUT')
     await checkbox.check()
+    await saving
     await page.goto(`${origin}/u/example`)
     await page.getByRole('link', { name: texts[lang]['profile.allWishes'] }).waitFor()
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `${lang}/${width}/profile`)
@@ -40,7 +45,10 @@ try {
     if (lang === 'ru' && [390, 1440].includes(width)) await page.screenshot({ path: new URL(`../../.cache/profile-screens/collection-${width}.png`, import.meta.url).pathname.replace(/^\/(\w:)/, '$1'), fullPage: true })
     await page.goto(`${origin}/my`)
     await page.getByRole('button', { name: texts[lang]['my.openAccount'] }).first().click()
+    await page.waitForFunction(() => [...document.querySelectorAll('.collection-setting input')].some(input => input.checked && !input.disabled))
+    saving = page.waitForResponse(response => response.url().endsWith('/api/profile/collection') && response.request().method() === 'PUT')
     await page.getByRole('checkbox', { name: texts[lang]['profile.showAll'] }).uncheck()
+    await saving
     await page.goto(`${origin}/u/example/wishes`)
     await page.getByRole('heading', { name: texts[lang]['lists.sharedUnavailable'] }).waitFor()
     await context.close()
