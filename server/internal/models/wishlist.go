@@ -18,10 +18,11 @@ type Wishlist struct {
 }
 
 type WishlistWish struct {
-	ListID  string `gorm:"primaryKey"`
-	WishID  string `gorm:"primaryKey"`
-	OwnerID string
-	AddedAt time.Time
+	ListID   string `gorm:"primaryKey"`
+	WishID   string `gorm:"primaryKey"`
+	OwnerID  string
+	AddedAt  time.Time
+	Received bool
 }
 
 func (WishlistWish) TableName() string { return "wishlist_wishes" }

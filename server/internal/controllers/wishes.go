@@ -37,6 +37,7 @@ type wishResponse struct {
 	ShopLinks   []string  `json:"shop_links"`
 	ImageURL    *string   `json:"image_url"`
 	EditVersion string    `json:"edit_version"`
+	Received    bool      `json:"received,omitempty"`
 }
 
 func privateWish(wish *models.Wish) wishResponse {
@@ -44,7 +45,7 @@ func privateWish(wish *models.Wish) wishResponse {
 	for _, link := range wish.ShopLinks {
 		links = append(links, link.URL)
 	}
-	return wishResponse{ID: wish.ID, Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, CreatedAt: wish.CreatedAt, ShopLinks: links, ImageURL: wishImageURL(wish.ID, wish.ImageVersion), EditVersion: services.WishEditVersion(wish)}
+	return wishResponse{ID: wish.ID, Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, CreatedAt: wish.CreatedAt, ShopLinks: links, ImageURL: wishImageURL(wish.ID, wish.ImageVersion), EditVersion: services.WishEditVersion(wish), Received: wish.Received}
 }
 
 func wishImageURL(id, version string) *string {

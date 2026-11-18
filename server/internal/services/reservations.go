@@ -80,11 +80,7 @@ func (s *Reservations) context(ctx context.Context, input ReservationInput) (*Re
 	if !wishIDPattern.MatchString(input.WishID) {
 		return nil, ErrReservationUnavailable
 	}
-	if input.ListID != "" {
-		if !validGuestList(input.ListID, input.ListToken) || input.Username != "" {
-			return nil, ErrReservationUnavailable
-		}
-	} else if !usernamePattern.MatchString(strings.ToLower(input.Username)) || input.ListToken != "" {
+	if !validGuestList(input.ListID, input.ListToken) || input.Username != "" {
 		return nil, ErrReservationUnavailable
 	}
 	c, err := s.repo.Context(ctx, input.ListID, input.ListToken, strings.ToLower(input.Username), input.WishID)

@@ -60,7 +60,7 @@ func (r *Lists) Delete(ctx context.Context, owner, id, message string) error {
 }
 func (r *Lists) Wishes(ctx context.Context, owner, id string) ([]models.Wish, error) {
 	wishes := make([]models.Wish, 0)
-	err := r.Ctx(ctx).Select(wishColumns).Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Where("m.list_id = ? AND m.owner_id = ?", id, owner).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	err := r.Ctx(ctx).Select(wishColumns+", m.received AS received").Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Where("m.list_id = ? AND m.owner_id = ?", id, owner).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
 	return wishes, err
 }
 func (r *Lists) OwnedWishes(ctx context.Context, owner string, ids []string) (bool, error) {
@@ -90,6 +90,28 @@ func (r *Lists) Remove(ctx context.Context, owner, id string, ids []string) erro
 	}
 	return r.Ctx(ctx).Where("owner_id = ? AND list_id = ? AND wish_id IN ?", owner, id, ids).Delete(&models.WishlistWish{}).Error
 }
+
+// The caller holds the list lock for this transaction. Only a new transition
+// completes the reservation belonging to the same list.
+func (r *Lists) SetReceived(ctx context.Context, owner, id, wishID string, received bool) (bool, error) {
+	var members []models.WishlistWish
+	err := r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("owner_id = ? AND list_id = ? AND wish_id = ?", owner, id, wishID).Limit(1).Find(&members).Error
+	if err != nil || len(members) == 0 {
+		return false, err
+	}
+	if members[0].Received == received {
+		return true, nil
+	}
+	if err := r.Ctx(ctx).Model(&models.WishlistWish{}).Where("owner_id = ? AND list_id = ? AND wish_id = ?", owner, id, wishID).Update("received", received).Error; err != nil {
+		return false, err
+	}
+	if received {
+		if err := r.Ctx(ctx).Where("list_id = ? AND wish_id = ?", id, wishID).Delete(&models.Reservation{}).Error; err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
 func (r *Lists) Clear(ctx context.Context, owner, id string) error {
 	if err := cancelReservations(r.Ctx(ctx), "r.list_id = ?", []any{id}, "wish_removed", ""); err != nil {
 		return err
@@ -106,10 +128,10 @@ func (r *Lists) Touch(ctx context.Context, owner string, ids []string, now time.
 	return r.Ctx(ctx).Model(&models.Wishlist{}).Where("owner_id = ? AND id IN ?", owner, ids).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": now}).Error
 }
 func (r *Lists) Copy(ctx context.Context, owner, source, target string, now time.Time) error {
-	if err := r.Ctx(ctx).Exec(`INSERT INTO wishlist_wishes (list_id, wish_id, owner_id, added_at) SELECT ?::UUID, wish_id, owner_id, ? FROM wishlist_wishes WHERE list_id = ? AND owner_id = ?`, target, now, source, owner).Error; err != nil {
+	if err := r.Ctx(ctx).Exec(`INSERT INTO wishlist_wishes (list_id, wish_id, owner_id, added_at) SELECT ?::UUID, wish_id, owner_id, ? FROM wishlist_wishes WHERE list_id = ? AND owner_id = ? AND received = false`, target, now, source, owner).Error; err != nil {
 		return err
 	}
-	return r.Ctx(ctx).Model(&models.Wish{}).Where("owner_id = ? AND id IN (SELECT wish_id FROM wishlist_wishes WHERE list_id = ? AND owner_id = ?)", owner, source, owner).UpdateColumn("lists_version", gorm.Expr("lists_version + 1")).Error
+	return r.Ctx(ctx).Model(&models.Wish{}).Where("owner_id = ? AND id IN (SELECT wish_id FROM wishlist_wishes WHERE list_id = ? AND owner_id = ?)", owner, target, owner).UpdateColumn("lists_version", gorm.Expr("lists_version + 1")).Error
 }
 func (r *Lists) Memberships(ctx context.Context, owner, wishID string) ([]string, int64, error) {
 	var wishes []models.Wish
@@ -163,11 +185,13 @@ func (r *Lists) ReplaceMemberships(ctx context.Context, owner, wishID string, id
 	if result.Error != nil || result.RowsAffected != 1 {
 		return false, result.Error
 	}
-	if err := r.Ctx(ctx).Where("owner_id = ? AND wish_id = ?", owner, wishID).Delete(&models.WishlistWish{}).Error; err != nil {
-		return false, err
+	if len(removed) > 0 {
+		if err := r.Ctx(ctx).Where("owner_id = ? AND wish_id = ? AND list_id IN ?", owner, wishID, removed).Delete(&models.WishlistWish{}).Error; err != nil {
+			return false, err
+		}
 	}
 	for _, id := range ids {
-		if err := r.Ctx(ctx).Create(&models.WishlistWish{ListID: id, WishID: wishID, OwnerID: owner, AddedAt: now}).Error; err != nil {
+		if err := r.Ctx(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&models.WishlistWish{ListID: id, WishID: wishID, OwnerID: owner, AddedAt: now}).Error; err != nil {
 			return false, err
 		}
 	}
@@ -187,7 +211,7 @@ func (r *Lists) Shared(ctx context.Context, token string) (*models.Wishlist, str
 }
 func (r *Lists) SharedWishes(ctx context.Context, token string) ([]models.Wish, error) {
 	wishes := make([]models.Wish, 0)
-	err := r.Ctx(ctx).Select(publicWishColumns).Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where("l.share_token = ? AND l.visibility IN ('link', 'public')", token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	err := r.Ctx(ctx).Select(publicWishColumns+", m.received AS received").Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where("l.share_token = ? AND l.visibility IN ('link', 'public')", token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
 	return wishes, err
 }
 func (r *Lists) SharedImage(ctx context.Context, token, wishID string) (*models.WishImage, error) {
@@ -215,7 +239,7 @@ func (r *Lists) GuestList(ctx context.Context, id, token string) (*models.Wishli
 }
 func (r *Lists) GuestWishes(ctx context.Context, id, token string) ([]models.Wish, error) {
 	wishes := make([]models.Wish, 0)
-	err := r.Ctx(ctx).Select(publicWishColumns).Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where(guestCondition, id, token, token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	err := r.Ctx(ctx).Select(publicWishColumns+", m.received AS received").Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where(guestCondition, id, token, token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
 	return wishes, err
 }
 func (r *Lists) GuestImage(ctx context.Context, id, token, wishID string) (*models.WishImage, error) {
@@ -251,7 +275,7 @@ func (r *Lists) PublicCollection(ctx context.Context, username string) (bool, []
 		return false, nil, err
 	}
 	wishes := make([]models.Wish, 0)
-	err := r.Ctx(ctx).Select(publicWishColumns).Joins("JOIN users ON users.id = wishes.owner_id").Where("users.username = ? AND users.show_all_wishes = true", username).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	err := r.Ctx(ctx).Select(wishColumns).Joins("JOIN users ON users.id = wishes.owner_id").Where("users.username = ? AND users.show_all_wishes = true", username).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
 	return true, wishes, err
 }
 func (r *Lists) PublicCollectionImage(ctx context.Context, username, wishID string) (*models.WishImage, error) {

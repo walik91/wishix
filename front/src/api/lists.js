@@ -12,6 +12,7 @@ export const copyList = (id, title) => mutate(`${idPath(id)}/copy`, 'POST', { ti
 export const rotateListLink = (id, revision) => mutate(`${idPath(id)}/share-link`, 'POST', { revision })
 export const addListWishes = (id, wish_ids) => mutate(`${idPath(id)}/wishes`, 'POST', { wish_ids })
 export const removeListWish = (id, wishID) => mutate(`${idPath(id)}/wishes/${encodeURIComponent(wishID)}`, 'DELETE', {})
+export const setListWishReceived = (id, wishID, revision, received) => mutate(`${idPath(id)}/wishes/${encodeURIComponent(wishID)}/received`, 'PUT', { revision, received })
 export const getWishLists = id => requestJSON(`/wishes/${encodeURIComponent(id)}/lists`)
 export const setWishLists = (id, list_ids, version) => mutate(`/wishes/${encodeURIComponent(id)}/lists`, 'PUT', { list_ids, version })
 export const viewSharedList = token => mutate('/public/lists/view', 'POST', { token })

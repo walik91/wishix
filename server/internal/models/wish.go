@@ -17,6 +17,7 @@ type Wish struct {
 	ShopLinks        []WishShopLink `gorm:"foreignKey:WishID"`
 	ImageVersion     string         `gorm:"->"`
 	Reserved         bool           `gorm:"->"`
+	Received         bool           `gorm:"->"`
 	GuestRecoverable bool           `gorm:"->"`
 	Image            *WishImage     `gorm:"foreignKey:WishID"`
 }

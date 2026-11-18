@@ -80,6 +80,7 @@ func (c *Lists) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/lists/{id}/wishes", c.authorized(c.add))
 	mux.HandleFunc("DELETE /api/lists/{id}/wishes", c.authorized(c.clear))
 	mux.HandleFunc("DELETE /api/lists/{id}/wishes/{wishID}", c.authorized(c.remove))
+	mux.HandleFunc("PUT /api/lists/{id}/wishes/{wishID}/received", c.authorized(c.setReceived))
 	mux.HandleFunc("GET /api/wishes/{id}/lists", c.authorized(c.memberships))
 	mux.HandleFunc("PUT /api/wishes/{id}/lists", c.authorized(c.setMemberships))
 	mux.HandleFunc("POST /api/public/lists/view", c.public(c.shared))
@@ -322,6 +323,23 @@ func (c *Lists) remove(w http.ResponseWriter, r *http.Request, owner string) err
 	c.auth.write(w, 200, map[string]string{"status": "ok"})
 	return nil
 }
+func (c *Lists) setReceived(w http.ResponseWriter, r *http.Request, owner string) error {
+	var input struct {
+		Received *bool `json:"received"`
+		Revision int64 `json:"revision"`
+	}
+	if err := readListJSON(r, &input); err != nil {
+		return err
+	}
+	if input.Received == nil {
+		return services.ErrInvalidInput
+	}
+	if err := c.service.SetReceived(r.Context(), owner, r.PathValue("id"), r.PathValue("wishID"), input.Revision, *input.Received); err != nil {
+		return err
+	}
+	c.auth.write(w, 200, map[string]string{"status": "ok"})
+	return nil
+}
 func (c *Lists) memberships(w http.ResponseWriter, r *http.Request, owner string) error {
 	ids, version, err := c.service.Memberships(r.Context(), owner, r.PathValue("id"))
 	if err != nil {
@@ -431,6 +449,7 @@ type publicWishResponse struct {
 	HasImage         bool     `json:"has_image"`
 	Reserved         bool     `json:"reserved"`
 	GuestRecoverable bool     `json:"guest_recoverable"`
+	Received         bool     `json:"received"`
 }
 
 func (c *Lists) public(handler func(http.ResponseWriter, *http.Request) error) http.HandlerFunc {
@@ -468,7 +487,7 @@ func publicWishes(wishes []models.Wish) []publicWishResponse {
 		for _, link := range wish.ShopLinks {
 			links = append(links, link.URL)
 		}
-		result = append(result, publicWishResponse{ID: wish.ID, Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, ShopLinks: links, HasImage: wish.ImageVersion != "", Reserved: wish.Reserved, GuestRecoverable: wish.GuestRecoverable})
+		result = append(result, publicWishResponse{ID: wish.ID, Title: wish.Title, Description: wish.Description, Price: wish.Price, Currency: wish.Currency, Priority: wish.Priority, ShopLinks: links, HasImage: wish.ImageVersion != "", Reserved: wish.Reserved, GuestRecoverable: wish.GuestRecoverable, Received: wish.Received})
 	}
 	return result
 }
@@ -534,7 +553,11 @@ func (c *Lists) collection(w http.ResponseWriter, r *http.Request) {
 		c.failure(w, err)
 		return
 	}
-	c.auth.write(w, 200, map[string]any{"username": strings.ToLower(r.PathValue("username")), "wishes": publicWishes(wishes)})
+	result := make([]map[string]any, 0, len(wishes))
+	for _, wish := range publicWishes(wishes) {
+		result = append(result, map[string]any{"id": wish.ID, "title": wish.Title, "description": wish.Description, "price": wish.Price, "currency": wish.Currency, "priority": wish.Priority, "shop_links": wish.ShopLinks, "has_image": wish.HasImage})
+	}
+	c.auth.write(w, 200, map[string]any{"username": strings.ToLower(r.PathValue("username")), "wishes": result})
 }
 func (c *Lists) collectionImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")

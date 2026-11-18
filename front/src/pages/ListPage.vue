@@ -4,7 +4,7 @@ import { locale, t } from '../i18n.js'
 import { useSession } from '../composables/useSession.js'
 import { listFailure, useList } from '../composables/useLists.js'
 import { sharedListPath } from '../sharedListPath.js'
-import { updateList, deleteList, clearList, copyList, rotateListLink, removeListWish } from '../api/lists.js'
+import { updateList, deleteList, clearList, copyList, rotateListLink, removeListWish, setListWishReceived } from '../api/lists.js'
 import ListForm from '../components/lists/ListForm.vue'
 import WishPickerDialog from '../components/lists/WishPickerDialog.vue'
 import WishImageDialog from '../components/wishes/WishImageDialog.vue'
@@ -67,6 +67,13 @@ async function copyLink() {
   try { await navigator.clipboard.writeText(shareURL.value); showNotice('copiedLink') }
   catch { shareInput.value?.focus(); shareInput.value?.select(); showNotice('selectLink') }
 }
+async function toggleReceived(wish) {
+  if (busy.value) return
+  busy.value = true; operationError.value = ''
+  try { await setListWishReceived(props.id, wish.id, list.value.revision, !wish.received); dialog.value = ''; await load() }
+  catch (failure) { operationError.value = listFailure(failure) }
+  finally { busy.value = false }
+}
 function imageUpdated(id, url) { const wish = wishes.value.find(wish => wish.id === id); if (wish) wish.image_url = url; showNotice('imageUpdated') }
 </script>
 <template>
@@ -78,11 +85,14 @@ function imageUpdated(id, url) { const wish = wishes.value.find(wish => wish.id 
     <template v-else-if="user && list">
       <header class="list-page-heading list-form-heading"><div><p class="list-eyebrow">{{ t(`lists.visibility.${list.visibility}`) }}</p><h1>{{ list.title }}</h1><p v-if="list.expired" class="list-muted">{{ t('lists.expired') }}</p><p v-if="date" class="list-muted"><time :datetime="list.event_date">{{ date }}</time></p><p v-if="list.description" class="list-muted list-description">{{ list.description }}</p><p class="list-muted">{{ t('lists.wishesCount') }} {{ wishes.length }}</p></div></header>
       <div class="list-toolbar"><UiButton :href="`/my/wishes/new?list=${id}`"><AppIcon name="plus" />{{ t('my.addWish') }}</UiButton><UiButton variant="secondary" @click="pickerOpen = true">{{ t('lists.fromCollection') }}</UiButton><UiButton variant="secondary" @click="show('share')"><AppIcon name="share" />{{ t('lists.share') }}</UiButton><UiButton ref="manageButton" variant="secondary" @click="show('manage')"><AppIcon name="more" />{{ t('lists.manage') }}</UiButton></div>
-      <div v-if="wishes.length" class="wish-grid"><WishCard v-for="wish in wishes" :key="wish.id" :wish="wish" remove-from-list @delete="show('remove', $event)" @image="imageWish = $event; imageOpen = true" /></div>
+      <p v-if="operationError && !dialog" class="list-error" role="alert">{{ t(`lists.error.${operationError}`) }}</p>
+      <UiButton v-if="operationError === 'list_changed' && !dialog" variant="secondary" @click="reload">{{ t('lists.reload') }}</UiButton>
+      <div v-if="wishes.length" class="wish-grid"><WishCard v-for="wish in wishes" :key="wish.id" :wish="wish" remove-from-list @delete="show('remove', $event)" @image="imageWish = $event; imageOpen = true"><template #actions><UiButton variant="secondary" :disabled="busy" @click="wish.received ? toggleReceived(wish) : show('receive', wish)">{{ t(wish.received ? 'lists.undoReceived' : 'lists.markReceived') }}</UiButton></template></WishCard></div>
       <UiCard v-else class="list-empty"><EmptyState icon="heart" :title="t('lists.emptyListTitle')" :description="t('lists.emptyListDescription')"><UiButton @click="pickerOpen = true">{{ t('lists.fromCollection') }}</UiButton></EmptyState></UiCard>
       <p class="list-muted">{{ t('lists.sharedWishHint') }}</p>
       <WishPickerDialog v-model:open="pickerOpen" :list-id="id" :existing="wishes.map(wish => wish.id)" @updated="updated" />
       <WishImageDialog v-model:open="imageOpen" :wish="imageWish" @updated="imageUpdated" />
+      <UiDialog :open="dialog === 'receive'" :busy="busy" :title="t('lists.markReceived')" @update:open="!$event && (dialog = '')"><p class="list-selected-title">{{ selected?.title }}</p><p class="list-muted">{{ t('lists.receiveConfirmation') }}</p><p v-if="operationError" class="list-error" role="alert">{{ t(`lists.error.${operationError}`) }}</p><div class="list-form-actions"><UiButton :loading="busy" @click="toggleReceived(selected)">{{ t('lists.markReceived') }}</UiButton><UiButton variant="secondary" :disabled="busy" @click="dialog = ''">{{ t('wishes.cancel') }}</UiButton><UiButton v-if="operationError === 'list_changed'" variant="secondary" @click="reload">{{ t('lists.reload') }}</UiButton></div></UiDialog>
       <UiDialog :open="dialog === 'manage'" :title="t('lists.manage')" @update:open="!$event && dialog === 'manage' && (dialog = '')"><div class="list-action-stack"><UiButton variant="secondary" @click="show('edit')">{{ t('lists.edit') }}</UiButton><UiButton variant="secondary" @click="show('copy')">{{ t('lists.copy') }}</UiButton><UiButton variant="secondary" :disabled="!wishes.length" @click="show('clear')">{{ t('lists.clear') }}</UiButton><UiButton variant="destructive" @click="show('delete')">{{ t('lists.delete') }}</UiButton></div></UiDialog>
       <UiDialog :open="dialog === 'edit'" :busy="busy" :title="t('lists.edit')" @update:open="!$event && dialog === 'edit' && (dialog = '')"><ListForm :initial="list" :busy="busy" :error="operationError" @submit="save" @cancel="dialog = ''" /><UiButton v-if="operationError === 'list_changed'" variant="secondary" @click="reload">{{ t('lists.reload') }}</UiButton></UiDialog>
       <UiDialog :open="dialog === 'share'" :title="t('lists.share')" @update:open="!$event && dialog === 'share' && (dialog = '')"><p class="list-muted">{{ t(`lists.visibilityHint.${list.visibility}`) }}</p><template v-if="shareURL"><label class="list-muted" for="list-share-url">{{ t('lists.shareLink') }}</label><div class="share-input-row"><input id="list-share-url" ref="shareInput" class="list-share-path" :value="shareURL" readonly /><UiButton variant="secondary" class="share-icon" :aria-label="t('lists.copyLink')" :title="t('lists.copyLink')" @click="copyLink"><AppIcon name="copy" /></UiButton><UiButton v-if="list.visibility === 'link'" variant="secondary" class="share-icon" :aria-label="t('lists.rotate')" :title="t('lists.rotate')" @click="show('rotate')"><AppIcon name="refresh" /></UiButton></div><div class="list-form-actions"><UiButton variant="secondary" :href="shareURL" target="_blank" rel="noopener noreferrer">{{ t('lists.preview') }}</UiButton></div></template><UiButton v-else variant="secondary" @click="show('edit')">{{ t('lists.edit') }}</UiButton></UiDialog>

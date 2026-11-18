@@ -314,7 +314,7 @@
   "lists.confirm.clear": "All wishes will be removed from this list. The list itself, your collection and other lists will be kept.",
   "lists.confirm.remove": "This wish will stay in your collection and in any other lists.",
   "lists.confirm.rotate": "The current link will stop working. Refresh it? Then share the new link with anyone who needs access.",
-  "lists.confirm.copy": "The new list will contain the same wishes, linked to your collection. The event date is not copied. Access defaults to anyone with the new link.",
+  "lists.confirm.copy": "The new list will contain the same wishes, except those marked as received, linked to your collection. The event date is not copied. Access defaults to anyone with the new link.",
   "lists.wishLists": "Wish lists",
   "lists.membershipHint": "Choose every list that should contain this wish. This keeps one shared wish.",
   "lists.newWishHint": "Optional. Choose one or more lists, or keep the wish only in your collection.",
@@ -386,5 +386,9 @@
   "profile.noEmail": "Not added",
   "profile.emailForMail": "Add and verify an email address to receive emails from Wishix.",
   "profile.addEmail": "Add email",
-  "reservation.addEmailFirst": "Add and verify an email address in your profile before reserving a gift."
+  "reservation.addEmailFirst": "Add and verify an email address in your profile before reserving a gift.",
+  "lists.received": "Received",
+  "lists.markReceived": "Mark as received",
+  "lists.undoReceived": "Mark as not received",
+  "lists.receiveConfirmation": "Any reservation made through this list will be completed. Undoing this mark will not restore it."
 }

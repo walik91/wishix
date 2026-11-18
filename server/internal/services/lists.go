@@ -49,6 +49,7 @@ type ListRepository interface {
 	OwnedWishes(context.Context, string, []string) (bool, error)
 	Add(context.Context, string, string, []string, time.Time) error
 	Remove(context.Context, string, string, []string) error
+	SetReceived(context.Context, string, string, string, bool) (bool, error)
 	Clear(context.Context, string, string) error
 	Touch(context.Context, string, []string, time.Time) error
 	Copy(context.Context, string, string, string, time.Time) error
@@ -348,6 +349,33 @@ func (s *Lists) Remove(ctx context.Context, owner, id, wishID string) error {
 		return s.repo.Touch(ctx, owner, []string{id}, time.Now().UTC())
 	})
 }
+func (s *Lists) SetReceived(ctx context.Context, owner, id, wishID string, revision int64, received bool) error {
+	if owner == "" {
+		return ErrSession
+	}
+	if !wishIDPattern.MatchString(id) {
+		return ErrListNotFound
+	}
+	if !wishIDPattern.MatchString(wishID) {
+		return ErrListSelection
+	}
+	if revision < 1 {
+		return ErrListChanged
+	}
+	return s.tx.WithTransaction(ctx, func(ctx context.Context) error {
+		if _, err := s.lock(ctx, owner, id, revision); err != nil {
+			return err
+		}
+		found, err := s.repo.SetReceived(ctx, owner, id, wishID, received)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return ErrWishNotFound
+		}
+		return s.repo.Touch(ctx, owner, []string{id}, time.Now().UTC())
+	})
+}
 func (s *Lists) Copy(ctx context.Context, owner, id, title string) (*models.Wishlist, error) {
 	if owner == "" {
 		return nil, ErrSession
@@ -373,7 +401,11 @@ func (s *Lists) Copy(ctx context.Context, owner, id, title string) (*models.Wish
 		if err := s.repo.Copy(ctx, owner, id, newID, now); err != nil {
 			return err
 		}
-		result.WishCount = original.WishCount
+		wishes, err := s.repo.Wishes(ctx, owner, newID)
+		if err != nil {
+			return err
+		}
+		result.WishCount = int64(len(wishes))
 		return nil
 	})
 	return result, err

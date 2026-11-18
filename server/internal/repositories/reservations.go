@@ -29,7 +29,7 @@ func (r *Reservations) Context(ctx context.Context, listID, token, username, wis
 		if services.ListExpired(&list, time.Now()) {
 			return nil, nil
 		}
-		q = r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND owner_id = ? AND id IN (SELECT wish_id FROM wishlist_wishes WHERE list_id = ?)", wishID, list.OwnerID, list.ID).Limit(1).Find(&wish)
+		q = r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND owner_id = ? AND id IN (SELECT wish_id FROM wishlist_wishes WHERE list_id = ? AND received = false)", wishID, list.OwnerID, list.ID).Limit(1).Find(&wish)
 		if q.Error != nil || q.RowsAffected == 0 {
 			return nil, q.Error
 		}

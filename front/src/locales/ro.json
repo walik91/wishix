@@ -314,7 +314,7 @@
   "lists.confirm.clear": "Toate dorințele vor fi eliminate din această listă. Lista, colecția și celelalte liste vor fi păstrate.",
   "lists.confirm.remove": "Dorința va rămâne în colecție și în celelalte liste.",
   "lists.confirm.rotate": "Linkul actual nu va mai funcționa. Îl reînnoiești? Apoi trimite noul link celor care au nevoie de acces.",
-  "lists.confirm.copy": "Noua listă va conține aceleași dorințe, legate de colecție. Data evenimentului nu se copiază. Accesul implicit este prin noul link.",
+  "lists.confirm.copy": "Noua listă va conține aceleași dorințe legate de colecție, cu excepția celor marcate ca primite. Data evenimentului nu se copiază. Accesul implicit este prin noul link.",
   "lists.wishLists": "Listele dorinței",
   "lists.membershipHint": "Alege listele care vor conține această dorință. Dorința rămâne comună.",
   "lists.newWishHint": "Opțional. Alege una sau mai multe liste sau păstrează dorința doar în colecție.",
@@ -386,5 +386,9 @@
   "profile.noEmail": "Nu este adăugat",
   "profile.emailForMail": "Adaugă și confirmă o adresă de email pentru a primi mesaje de la Wishix.",
   "profile.addEmail": "Adaugă email",
-  "reservation.addEmailFirst": "Adaugă și confirmă o adresă de email în profil înainte de a rezerva un cadou."
+  "reservation.addEmailFirst": "Adaugă și confirmă o adresă de email în profil înainte de a rezerva un cadou.",
+  "lists.received": "Primit",
+  "lists.markReceived": "Marchează ca primit",
+  "lists.undoReceived": "Anulează marcarea",
+  "lists.receiveConfirmation": "Rezervarea făcută prin această listă va fi încheiată. Anularea marcajului nu o va restabili."
 }

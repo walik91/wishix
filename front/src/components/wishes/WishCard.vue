@@ -28,6 +28,7 @@ function shopHost(link) { try { return new URL(link).hostname } catch { return l
       <button v-if="!readOnly" class="delete-wish" type="button" :aria-label="`${t(removeFromList ? 'lists.remove' : 'wishes.delete')}: ${wish.title}`" @click="$emit('delete', wish)"><AppIcon :name="removeFromList ? 'close' : 'trash'" /></button>
     </div>
     <UiBadge class="priority" :class="wish.priority">{{ t(`wishes.priority.${wish.priority}`) }}</UiBadge>
+    <UiBadge v-if="wish.received" class="priority">{{ t('lists.received') }}</UiBadge>
     <p v-if="wish.description" class="description">{{ wish.description }}</p>
     <ul v-if="wish.shop_links.length" class="shop-links" :aria-label="t('wishes.shopLinks')">
       <li v-for="(link, index) in wish.shop_links" :key="index"><a :href="link" target="_blank" rel="noopener noreferrer"><AppIcon name="link" /><span>{{ shopHost(link) }}</span><span class="sr-only"> · {{ t('wishes.newTab') }}</span></a></li>

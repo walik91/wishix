@@ -53,7 +53,7 @@ onBeforeUnmount(reset)
 <template>
   <div ref="container" class="shared-wish">
     <WishCard :wish="wish" read-only />
-    <div class="reservation-actions"><template v-if="wish.reserved"><span class="reservation-status">{{ t('reservation.reserved') }}</span><UiButton v-if="wish.guest_recoverable" variant="secondary" @click="show('recover')">{{ t('reservation.needLink') }}</UiButton></template><UiButton v-else @click="show('start')">{{ t('reservation.reserve') }}</UiButton></div>
+    <div v-if="!username && !wish.received" class="reservation-actions"><template v-if="wish.reserved"><span class="reservation-status">{{ t('reservation.reserved') }}</span><UiButton v-if="wish.guest_recoverable" variant="secondary" @click="show('recover')">{{ t('reservation.needLink') }}</UiButton></template><UiButton v-else @click="show('start')">{{ t('reservation.reserve') }}</UiButton></div>
     <UiDialog v-model:open="open" :busy="busy" :title="t(mode === 'recover' ? 'reservation.needLink' : 'reservation.reserve')">
       <div v-if="mode === 'login'" class="reservation-form" role="status"><p>{{ t('reservation.accountExists') }}</p><UiButton href="/login" @click="rememberReturn">{{ t('reservation.signIn') }}</UiButton></div>
       <div v-else-if="mode === 'start' && user && !user.email" class="reservation-form" role="status"><p>{{ t('reservation.addEmailFirst') }}</p><UiButton href="/my?add_email=1">{{ t('profile.addEmail') }}</UiButton></div>
