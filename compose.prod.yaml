@@ -39,6 +39,8 @@ services:
     build:
       context: ./front
       target: production
+      args:
+        VITE_GA_MEASUREMENT_ID: ${VITE_GA_MEASUREMENT_ID:-}
     restart: unless-stopped
     ports:
       - "${APP_PORT:?Укажите APP_PORT в .env}:8080"

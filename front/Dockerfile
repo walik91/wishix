@@ -12,6 +12,8 @@ EXPOSE 5173
 CMD ["npm", "run", "dev"]
 
 FROM base AS build
+ARG VITE_GA_MEASUREMENT_ID
+ENV VITE_GA_MEASUREMENT_ID=$VITE_GA_MEASUREMENT_ID
 RUN npm run build
 
 FROM nginx/nginx-unprivileged:1.30.6-alpine AS production

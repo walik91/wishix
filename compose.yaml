@@ -46,6 +46,7 @@ services:
       target: development
     environment:
       API_PROXY_TARGET: http://server:8080
+      VITE_GA_MEASUREMENT_ID: ${VITE_GA_MEASUREMENT_ID:-}
       APP_ORIGIN: ${APP_ORIGIN:?Укажите APP_ORIGIN в .env}
     ports:
       - "127.0.0.1:${APP_PORT:?Укажите APP_PORT в .env}:5173"

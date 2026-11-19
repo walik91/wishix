@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watchEffect } from 'vue'
 import { locale, t } from '../i18n.js'
+import { trackEvent } from '../analytics.js'
 import { register, verifyEmail, resendCode, googleStatus, startGoogle, facebookStatus, startFacebook } from '../api/auth.js'
 import { useAuthForm } from '../composables/useAuthForm.js'
 import AuthLayout from '../layouts/AuthLayout.vue'
@@ -46,6 +47,7 @@ async function submit() {
   if (passwordError.value) return passwordField.value.focus()
   await run(async () => {
     const result = await register({ username: username.value, email: email.value, password: password.value, locale: locale.value })
+    trackEvent('sign_up_started')
     challenge.value = result.challenge
     password.value = ''
     cooldown(result.resend_after)
@@ -55,7 +57,7 @@ async function submit() {
 }
 
 function verify(code) {
-  return run(async () => { await verifyEmail(challenge.value, code); window.location.assign('/my') })
+  return run(async () => { await verifyEmail(challenge.value, code); trackEvent('sign_up_completed'); window.location.assign('/my') })
 }
 function resend() {
   return run(async () => { const result = await resendCode(challenge.value); cooldown(result.resend_after) })

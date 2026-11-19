@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { locale, t } from '../../i18n.js'
+import { trackEvent } from '../../analytics.js'
 import { useSession } from '../../composables/useSession.js'
 import { rememberReservationReturn } from '../../reservationReturn.js'
 import { startReservation, confirmReservation, recoverReservation } from '../../api/reservations.js'
@@ -21,8 +22,8 @@ async function submit() {
   if (busy.value) return
   busy.value = true; failure.value = ''
   try {
-    if (mode.value === 'start') { const result = await startReservation(payload()); challenge.value = result.challenge; mode.value = 'verify' }
-    else if (mode.value === 'verify') { await confirmReservation({ ...payload(), challenge: challenge.value, code: code.value }); success.value = t('reservation.confirmed'); mode.value = 'done'; refreshNeeded.value = true }
+    if (mode.value === 'start') { const result = await startReservation(payload()); trackEvent('reservation_started'); challenge.value = result.challenge; mode.value = 'verify' }
+    else if (mode.value === 'verify') { await confirmReservation({ ...payload(), challenge: challenge.value, code: code.value }); trackEvent('reservation_completed'); success.value = t('reservation.confirmed'); mode.value = 'done'; refreshNeeded.value = true }
     else if (mode.value === 'recover') { await recoverReservation(payload()); success.value = t('reservation.recoverySent'); mode.value = 'done' }
   } catch (error) {
     if (mode.value === 'verify' && error.code === 'reservation_login_required') { code.value = ''; challenge.value = ''; mode.value = 'login' }

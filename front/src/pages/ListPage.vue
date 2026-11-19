@@ -4,6 +4,7 @@ import { locale, t } from '../i18n.js'
 import { useSession } from '../composables/useSession.js'
 import { listFailure, useList } from '../composables/useLists.js'
 import { sharedListPath } from '../sharedListPath.js'
+import { trackEvent } from '../analytics.js'
 import { updateList, deleteList, clearList, copyList, rotateListLink, removeListWish, setListWishReceived } from '../api/lists.js'
 import ListForm from '../components/lists/ListForm.vue'
 import WishPickerDialog from '../components/lists/WishPickerDialog.vue'
@@ -64,7 +65,7 @@ async function perform() {
   finally { busy.value = false }
 }
 async function copyLink() {
-  try { await navigator.clipboard.writeText(shareURL.value); showNotice('copiedLink') }
+  try { await navigator.clipboard.writeText(shareURL.value); trackEvent('share_link_copied'); showNotice('copiedLink') }
   catch { shareInput.value?.focus(); shareInput.value?.select(); showNotice('selectLink') }
 }
 async function toggleReceived(wish) {

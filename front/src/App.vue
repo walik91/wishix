@@ -6,6 +6,8 @@ import RegisterPage from './pages/RegisterPage.vue'
 import GuestHomePage from './pages/GuestHomePage.vue'
 import StartPage from './pages/StartPage.vue'
 import UiButton from './components/ui/UiButton.vue'
+import CookieConsent from './components/ui/CookieConsent.vue'
+import { startAnalytics } from './analytics.js'
 import { t } from './i18n.js'
 import PublicLayout from './layouts/PublicLayout.vue'
 import AppShell from './layouts/AppShell.vue'
@@ -44,6 +46,7 @@ if (aliases[path]) {
 }
 const { user, unavailable, initialize } = useSession()
 onMounted(async () => {
+  startAnalytics()
   await initialize()
   if (user.value && page === '/login') window.location.replace(consumeReservationReturn())
   else if (user.value && page === '/register') window.location.replace('/my')
@@ -80,6 +83,7 @@ onMounted(async () => {
       <UiButton href="/">{{ t('notFound.home') }}</UiButton>
     </section>
   </component>
+  <CookieConsent />
 </template>
 
 <style scoped>

@@ -470,5 +470,16 @@
   "social.unavailableList": "Этот список недоступен.",
   "social.empty.following": "Подписок пока нет",
   "social.empty.followers": "Подписчиков пока нет",
-  "social.empty.blocked": "Нет заблокированных пользователей"
+  "social.empty.blocked": "Нет заблокированных пользователей",
+  "cookies.title": "Файлы cookie и аналитика",
+  "cookies.description": "Мы используем необходимые cookie для работы Wishix. С вашего разрешения Google Analytics помогает нам понимать посещаемость и улучшать сервис. Вы можете изменить выбор в любое время.",
+  "cookies.accept": "Принять все",
+  "cookies.reject": "Отклонить аналитику",
+  "cookies.settings": "Настройки cookie",
+  "cookies.essential": "Необходимые cookie",
+  "cookies.essentialDescription": "Нужны для входа и сохранения языка.",
+  "cookies.analytics": "Аналитика",
+  "cookies.analyticsDescription": "Помогает изучать посещения и использование Wishix с помощью Google Analytics.",
+  "cookies.save": "Сохранить выбор",
+  "cookies.always": "Всегда включены"
 }

@@ -470,5 +470,16 @@
   "social.unavailableList": "This list is unavailable.",
   "social.empty.following": "No follows yet",
   "social.empty.followers": "No followers yet",
-  "social.empty.blocked": "No blocked users"
+  "social.empty.blocked": "No blocked users",
+  "cookies.title": "Cookies and analytics",
+  "cookies.description": "We use essential cookies to make Wishix work. With your permission, Google Analytics helps us understand visits and improve the service. You can change your choice at any time.",
+  "cookies.accept": "Accept all",
+  "cookies.reject": "Reject analytics",
+  "cookies.settings": "Cookie settings",
+  "cookies.essential": "Essential cookies",
+  "cookies.essentialDescription": "Needed for sign-in and your language preference.",
+  "cookies.analytics": "Analytics",
+  "cookies.analyticsDescription": "Helps us understand visits and use of Wishix with Google Analytics.",
+  "cookies.save": "Save choices",
+  "cookies.always": "Always on"
 }

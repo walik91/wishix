@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, ref, watch, watchEffect } from 'vue'
 import { t } from '../i18n.js'
+import { trackEvent } from '../analytics.js'
 import { useSession } from '../composables/useSession.js'
 import { createWish } from '../api/wishes.js'
 import { useWishImport, validImportLink } from '../composables/useWishImport.js'
@@ -100,6 +101,7 @@ async function submit() {
       priority: priority.value, shop_links: links.value.map(link => link.value.trim()).filter(Boolean),
       list_ids: selectedLists.value,
     }, image.value)
+    trackEvent('wish_created')
     saved.value = true
     window.location.assign(contextList.value && selectedLists.value.includes(contextList.value) ? `/my/lists/${contextList.value}?notice=wish-added` : '/my/wishes?notice=wish-added')
   } catch (error) {
