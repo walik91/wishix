@@ -20,7 +20,8 @@ async function setup(lang = 'en', width = 390) {
   const jpeg = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 40; c.height = 40; return c.toDataURL('image/jpeg').split(',')[1] })
   return { context, page, result: { status: 'ok', title: 'Imported product', description: 'Imported details', price: '49.95', currency: 'MDL', shop_name: 'Store', image: { mime: 'image/jpeg', data_base64: jpeg } } }
 }
-async function waitStatus(page, text) { await page.locator('.import-status').filter({ hasText: text }).waitFor() }
+async function waitStatus(page, text) { await page.locator('.toast').filter({ hasText: text }).waitFor() }
+function importButton(page, index = 1) { return page.getByRole('button', { name: `${texts.en['wishes.import.action']} ${index}`, exact: true }) }
 try {
   // Exercise late responses, explicit clearing, and user image selection during import.
   {
@@ -48,7 +49,7 @@ try {
     assert.equal(await page.locator('.file-name').innerText(), 'mine.jpg')
     checks++; await context.close()
   }
-  // Abort a stale response, do not import alternate links, retry the new source explicitly.
+  // Abort a stale response, import a changed first link explicitly, and preserve manual edits.
   {
     const { page, context, result } = await setup()
     let release
@@ -70,7 +71,7 @@ try {
     await page.waitForTimeout(950)
     assert.equal(await page.locator('#wish-title').inputValue(), '')
     assert.equal(urls.length, 1)
-    await page.locator('#wish-import').click()
+    await importButton(page).click()
     await waitStatus(page, texts.en['wishes.import.ok'])
     assert.equal(await page.locator('#wish-title').inputValue(), 'Second product')
     assert.equal(await page.locator('#wish-description').inputValue(), 'Imported details')
@@ -93,9 +94,110 @@ try {
     await page.locator('#wish-description').fill('Keep my description')
     await page.locator('#wish-link-1').fill('https://shop.example.com/second')
     assert.equal(await page.locator('#wish-description').inputValue(), 'Keep my description')
-    await page.locator('#wish-import').click()
+    await importButton(page).click()
     await waitStatus(page, texts.en['wishes.import.ok'])
     assert.equal(await page.locator('#wish-description').inputValue(), 'Keep my description')
+    checks++; await context.close()
+  }
+  // Any link can be selected; switching sources does not mix old automatic values.
+  {
+    const { page, context, result } = await setup()
+    const urls = []
+    await page.route('**/api/wishes/import-preview', async route => {
+      const { url } = route.request().postDataJSON(); urls.push(url)
+      const next = url.endsWith('second') ? { status: 'partial', title: 'Other product' } : result
+      await route.fulfill({ json: next })
+    })
+    await page.locator('#wish-link-1').fill('https://shop.example.com/first')
+    await waitStatus(page, texts.en['wishes.import.ok'])
+    await page.getByRole('button', { name: texts.en['wishes.addLink'], exact: true }).click()
+    await page.locator('#wish-link-2').fill('https://shop.example.com/second')
+    await page.locator('#wish-description').fill('My own details')
+    await importButton(page, 2).click()
+    await waitStatus(page, texts.en['wishes.import.partial'])
+    assert.deepEqual(urls, ['https://shop.example.com/first', 'https://shop.example.com/second'])
+    assert.equal(await page.locator('#wish-title').inputValue(), 'Other product')
+    assert.equal(await page.locator('#wish-price').inputValue(), '')
+    assert.equal(await page.locator('.file-name').count(), 0)
+    assert.equal(await page.locator('#wish-description').inputValue(), 'My own details')
+    await page.locator('#wish-link-1').fill('https://shop.example.com/third')
+    assert.equal(await page.locator('#wish-title').inputValue(), 'Other product')
+    await page.locator('#wish-link-2').fill('https://shop.example.com/changed')
+    assert.equal(await page.locator('#wish-title').inputValue(), '')
+    assert.equal(await page.locator('#wish-description').inputValue(), 'My own details')
+    checks++; await context.close()
+  }
+  // Starting an import from another link cancels the previous request.
+  {
+    const { page, context, result } = await setup()
+    let release, started
+    const gate = new Promise(resolve => { release = resolve })
+    const pending = new Promise(resolve => { started = resolve })
+    await page.route('**/api/wishes/import-preview', async route => {
+      const { url } = route.request().postDataJSON()
+      if (url.endsWith('first')) { started(); await gate }
+      await route.fulfill({ json: { ...result, title: url.endsWith('first') ? 'Stale' : 'Selected' } }).catch(() => {})
+    })
+    await page.locator('#wish-link-1').fill('https://shop.example.com/first'); await pending
+    await page.getByRole('button', { name: texts.en['wishes.addLink'], exact: true }).click()
+    await page.locator('#wish-link-2').fill('https://shop.example.com/second')
+    await importButton(page, 2).click()
+    await waitStatus(page, texts.en['wishes.import.ok'])
+    release()
+    assert.equal(await page.locator('#wish-title').inputValue(), 'Selected')
+    checks++; await context.close()
+  }
+  // Successful feedback disappears automatically; invalid links cannot be imported.
+  {
+    const { page, context, result } = await setup()
+    await page.route('**/api/wishes/import-preview', route => route.fulfill({ json: result }))
+    assert.equal(await importButton(page).isDisabled(), true)
+    await page.locator('#wish-link-1').fill('https://shop.example.com/first')
+    await waitStatus(page, texts.en['wishes.import.ok'])
+    await page.locator('.toast').waitFor({ state: 'hidden', timeout: 6000 })
+    checks++; await context.close()
+  }
+  // The per-link import action is available and labelled to keyboard users.
+  {
+    const { page, context, result } = await setup()
+    const urls = []
+    await page.route('**/api/wishes/import-preview', route => { urls.push(route.request().postDataJSON().url); return route.fulfill({ json: result }) })
+    await page.locator('#wish-link-1').fill('https://shop.example.com/first')
+    await waitStatus(page, texts.en['wishes.import.ok'])
+    await page.getByRole('button', { name: texts.en['wishes.addLink'], exact: true }).click()
+    await page.locator('#wish-link-2').fill('https://shop.example.com/second')
+    await page.locator('#wish-link-2').press('Tab')
+    assert.equal(await importButton(page, 2).evaluate(el => document.activeElement === el), true)
+    const response = page.waitForResponse(r => r.url().endsWith('/api/wishes/import-preview'))
+    await page.keyboard.press('Enter')
+    await response
+    assert.deepEqual(urls, ['https://shop.example.com/first', 'https://shop.example.com/second'])
+    checks++; await context.close()
+  }
+  // Deleting the source cancels its pending request and removes only its untouched data.
+  {
+    const { page, context, result } = await setup()
+    let release, started
+    const gate = new Promise(resolve => { release = resolve })
+    const pending = new Promise(resolve => { started = resolve })
+    await page.route('**/api/wishes/import-preview', async route => {
+      const { url } = route.request().postDataJSON()
+      if (url.endsWith('second')) { started(); await gate }
+      await route.fulfill({ json: result }).catch(() => {})
+    })
+    await page.locator('#wish-link-1').fill('https://shop.example.com/first')
+    await waitStatus(page, texts.en['wishes.import.ok'])
+    await page.getByRole('button', { name: texts.en['wishes.addLink'], exact: true }).click()
+    await page.locator('#wish-link-2').fill('https://shop.example.com/second')
+    await importButton(page, 2).click(); await pending
+    await page.getByRole('button', { name: `${texts.en['wishes.removeLink']} 2`, exact: true }).click()
+    release()
+    assert.equal(await page.locator('#wish-title').inputValue(), 'Imported product')
+    await page.locator('#wish-description').fill('Keep my details')
+    await page.getByRole('button', { name: texts.en['wishes.addLink'], exact: true }).click()
+    await page.getByRole('button', { name: `${texts.en['wishes.removeLink']} 1`, exact: true }).click()
+    assert.equal(await page.locator('#wish-title').inputValue(), '')
+    assert.equal(await page.locator('#wish-description').inputValue(), 'Keep my details')
     checks++; await context.close()
   }
   // Save stays available when import fails, returns a category, or is in progress.
@@ -147,6 +249,8 @@ try {
       await page.route('**/api/wishes/import-preview', route => route.fulfill({ json: { ...result, title: `${result.title} ${'Long name '.repeat(14)}` } }))
       await page.locator('#wish-link-1').fill('https://shop.example.com/product')
       await waitStatus(page, texts[lang]['wishes.import.ok'])
+      await page.getByRole('button', { name: texts[lang]['wishes.addLink'], exact: true }).click()
+      await page.locator('#wish-link-2').fill('https://shop.example.com/alternative')
       await page.evaluate(() => document.fonts.ready)
       assert.equal(await page.locator('html').getAttribute('lang'), lang)
       assert.equal(await page.locator('#wish-description').inputValue(), 'Imported details')

@@ -8,6 +8,7 @@ import { useWishImport, validImportLink } from '../composables/useWishImport.js'
 import UiButton from '../components/ui/UiButton.vue'
 import UiCard from '../components/ui/UiCard.vue'
 import UiSkeleton from '../components/ui/UiSkeleton.vue'
+import UiToast from '../components/ui/UiToast.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import TextField from '../components/ui/TextField.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
@@ -45,9 +46,12 @@ async function loadLists() {
   finally { listsLoading.value = false }
 }
 watch([user, checking, unavailable], ([account, pending, failed]) => { if (account && !pending && !failed) loadLists() }, { immediate: true })
-const firstLink = computed(() => links.value[0]?.value || '')
-const { status: importStatus, shopName, canImport, loading: importing, markDirty, cancel: cancelImport, run: importLink, firstLinkBlur } = useWishImport(firstLink, { title, description, price, currency, image }, applied => {
+const importNotice = ref(''), importNoticeSequence = ref(0)
+const { activeId: importingId, markDirty, cancel: cancelImport, run: importLink, firstLinkBlur } = useWishImport(links, { title, description, price, currency, image }, applied => {
   for (const field of applied) delete errors.value[field]
+}, result => {
+  importNotice.value = result
+  importNoticeSequence.value++
 })
 const currencies = ['EUR', 'USD', 'GBP', 'MDL', 'RON', 'UAH', 'RUB', 'CHF', 'CAD', 'AUD', 'JPY']
 watchEffect(() => { document.title = `${t('my.addWish')} · ${t('appName')}` })
@@ -131,11 +135,12 @@ async function submit() {
               <h2 id="links-title">{{ t('wishes.shopLinks') }}</h2><p class="links-hint">{{ t('wishes.linksHint') }}</p>
               <div v-for="(link, index) in links" :key="link.id" class="link-row">
                 <TextField :id="`wish-link-${link.id}`" v-model="link.value" :label="`${t('wishes.shopLink')} ${index + 1}`" :error="errors[`link-${link.id}`] ? t('wishes.error.wish_links_invalid') : ''" type="url" placeholder="https://" maxlength="2048" autocomplete="off" @blur="index === 0 && firstLinkBlur()" />
-                <button v-if="links.length > 1" class="remove-link" type="button" :aria-label="`${t('wishes.removeLink')} ${index + 1}`" @click="removeLink(link.id)"><AppIcon name="close" /></button>
+                <button class="link-icon import-link" type="button" :aria-label="`${t('wishes.import.action')} ${index + 1}`" :title="t('wishes.import.action')" :disabled="!validImportLink(link.value.trim()) || importingId === link.id" :aria-busy="importingId === link.id || undefined" @click="importLink(link.id)"><span v-if="importingId === link.id" class="spinner" aria-hidden="true"></span><AppIcon v-else name="download" /></button>
+                <button v-if="links.length > 1" class="link-icon remove-link" type="button" :aria-label="`${t('wishes.removeLink')} ${index + 1}`" @click="removeLink(link.id)"><AppIcon name="close" /></button>
               </div>
-              <div class="link-actions"><UiButton variant="secondary" :disabled="links.length >= 10" @click="addLink"><AppIcon name="plus" />{{ t('wishes.addLink') }}</UiButton><UiButton v-if="canImport" id="wish-import" variant="secondary" :loading="importing" @click="importLink">{{ t(importStatus === 'idle' ? 'wishes.import.action' : 'wishes.import.retry') }}</UiButton></div>
+              <div class="link-actions"><UiButton variant="secondary" :disabled="links.length >= 10" @click="addLink"><AppIcon name="plus" />{{ t('wishes.addLink') }}</UiButton></div>
               <p class="import-hint">{{ t('wishes.import.hint') }}</p>
-              <div v-if="importStatus !== 'idle'" class="import-status" role="status" aria-live="polite" aria-atomic="true"><p>{{ t(`wishes.import.${importStatus}`) }}</p><p v-if="shopName" class="import-shop">{{ t('wishes.import.shop') }} {{ shopName }}</p><a v-if="importStatus === 'session'" href="/login">{{ t('wishes.import.login') }}</a></div>
+              <p v-if="importingId !== null" class="sr-only" role="status">{{ t('wishes.import.loading') }}</p>
             </section>
             <TextField id="wish-title" v-model="title" :label="t('wishes.titleLabel')" :placeholder="t('wishes.titlePlaceholder')" :hint="t('wishes.titleHint')" :error="errors.title ? t(`wishes.error.${errors.title}`) : ''" required maxlength="400" autocomplete="off" @input="markDirty('title')" />
             <WishImageInput id="wish-image" v-model="image" :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" @manual-change="markDirty('image')" />
@@ -158,6 +163,7 @@ async function submit() {
         </form>
       </UiCard>
       <p class="privacy-note"><AppIcon name="lock" /><span>{{ t('wishes.privateNote') }}</span></p>
+      <UiToast v-if="importNotice" :key="importNoticeSequence" :duration="importNotice === 'ok' ? 3000 : 6000" :variant="importNotice === 'ok' ? 'success' : 'info'" @dismiss="importNotice = ''">{{ t(`wishes.import.${importNotice}`) }}</UiToast>
     </template>
   </div>
 </template>
@@ -177,8 +183,9 @@ select:hover { border-color: var(--wx-secondary); }
 .link-row { display: flex; align-items: flex-start; gap: var(--wx-space-2); margin-bottom: var(--wx-space-4); }.link-row > .field { flex: 1; }
 .link-actions { display: flex; flex-wrap: wrap; gap: var(--wx-space-3); }.link-actions > * { max-width: 100%; }
 .import-hint { margin: var(--wx-space-3) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }
-.import-status { margin-top: var(--wx-space-4); padding: var(--wx-space-3) var(--wx-space-4); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); background: var(--wx-background); color: var(--wx-text); font-size: var(--wx-text-sm); line-height: 1.65; }.import-status p { margin: 0; }.import-status .import-shop { margin-top: var(--wx-space-2); color: var(--wx-text-muted); font-size: var(--wx-text-xs); }.import-status a { display: inline-flex; align-items: center; min-height: 44px; color: var(--wx-primary); }
-.remove-link { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; min-height: 48px; margin-top: 29px; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-text-muted); background: var(--wx-surface); cursor: pointer; }.remove-link:hover { color: var(--wx-error); background: var(--wx-background); }.remove-link:disabled { cursor: wait; }
+.link-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; min-height: 48px; margin-top: 29px; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-primary); background: var(--wx-surface); cursor: pointer; }
+.link-icon:hover:not(:disabled) { background: var(--wx-background); border-color: var(--wx-secondary); }.link-icon:active:not(:disabled) { background: var(--wx-lavender); }.link-icon:focus-visible { outline: none; box-shadow: var(--wx-focus-ring); }.link-icon:disabled { opacity: .5; cursor: not-allowed; }.link-icon[aria-busy='true'] { cursor: wait; }.remove-link { color: var(--wx-text-muted); }.remove-link:hover:not(:disabled) { color: var(--wx-error); }
+.spinner { width: 18px; height: 18px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: import-spin 700ms linear infinite; }@keyframes import-spin { to { transform: rotate(360deg); } }@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 .form-actions { display: flex; flex-direction: column; gap: var(--wx-space-3); margin-top: var(--wx-space-8); padding-top: var(--wx-space-6); border-top: 1px solid var(--wx-border); }
 .privacy-note { display: flex; align-items: flex-start; justify-content: center; gap: var(--wx-space-2); margin: var(--wx-space-6) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }.privacy-note .icon { width: 16px; height: 18px; }
 .operation-error, .field-error { color: var(--wx-error); font-size: var(--wx-text-sm); line-height: 1.6; }
