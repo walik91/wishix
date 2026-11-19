@@ -42,7 +42,7 @@ func (r *Auth) UserByID(ctx context.Context, id string, lock bool) (*models.User
 
 func (r *Auth) UsernameExists(ctx context.Context, username string) (bool, error) {
 	var count int64
-	err := r.Ctx(ctx).Raw(`SELECT count(*) FROM (SELECT username FROM users WHERE username = ? UNION ALL SELECT username FROM username_registry WHERE username = ?) AS occupied`, username, username).Scan(&count).Error
+	err := r.Ctx(ctx).Raw(`SELECT count(*) FROM (SELECT username FROM users WHERE username = ? UNION ALL SELECT username FROM username_registry WHERE username = ? AND (expires_at IS NULL OR expires_at > now())) AS occupied`, username, username).Scan(&count).Error
 	return count > 0, err
 }
 
@@ -61,7 +61,9 @@ func (r *Auth) CreateUser(ctx context.Context, user *models.User) error {
 	}
 	// Account creation is called inside a serializable transaction: claiming the
 	// name and inserting the user must commit together, including OAuth signup.
-	claim := r.Ctx(ctx).Exec(`INSERT INTO username_registry (username, user_id, expires_at) VALUES (?, ?, NULL) ON CONFLICT (username) DO NOTHING`, user.Username, user.ID)
+	claim := r.Ctx(ctx).Exec(`INSERT INTO username_registry (username, user_id, expires_at) VALUES (?, ?, NULL)
+		ON CONFLICT (username) DO UPDATE SET user_id = excluded.user_id, expires_at = NULL
+		WHERE username_registry.expires_at IS NOT NULL AND username_registry.expires_at <= now()`, user.Username, user.ID)
 	if claim.Error != nil {
 		return claim.Error
 	}
