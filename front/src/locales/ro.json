@@ -407,6 +407,7 @@
   "search.error": "Căutarea nu este disponibilă. Încearcă din nou.",
   "search.invalid": "Introdu un termen de căutare de maximum 100 de caractere.",
   "profile.displayName": "Nume afișat",
+  "profile.general": "General",
   "profile.nameHint": "Opțional, maximum 100 de caractere.",
   "profile.showName": "Afișează numele meu public",
   "profile.showNameHint": "Numele va apărea în profilul public și vei putea fi găsit după el.",

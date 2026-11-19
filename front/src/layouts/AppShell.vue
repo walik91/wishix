@@ -139,62 +139,71 @@ async function logout() {
 
     <UiDialog v-model:open="profileOpen" class="profile-dialog" :title="t('my.profile')">
       <template v-if="account">
-        <div class="profile-identity">
-          <UserAvatar :username="account.username" />
-          <div>
-            <strong>{{ account.username }}</strong>
-            <p>{{ t('my.accountDetails') }}</p>
+        <div class="profile-layout">
+          <aside class="profile-sections" :aria-label="t('my.profile')">
+            <div class="profile-section-current"><AppIcon name="user" /><span>{{ t('profile.general') }}</span></div>
+          </aside>
+          <div class="profile-content">
+            <div class="profile-identity">
+              <UserAvatar :username="account.username" />
+              <div>
+                <strong>{{ account.username }}</strong>
+                <p>{{ t('my.accountDetails') }}</p>
+              </div>
+            </div>
+            <dl class="profile-details">
+              <div><dt>{{ t('register.username') }}</dt><dd>{{ account.username }}</dd></div>
+              <div><dt>{{ t('login.email') }}</dt><dd>{{ account.email || t('profile.noEmail') }}</dd></div>
+            </dl>
+            <form class="name-setting" @submit.prevent="saveName">
+              <div class="name-field-row">
+                <TextField id="profile-display-name" v-model="displayName" :label="t('profile.displayName')" :hint="t('profile.nameHint')" maxlength="200" :disabled="nameLoading || !nameReady" />
+                <UiButton type="submit" variant="secondary" :loading="nameLoading" :disabled="!nameReady">{{ t('profile.saveName') }}</UiButton>
+              </div>
+              <label class="name-visibility"><input v-model="showDisplayName" type="checkbox" :disabled="nameLoading || !nameReady || !displayName.trim()" /><strong>{{ t('profile.showName') }}</strong></label>
+              <p class="name-hint">{{ t('profile.showNameHint') }}</p>
+              <p v-if="nameSaved" role="status">{{ t('profile.nameSaved') }}</p>
+              <p v-if="nameError" class="auth-error" role="alert">{{ nameError }}</p>
+            </form>
+            <div v-if="!account.email" class="email-setting">
+              <p>{{ t('profile.emailForMail') }}</p>
+              <template v-if="emailChallenge"><p>{{ t('reservation.codeSent') }} {{ emailInput }}</p><CodeVerification :busy="emailBusy" :remaining="emailRemaining" @verify="verifyAddedEmail" @resend="resendEmailCode" /></template>
+              <form v-else @submit.prevent="sendEmailCode">
+                <TextField id="profile-email" v-model="emailInput" type="email" required maxlength="254" autocomplete="email" :label="t('login.email')" />
+                <UiButton type="submit" :loading="emailBusy">{{ t('profile.addEmail') }}</UiButton>
+              </form>
+              <p v-if="emailError" class="auth-error" role="alert">{{ emailError }}</p>
+            </div>
+            <div v-if="googleEnabled" class="google-setting">
+              <strong>{{ t('google.methods') }}</strong>
+              <p v-if="googleLinked" role="status">{{ t('google.linked') }}</p>
+              <SocialAuthButtons v-else :busy="googleBusy" :label="t('google.connect')" @select="linkGoogle" />
+              <p v-if="googleResult === 'error' || googleResult === 'conflict'" class="auth-error" role="alert">{{ t(googleResult === 'conflict' ? 'google.linkConflict' : 'google.error') }}</p>
+              <p v-if="googleError" class="auth-error" role="alert">{{ googleError }}</p>
+            </div>
+            <div v-if="facebookEnabled" class="google-setting">
+              <strong v-if="!googleEnabled">{{ t('google.methods') }}</strong>
+              <p v-if="facebookLinked" role="status">{{ t('facebook.linked') }}</p>
+              <SocialAuthButtons v-else :google="false" facebook :busy="facebookBusy" :label="t('facebook.connect')" @select="linkFacebook" />
+              <p v-if="facebookResult === 'error' || facebookResult === 'conflict'" class="auth-error" role="alert">{{ t(facebookResult === 'conflict' ? 'facebook.linkConflict' : 'facebook.error') }}</p>
+              <p v-if="facebookError" class="auth-error" role="alert">{{ facebookError }}</p>
+            </div>
+            <div class="collection-setting">
+              <label><input type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
+              <p>{{ t('profile.showAllWarning') }}</p>
+              <p v-if="collectionError" class="auth-error" role="alert">{{ collectionError }}</p>
+            </div>
+            <div class="profile-actions">
+              <UiButton class="profile-public-link" variant="secondary" href="/my/following">{{ t('social.title') }}</UiButton>
+              <UiButton class="profile-public-link" variant="secondary" href="/my/profile">{{ t('profile.editProfile') }}</UiButton>
+              <UiButton class="profile-public-link" variant="secondary" :href="`/u/${encodeURIComponent(account.username)}`">{{ t('lists.publicProfile') }}</UiButton>
+              <UiButton class="logout-button" variant="secondary" :loading="signingOut" @click="logout">
+                <AppIcon name="logout" />{{ t('auth.logout') }}
+              </UiButton>
+            </div>
+            <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
           </div>
         </div>
-        <dl>
-          <dt>{{ t('register.username') }}</dt>
-          <dd>{{ account.username }}</dd>
-          <dt>{{ t('login.email') }}</dt>
-          <dd>{{ account.email || t('profile.noEmail') }}</dd>
-        </dl>
-        <form class="name-setting" @submit.prevent="saveName">
-          <TextField id="profile-display-name" v-model="displayName" :label="t('profile.displayName')" :hint="t('profile.nameHint')" maxlength="200" :disabled="nameLoading || !nameReady" />
-          <label class="name-visibility"><input v-model="showDisplayName" type="checkbox" :disabled="nameLoading || !nameReady || !displayName.trim()" /><strong>{{ t('profile.showName') }}</strong></label>
-          <p class="name-hint">{{ t('profile.showNameHint') }}</p>
-          <UiButton type="submit" variant="secondary" :loading="nameLoading" :disabled="!nameReady">{{ t('profile.saveName') }}</UiButton>
-          <p v-if="nameSaved" role="status">{{ t('profile.nameSaved') }}</p>
-          <p v-if="nameError" class="auth-error" role="alert">{{ nameError }}</p>
-        </form>
-        <div v-if="!account.email" class="email-setting">
-          <p>{{ t('profile.emailForMail') }}</p>
-          <template v-if="emailChallenge"><p>{{ t('reservation.codeSent') }} {{ emailInput }}</p><CodeVerification :busy="emailBusy" :remaining="emailRemaining" @verify="verifyAddedEmail" @resend="resendEmailCode" /></template>
-          <form v-else @submit.prevent="sendEmailCode">
-            <TextField id="profile-email" v-model="emailInput" type="email" required maxlength="254" autocomplete="email" :label="t('login.email')" />
-            <UiButton type="submit" :loading="emailBusy">{{ t('profile.addEmail') }}</UiButton>
-          </form>
-          <p v-if="emailError" class="auth-error" role="alert">{{ emailError }}</p>
-        </div>
-        <div v-if="googleEnabled" class="google-setting">
-          <strong>{{ t('google.methods') }}</strong>
-          <p v-if="googleLinked" role="status">{{ t('google.linked') }}</p>
-          <SocialAuthButtons v-else :busy="googleBusy" :label="t('google.connect')" @select="linkGoogle" />
-          <p v-if="googleResult === 'error' || googleResult === 'conflict'" class="auth-error" role="alert">{{ t(googleResult === 'conflict' ? 'google.linkConflict' : 'google.error') }}</p>
-          <p v-if="googleError" class="auth-error" role="alert">{{ googleError }}</p>
-        </div>
-        <div v-if="facebookEnabled" class="google-setting">
-          <strong v-if="!googleEnabled">{{ t('google.methods') }}</strong>
-          <p v-if="facebookLinked" role="status">{{ t('facebook.linked') }}</p>
-          <SocialAuthButtons v-else :google="false" facebook :busy="facebookBusy" :label="t('facebook.connect')" @select="linkFacebook" />
-          <p v-if="facebookResult === 'error' || facebookResult === 'conflict'" class="auth-error" role="alert">{{ t(facebookResult === 'conflict' ? 'facebook.linkConflict' : 'facebook.error') }}</p>
-          <p v-if="facebookError" class="auth-error" role="alert">{{ facebookError }}</p>
-        </div>
-        <div class="collection-setting">
-          <label><input type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
-          <p>{{ t('profile.showAllWarning') }}</p>
-          <p v-if="collectionError" class="auth-error" role="alert">{{ collectionError }}</p>
-        </div>
-        <UiButton class="profile-public-link" variant="secondary" href="/my/following">{{ t('social.title') }}</UiButton>
-        <UiButton class="profile-public-link" variant="secondary" href="/my/profile">{{ t('profile.editProfile') }}</UiButton>
-        <UiButton class="profile-public-link" variant="secondary" :href="`/u/${encodeURIComponent(account.username)}`">{{ t('lists.publicProfile') }}</UiButton>
-        <UiButton class="logout-button" variant="secondary" :loading="signingOut" @click="logout">
-          <AppIcon name="logout" />{{ t('auth.logout') }}
-        </UiButton>
-        <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
       </template>
     </UiDialog>
   </div>
@@ -216,21 +225,38 @@ async function logout() {
 .header-username, .profile-chevron { display: none; }
 .app-content { flex: 1; width: 100%; max-width: var(--wx-content-max); margin-inline: auto; padding: var(--wx-space-6) var(--wx-space-4); }
 .bottom-navigation { position: fixed; z-index: 5; inset: auto 0 0; padding: var(--wx-space-2) var(--wx-space-2) max(var(--wx-space-2), env(safe-area-inset-bottom)); border-top: 1px solid var(--wx-border); background: var(--wx-surface); }
+.profile-layout { min-width: 0; }
+.profile-sections { padding: var(--wx-space-3) var(--wx-space-5) 0; }
+.profile-section-current { display: flex; align-items: center; gap: var(--wx-space-2); width: fit-content; padding: var(--wx-space-2) var(--wx-space-3); border-radius: var(--wx-radius-sm); color: var(--wx-primary); background: var(--wx-lavender); font-size: var(--wx-text-sm); font-weight: 600; }
+.profile-section-current .icon { width: 18px; height: 18px; }
+.profile-content { min-width: 0; padding: var(--wx-space-5); }
 .profile-identity { display: flex; align-items: center; gap: var(--wx-space-3); min-width: 0; }
 .profile-identity strong { line-height: 1.5; }
 .profile-identity p { margin: var(--wx-space-1) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); }
-dl { margin: var(--wx-space-6) 0; padding: var(--wx-space-5); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); }
-dt { margin-bottom: var(--wx-space-1); color: var(--wx-text-muted); font-size: var(--wx-text-xs); }
-dd { margin: 0; line-height: 1.5; }
-dd + dt { margin-top: var(--wx-space-4); }
-.profile-note { margin-block: var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.6; }
-.collection-setting { margin-block: var(--wx-space-5); }.collection-setting label { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; }.collection-setting input { width: 20px; height: 20px; accent-color: var(--wx-primary); }.collection-setting p { margin: var(--wx-space-1) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
-.name-setting { display: grid; gap: var(--wx-space-3); margin-block: var(--wx-space-5); }.name-setting p { margin: 0; }.name-visibility { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; }.name-visibility input { width: 20px; height: 20px; accent-color: var(--wx-primary); }.name-hint { color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
-.google-setting { display: grid; gap: var(--wx-space-3); margin-block: var(--wx-space-5); }.google-setting p { margin: 0; line-height: 1.5; }
-.email-setting, .email-setting form { display: grid; gap: var(--wx-space-3); margin-block: var(--wx-space-4); }.email-setting p { margin: 0; line-height: 1.5; }
-.logout-button { width: 100%; }
-.profile-public-link { width: 100%; margin-bottom: var(--wx-space-3); }
+.profile-details { display: grid; gap: var(--wx-space-3); margin: var(--wx-space-5) 0 0; padding: var(--wx-space-4) 0; border-block: 1px solid var(--wx-border); }
+.profile-details > div { min-width: 0; }
+.profile-details dt { margin-bottom: var(--wx-space-1); color: var(--wx-text-muted); font-size: var(--wx-text-xs); }
+.profile-details dd { margin: 0; font-size: var(--wx-text-sm); line-height: 1.5; }
+.name-setting, .collection-setting, .google-setting, .email-setting { padding-block: var(--wx-space-4); border-bottom: 1px solid var(--wx-border); }
+.name-setting { display: grid; gap: var(--wx-space-1); }
+.name-field-row, .email-setting form { display: grid; gap: var(--wx-space-3); }
+.name-setting p { margin: 0; }
+.name-visibility, .collection-setting label { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; font-size: var(--wx-text-sm); }
+.name-visibility input, .collection-setting input { flex: 0 0 auto; width: 20px; height: 20px; accent-color: var(--wx-primary); }
+.name-hint, .collection-setting p { color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
+.collection-setting p { margin: 0; }
+.google-setting { display: grid; gap: var(--wx-space-2); font-size: var(--wx-text-sm); }.google-setting p { margin: 0; line-height: 1.5; }
+.email-setting { display: grid; gap: var(--wx-space-3); }.email-setting p { margin: 0; line-height: 1.5; }
+.profile-actions { display: flex; flex-wrap: wrap; gap: var(--wx-space-2); padding-top: var(--wx-space-4); }
+.profile-actions > * { flex: 1 1 180px; }
 @media (min-width: 48rem) {
+  .profile-layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); }
+  .profile-sections { padding: var(--wx-space-5) var(--wx-space-3); border-right: 1px solid var(--wx-border); }
+  .profile-section-current { width: 100%; min-height: 44px; }
+  .profile-content { padding: var(--wx-space-6); }
+  .profile-details { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--wx-space-5); }
+  .name-field-row { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+  .name-field-row > .button { margin-top: 29px; }
   .app-header { min-height: 88px; padding-inline: var(--wx-space-6); }
   .header-actions { gap: var(--wx-space-4); }
   .header-username { display: inline; max-width: 160px; overflow: hidden; text-overflow: ellipsis; font-size: var(--wx-text-sm); font-weight: 600; }

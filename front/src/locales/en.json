@@ -407,6 +407,7 @@
   "search.error": "Search is unavailable. Please try again.",
   "search.invalid": "Enter a valid search term of up to 100 characters.",
   "profile.displayName": "Display name",
+  "profile.general": "General",
   "profile.nameHint": "Optional, up to 100 characters.",
   "profile.showName": "Show my display name publicly",
   "profile.showNameHint": "Your name will appear in your public profile and people can find you by it.",
