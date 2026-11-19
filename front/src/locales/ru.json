@@ -436,7 +436,7 @@
   "profile.invalidDetails": "Проверьте дату и описание и попробуйте снова.",
   "profile.changeUsername": "Изменить username",
   "profile.usernameHint": "Менять username можно не чаще одного раза в 30 дней.",
-  "profile.redirectHint": "Старая ссылка профиля будет перенаправлять на новый профиль 60 дней. Затем перенаправление прекратится, а username останется за вами, чтобы ссылка не открыла чужой профиль.",
+  "profile.redirectHint": "Старая ссылка профиля будет перенаправлять на ваш профиль ещё 60 дней.",
   "profile.renameConfirm": "Изменить username на",
   "profile.usernameSaved": "Username изменён.",
   "profile.usernameTaken": "Этот username недоступен.",
