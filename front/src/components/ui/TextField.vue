@@ -8,6 +8,7 @@ defineProps({
   error: { type: String, default: '' },
   hint: { type: String, default: '' },
   multiline: Boolean,
+  visuallyHiddenLabel: Boolean,
 })
 const value = defineModel({ type: String, default: '' })
 const input = ref(null)
@@ -16,7 +17,7 @@ defineExpose({ focus: () => input.value?.focus() })
 
 <template>
   <div class="field">
-    <label :for="id">{{ label }}</label>
+    <label :for="id" :class="{ 'sr-only': visuallyHiddenLabel }">{{ label }}</label>
     <div class="control" :class="{ invalid: error }">
       <textarea v-if="multiline" :id="id" ref="input" v-model="value" v-bind="$attrs" :aria-invalid="error ? 'true' : undefined" :aria-describedby="[hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined"></textarea>
       <input v-else :id="id" ref="input" v-model="value" v-bind="$attrs" :aria-invalid="error ? 'true' : undefined" :aria-describedby="[hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined" />

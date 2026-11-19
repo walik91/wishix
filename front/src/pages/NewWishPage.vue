@@ -134,7 +134,7 @@ async function submit() {
             <section class="links-section" aria-labelledby="links-title">
               <h2 id="links-title">{{ t('wishes.shopLinks') }}</h2><p class="links-hint">{{ t('wishes.linksHint') }}</p>
               <div v-for="(link, index) in links" :key="link.id" class="link-row">
-                <TextField :id="`wish-link-${link.id}`" v-model="link.value" :label="`${t('wishes.shopLink')} ${index + 1}`" :error="errors[`link-${link.id}`] ? t('wishes.error.wish_links_invalid') : ''" type="url" placeholder="https://" maxlength="2048" autocomplete="off" @blur="index === 0 && firstLinkBlur()" />
+                <TextField :id="`wish-link-${link.id}`" v-model="link.value" :label="`${t('wishes.shopLink')} ${index + 1}`" visually-hidden-label :error="errors[`link-${link.id}`] ? t('wishes.error.wish_links_invalid') : ''" type="url" placeholder="https://" maxlength="2048" autocomplete="off" @blur="index === 0 && firstLinkBlur()" />
                 <button class="link-icon import-link" type="button" :aria-label="`${t('wishes.import.action')} ${index + 1}`" :title="t('wishes.import.action')" :disabled="!validImportLink(link.value.trim()) || importingId === link.id" :aria-busy="importingId === link.id || undefined" @click="importLink(link.id)"><span v-if="importingId === link.id" class="spinner" aria-hidden="true"></span><AppIcon v-else name="download" /></button>
                 <button v-if="links.length > 1" class="link-icon remove-link" type="button" :aria-label="`${t('wishes.removeLink')} ${index + 1}`" @click="removeLink(link.id)"><AppIcon name="close" /></button>
               </div>
@@ -144,7 +144,7 @@ async function submit() {
             </section>
             <TextField id="wish-title" v-model="title" :label="t('wishes.titleLabel')" :placeholder="t('wishes.titlePlaceholder')" :hint="t('wishes.titleHint')" :error="errors.title ? t(`wishes.error.${errors.title}`) : ''" required maxlength="400" autocomplete="off" @input="markDirty('title')" />
             <WishImageInput id="wish-image" v-model="image" :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" @manual-change="markDirty('image')" />
-            <TextField id="wish-description" v-model="description" multiline rows="4" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" maxlength="10000" @input="markDirty('description')" />
+            <TextField id="wish-description" v-model="description" multiline rows="3" class="description-field" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" maxlength="10000" @input="markDirty('description')" />
             <div class="price-fields">
               <TextField id="wish-price" v-model="price" :label="t('wishes.priceLabel')" :hint="t('wishes.priceHint')" :error="errors.price ? t(`wishes.error.${errors.price}`) : ''" inputmode="decimal" placeholder="0.00" maxlength="13" @input="markDirty('price')" />
               <TextField id="wish-currency" v-model="currency" :label="t('wishes.currencyLabel')" :hint="t('wishes.currencyHint')" :error="errors.currency ? t(`wishes.error.${errors.currency}`) : ''" list="wish-currencies" maxlength="3" placeholder="USD" autocomplete="off" @input="markDirty('currency')" />
@@ -174,16 +174,17 @@ async function submit() {
 .page-heading { margin-bottom: var(--wx-space-6); }h1 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 750; letter-spacing: -.03em; }
 .page-heading p { margin: var(--wx-space-3) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.65; }
 .form-card { padding: var(--wx-space-5) var(--wx-space-4); }
-fieldset { display: grid; gap: var(--wx-space-6); min-width: 0; margin: 0; padding: 0; border: 0; }fieldset:disabled { opacity: .7; }
-.price-fields { display: grid; gap: var(--wx-space-5); min-width: 0; }.select-field { display: grid; gap: var(--wx-space-2); }
+fieldset { display: grid; gap: var(--wx-space-5); min-width: 0; margin: 0; padding: 0; border: 0; }fieldset:disabled { opacity: .7; }
+:deep(textarea.description-field) { min-height: 88px; }
+.price-fields { display: grid; gap: var(--wx-space-4); min-width: 0; }.select-field { display: grid; gap: var(--wx-space-2); }
 label, h2 { margin: 0; font-size: var(--wx-text-sm); font-weight: 600; line-height: 1.5; }
 select { width: 100%; min-width: 0; min-height: 48px; padding: var(--wx-space-3); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-text); background: var(--wx-surface); font-size: var(--wx-text-md); }
 select:hover { border-color: var(--wx-secondary); }
-.links-section { min-width: 0; padding-bottom: var(--wx-space-6); border-bottom: 1px solid var(--wx-border); }.links-hint { margin: var(--wx-space-2) 0 var(--wx-space-5); color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }
-.link-row { display: flex; align-items: flex-start; gap: var(--wx-space-2); margin-bottom: var(--wx-space-4); }.link-row > .field { flex: 1; }
+.links-section { min-width: 0; padding-bottom: var(--wx-space-5); border-bottom: 1px solid var(--wx-border); }.links-hint { margin: var(--wx-space-1) 0 var(--wx-space-3); color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }
+.link-row { display: flex; align-items: flex-start; gap: var(--wx-space-2); margin-bottom: var(--wx-space-2); }.link-row > .field { flex: 1; }
 .link-actions { display: flex; flex-wrap: wrap; gap: var(--wx-space-3); }.link-actions > * { max-width: 100%; }
 .import-hint { margin: var(--wx-space-3) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }
-.link-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; min-height: 48px; margin-top: 29px; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-primary); background: var(--wx-surface); cursor: pointer; }
+.link-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; min-height: 48px; margin-top: 0; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-primary); background: var(--wx-surface); cursor: pointer; }
 .link-icon:hover:not(:disabled) { background: var(--wx-background); border-color: var(--wx-secondary); }.link-icon:active:not(:disabled) { background: var(--wx-lavender); }.link-icon:focus-visible { outline: none; box-shadow: var(--wx-focus-ring); }.link-icon:disabled { opacity: .5; cursor: not-allowed; }.link-icon[aria-busy='true'] { cursor: wait; }.remove-link { color: var(--wx-text-muted); }.remove-link:hover:not(:disabled) { color: var(--wx-error); }
 .spinner { width: 18px; height: 18px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: import-spin 700ms linear infinite; }@keyframes import-spin { to { transform: rotate(360deg); } }@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 .form-actions { display: flex; flex-direction: column; gap: var(--wx-space-3); margin-top: var(--wx-space-8); padding-top: var(--wx-space-6); border-top: 1px solid var(--wx-border); }

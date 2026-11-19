@@ -254,6 +254,8 @@ try {
       await page.evaluate(() => document.fonts.ready)
       assert.equal(await page.locator('html').getAttribute('lang'), lang)
       assert.equal(await page.locator('#wish-description').inputValue(), 'Imported details')
+      assert.equal(await page.getByLabel(`${texts[lang]['wishes.shopLink']} 2`, { exact: true }).count(), 1)
+      assert.equal(await page.locator('.link-row label').first().evaluate(el => getComputedStyle(el).position), 'absolute')
       assert.equal(await page.locator('.image-preview img').evaluate(img => img.complete && img.naturalWidth > 0), true)
       const state = await page.evaluate(() => {
         const visible = el => el.getClientRects().length && !el.classList.contains('sr-only')
