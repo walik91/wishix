@@ -8,6 +8,7 @@
 | `design/assets/logo-mark.svg` | SVG | векторная адаптация, **не точный исходник** | UI-прототип и дальнейшая доводка |
 | `design/assets/logo-mark.png` | PNG 512 | рендер векторной адаптации, прозрачный фон | UI-прототип |
 | `design/assets/logo-lockup.svg` | SVG | векторная адаптация + wordmark, **не точный исходник** | заголовок/экран входа |
+| `design/assets/logo-lockup-light.svg` | SVG | светлый текст той же векторной адаптации | тёмный футер, копия во frontend |
 | `design/assets/app-icon.svg` | SVG | векторная адаптация | источник под favicon/PWA |
 | `design/assets/favicon.svg` | SVG | векторная адаптация знака Wishix | favicon приложения и демо |
 | `design/assets/app-icon-512.png` | PNG 512 | рендер векторной адаптации | пример app icon |

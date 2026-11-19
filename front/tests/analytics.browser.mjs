@@ -11,6 +11,8 @@ try {
     await page.route('**/api/auth/me', route => route.fulfill({ json: { user: null } }))
     await page.goto(origin + '/')
     await page.locator('.cookie-panel').waitFor()
+    assert.equal(await page.locator('.site-footer a[href="/login"]').count(), 0, 'footer never offers sign-in')
+    assert.equal(await page.locator('.site-footer .footer-brand img').count(), 1, 'footer has the Wishix logo')
     assert.equal(googleRequests, 0, 'no Google request before consent')
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, locale + '/' + width + ' overflow')
     const offscreen = await page.locator('.cookie-panel button').evaluateAll(elements => elements.some(el => { const r=el.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth || r.width < 44 || r.height < 44 }))
@@ -87,6 +89,17 @@ try {
   assert.equal(searches.length, 1, 'record one successful search')
   assert.ok(!JSON.stringify(searches).includes('sample-private-query'), 'do not pass the search text')
   await searchContext.close()
+  const publicFooterTexts = []
+  for (const user of [null, { username:'tester', email:'test@example.com' }]) {
+    const footerContext = await browser.newContext({ locale:'ru' })
+    const footerPage = await footerContext.newPage()
+    await footerPage.addInitScript(() => localStorage.setItem('wishix_analytics_consent_v1', 'denied'))
+    await footerPage.route('**/api/auth/me', route => route.fulfill({ json: { user } }))
+    await footerPage.goto(origin + '/')
+    publicFooterTexts.push(await footerPage.locator('.site-footer').innerText())
+    await footerContext.close()
+  }
+  assert.equal(publicFooterTexts[0], publicFooterTexts[1], 'footer content is independent of sign-in state')
   for (const width of [320, 390, 768, 1024, 1440]) {
     const privateContext = await browser.newContext({ locale:'ru', viewport:{ width, height:900 } })
     const privatePage = await privateContext.newPage()
@@ -96,8 +109,10 @@ try {
     await privatePage.route('**/api/lists', route => route.fulfill({ json: { lists: [] } }))
     await privatePage.route('**/api/wishes', route => route.fulfill({ json: { wishes: [] } }))
     await privatePage.goto(origin + '/my')
-    const footerLink = privatePage.locator('.app-footer .cookie-settings-link')
+    const footerLink = privatePage.locator('.site-footer .cookie-settings-link')
     await footerLink.waitFor()
+    assert.equal(await privatePage.locator('.site-footer a[href="/login"]').count(), 0, 'private footer has no sign-in link')
+    assert.equal(await privatePage.locator('.site-footer .footer-brand img').count(), 1, 'private footer uses the same brand')
     await privatePage.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
     const geometry = await footerLink.evaluate(element => {
       const link = element.getBoundingClientRect()

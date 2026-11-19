@@ -10,7 +10,8 @@ defineEmits(['open'])
 </template>
 
 <style scoped>
-.cookie-settings-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; border-radius: var(--wx-radius-sm); background: transparent; color: var(--wx-text-muted); font-size: var(--wx-text-sm); text-align: left; cursor: pointer; }
-.cookie-settings-link:hover { color: var(--wx-primary-hover); text-decoration: underline; text-underline-offset: 4px; }
-.cookie-settings-link:active { color: var(--wx-primary-pressed); }
+.cookie-settings-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; border-radius: var(--wx-radius-sm); background: transparent; color: inherit; font-size: var(--wx-text-sm); text-align: left; cursor: pointer; }
+.cookie-settings-link:hover { color: var(--wx-surface); text-decoration: underline; text-underline-offset: 4px; }
+.cookie-settings-link:active { color: var(--wx-secondary); }
+.cookie-settings-link:focus-visible { outline-color: var(--wx-surface); }
 </style>
