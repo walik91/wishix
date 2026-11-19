@@ -22,8 +22,6 @@ type ProfileSettings struct {
 	Biography         string     `json:"biography"`
 	BirthDate         *string    `json:"birth_date"`
 	ShowAge           bool       `json:"show_age"`
-	ShowBiography     bool       `json:"show_biography"`
-	ShowAvatar        bool       `json:"show_avatar"`
 	ShowFollowers     bool       `json:"show_followers"`
 	ShowFollowing     bool       `json:"show_following"`
 	HasAvatar         bool       `json:"has_avatar"`

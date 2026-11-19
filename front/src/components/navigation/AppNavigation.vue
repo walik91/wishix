@@ -1,23 +1,22 @@
 <script setup>
 import { t } from '../../i18n.js'
 import AppIcon from '../ui/AppIcon.vue'
-defineProps({ profileAvailable: Boolean })
+defineProps({ profileAvailable: Boolean, profileActive: Boolean })
 defineEmits(['profile'])
 const inWishes = window.location.pathname.startsWith('/my/wishes')
 const inLists = window.location.pathname.startsWith('/my/lists')
 const inSearch = window.location.pathname === '/my/search'
 const inFollowing = window.location.pathname === '/my/following'
-const inProfile = window.location.pathname === '/my/profile'
 </script>
 
 <template>
   <nav class="app-navigation" :aria-label="t('my.navigation')">
-    <a class="nav-item" :class="{ active: !inLists && !inWishes && !inSearch && !inFollowing && !inProfile }" href="/my" :aria-current="!inLists && !inWishes && !inSearch && !inFollowing && !inProfile ? 'page' : undefined"><AppIcon name="home" /><span>{{ t('auth.my') }}</span></a>
+    <a class="nav-item" :class="{ active: !inLists && !inWishes && !inSearch && !inFollowing && !profileActive }" href="/my" :aria-current="!inLists && !inWishes && !inSearch && !inFollowing && !profileActive ? 'page' : undefined"><AppIcon name="home" /><span>{{ t('auth.my') }}</span></a>
     <a class="nav-item" :class="{ active: inWishes }" href="/my/wishes" :aria-current="inWishes ? 'page' : undefined"><AppIcon name="heart" /><span>{{ t('my.myWishes') }}</span></a>
     <a class="nav-item" :class="{ active: inLists }" href="/my/lists" :aria-current="inLists ? 'page' : undefined"><AppIcon name="list" /><span>{{ t('lists.nav') }}</span></a>
     <a class="nav-item" :class="{ active: inSearch }" href="/my/search" :aria-current="inSearch ? 'page' : undefined"><AppIcon name="search" /><span>{{ t('my.search') }}</span></a>
     <a class="nav-item following" :class="{ active: inFollowing }" href="/my/following" :aria-current="inFollowing ? 'page' : undefined"><AppIcon name="users" /><span>{{ t('my.following') }}</span></a>
-    <button class="nav-item" :class="{ active: inProfile }" type="button" :disabled="!profileAvailable" @click="$emit('profile')"><AppIcon name="user" /><span>{{ t('my.profile') }}</span></button>
+    <button class="nav-item" :class="{ active: profileActive }" type="button" :disabled="!profileAvailable" @click="$emit('profile')"><AppIcon name="user" /><span>{{ t('my.profile') }}</span></button>
   </nav>
 </template>
 

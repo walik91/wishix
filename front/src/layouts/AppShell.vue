@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { locale, t } from '../i18n.js'
 import { getCollectionSetting, setCollectionSetting } from '../api/lists.js'
 import { getProfileName, setProfileName } from '../api/search.js'
@@ -16,14 +16,19 @@ import SiteFooter from '../components/layout/SiteFooter.vue'
 import SocialAuthButtons from '../components/auth/SocialAuthButtons.vue'
 import CodeVerification from '../components/auth/CodeVerification.vue'
 import TextField from '../components/ui/TextField.vue'
+import ProfilePage from '../pages/ProfilePage.vue'
 import logo from '../assets/brand/logo-lockup.svg'
 
 const { user, checking, unavailable, signOut, refresh } = useSession()
 defineEmits(['cookie-settings'])
 const account = computed(() => !checking.value && !unavailable.value ? user.value : null)
+const profileAccount = computed(() => !unavailable.value ? user.value : null)
 const googleResult = new URLSearchParams(window.location.search).get('google')
 const facebookResult = new URLSearchParams(window.location.search).get('facebook')
-const profileOpen = ref(['linked', 'error', 'conflict'].includes(googleResult) || ['linked', 'error', 'conflict'].includes(facebookResult) || new URLSearchParams(window.location.search).has('add_email'))
+const profileLink = window.location.pathname.replace(/\/+$/, '') === '/my/profile'
+const profileOpen = ref(profileLink || ['linked', 'error', 'conflict'].includes(googleResult) || ['linked', 'error', 'conflict'].includes(facebookResult) || new URLSearchParams(window.location.search).has('add_email'))
+const profileSection = ref(profileLink ? 'profile' : 'general'), profileVisited = ref(profileLink)
+const profileDialog = ref(null)
 const googleEnabled = ref(false), googleLinked = ref(false), googleBusy = ref(false), googleError = ref('')
 const facebookEnabled = ref(false), facebookLinked = ref(false), facebookBusy = ref(false), facebookError = ref('')
 const emailInput = ref(''), emailChallenge = ref('')
@@ -33,7 +38,11 @@ const error = ref('')
 const collectionEnabled = ref(false), collectionLoading = ref(false), collectionReady = ref(false), collectionError = ref('')
 const displayName = ref(''), nameReady = ref(false), nameLoading = ref(false), nameError = ref(''), nameSaved = ref(false)
 watch(profileOpen, async open => {
-  if (!open) return
+  if (!open) {
+    profileSection.value = 'general'; profileVisited.value = false
+    if (window.location.pathname.replace(/\/+$/, '') === '/my/profile') window.history.replaceState(null, '', '/my')
+    return
+  }
   nameLoading.value = true; nameReady.value = false; nameError.value = ''; nameSaved.value = false
   try { const data = await getProfileName(); displayName.value = data.display_name; nameReady.value = true }
   catch { nameError.value = t('profile.nameError') }
@@ -47,6 +56,12 @@ watch(profileOpen, async open => {
   catch { collectionError.value = t('profile.settingsError') }
   finally { collectionLoading.value = false }
 }, { immediate: true })
+function selectProfileSection(section) {
+  if (profileSection.value === section) return
+  profileSection.value = section
+  if (section === 'profile') profileVisited.value = true
+  nextTick(() => profileDialog.value?.$el.scrollTo({ top: 0 }))
+}
 watch(displayName, () => { nameSaved.value = false })
 async function saveName() {
   if (nameLoading.value) return
@@ -97,7 +112,7 @@ async function logout() {
       <a class="brand" href="/my" :aria-label="t('appName')">
         <img :src="logo" :alt="t('appName')" width="147" height="45" />
       </a>
-      <AppNavigation :profile-available="!!account" @profile="profileOpen = true" />
+      <AppNavigation :profile-available="!!account" :profile-active="profileOpen" @profile="profileOpen = true" />
       <div class="sidebar-note">
         <AppIcon name="heart" />
         <p>{{ t('my.sidebarNote') }}</p>
@@ -135,26 +150,29 @@ async function logout() {
     </div>
 
     <div class="bottom-navigation">
-      <AppNavigation :profile-available="!!account" @profile="profileOpen = true" />
+      <AppNavigation :profile-available="!!account" :profile-active="profileOpen" @profile="profileOpen = true" />
     </div>
 
-    <UiDialog v-model:open="profileOpen" class="profile-dialog" :title="t('my.profile')">
-      <template v-if="account">
+    <UiDialog ref="profileDialog" v-model:open="profileOpen" class="profile-dialog" :title="t('my.profile')">
+      <template v-if="profileAccount">
         <div class="profile-layout">
-          <aside class="profile-sections" :aria-label="t('my.profile')">
-            <div class="profile-section-current"><AppIcon name="user" /><span>{{ t('profile.general') }}</span></div>
-          </aside>
-          <div class="profile-content">
+          <nav class="profile-sections" :aria-label="t('my.profile')">
+            <div class="profile-section-list">
+            <button type="button" class="profile-section" :class="{ active: profileSection === 'general' }" :aria-pressed="profileSection === 'general'" @click="selectProfileSection('general')"><AppIcon name="user" /><span>{{ t('profile.general') }}</span></button>
+            <button type="button" class="profile-section" :class="{ active: profileSection === 'profile' }" :aria-pressed="profileSection === 'profile'" @click="selectProfileSection('profile')"><AppIcon name="users" /><span>{{ t('my.profile') }}</span></button>
+            </div>
+          </nav>
+          <div v-show="profileSection === 'general'" class="profile-content">
             <div class="profile-identity">
-              <UserAvatar :username="account.username" />
+              <UserAvatar :username="profileAccount.username" />
               <div>
-                <strong>{{ account.username }}</strong>
+                <strong>{{ profileAccount.username }}</strong>
                 <p>{{ t('my.accountDetails') }}</p>
               </div>
             </div>
             <dl class="profile-details">
-              <div><dt>{{ t('register.username') }}</dt><dd>{{ account.username }}</dd></div>
-              <div><dt>{{ t('login.email') }}</dt><dd>{{ account.email || t('profile.noEmail') }}</dd></div>
+              <div><dt>{{ t('register.username') }}</dt><dd>{{ profileAccount.username }}</dd></div>
+              <div><dt>{{ t('login.email') }}</dt><dd>{{ profileAccount.email || t('profile.noEmail') }}</dd></div>
             </dl>
             <form class="name-setting" @submit.prevent="saveName">
               <div class="name-field-row">
@@ -164,7 +182,7 @@ async function logout() {
               <p v-if="nameSaved" role="status">{{ t('profile.nameSaved') }}</p>
               <p v-if="nameError" class="auth-error" role="alert">{{ nameError }}</p>
             </form>
-            <div v-if="!account.email" class="email-setting">
+            <div v-if="!profileAccount.email" class="email-setting">
               <p>{{ t('profile.emailForMail') }}</p>
               <template v-if="emailChallenge"><p>{{ t('reservation.codeSent') }} {{ emailInput }}</p><CodeVerification :busy="emailBusy" :remaining="emailRemaining" @verify="verifyAddedEmail" @resend="resendEmailCode" /></template>
               <form v-else @submit.prevent="sendEmailCode">
@@ -194,14 +212,14 @@ async function logout() {
             </div>
             <div class="profile-actions">
               <UiButton class="profile-public-link" variant="secondary" href="/my/following">{{ t('social.title') }}</UiButton>
-              <UiButton class="profile-public-link" variant="secondary" href="/my/profile">{{ t('profile.editProfile') }}</UiButton>
-              <UiButton class="profile-public-link" variant="secondary" :href="`/u/${encodeURIComponent(account.username)}`">{{ t('lists.publicProfile') }}</UiButton>
+              <UiButton class="profile-public-link" variant="secondary" :href="`/u/${encodeURIComponent(profileAccount.username)}`">{{ t('lists.publicProfile') }}</UiButton>
               <UiButton class="logout-button" variant="secondary" :loading="signingOut" @click="logout">
                 <AppIcon name="logout" />{{ t('auth.logout') }}
               </UiButton>
             </div>
             <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
           </div>
+          <div v-if="profileOpen && profileVisited" v-show="profileSection === 'profile'" class="profile-content"><ProfilePage /></div>
         </div>
       </template>
     </UiDialog>
@@ -225,9 +243,12 @@ async function logout() {
 .app-content { flex: 1; width: 100%; max-width: var(--wx-content-max); margin-inline: auto; padding: var(--wx-space-6) var(--wx-space-4); }
 .bottom-navigation { position: fixed; z-index: 5; inset: auto 0 0; padding: var(--wx-space-2) var(--wx-space-2) max(var(--wx-space-2), env(safe-area-inset-bottom)); border-top: 1px solid var(--wx-border); background: var(--wx-surface); }
 .profile-layout { min-width: 0; }
-.profile-sections { padding: var(--wx-space-3) var(--wx-space-5) 0; }
-.profile-section-current { display: flex; align-items: center; gap: var(--wx-space-2); width: fit-content; padding: var(--wx-space-2) var(--wx-space-3); border-radius: var(--wx-radius-sm); color: var(--wx-primary); background: var(--wx-lavender); font-size: var(--wx-text-sm); font-weight: 600; }
-.profile-section-current .icon { width: 18px; height: 18px; }
+.profile-sections { position: sticky; z-index: 1; top: calc(45px + var(--wx-space-3) + var(--wx-space-3)); padding: var(--wx-space-2) var(--wx-space-5); border-bottom: 1px solid var(--wx-border); background: var(--wx-surface); }
+.profile-section-list { display: flex; gap: var(--wx-space-2); }
+.profile-section { display: flex; align-items: center; gap: var(--wx-space-2); min-width: 44px; min-height: 44px; padding: var(--wx-space-2) var(--wx-space-3); border: 0; border-radius: var(--wx-radius-sm); color: var(--wx-text-muted); background: transparent; font-size: var(--wx-text-sm); font-weight: 600; cursor: pointer; }
+.profile-section:hover { background: var(--wx-background); }
+.profile-section.active { color: var(--wx-primary); background: var(--wx-lavender); }
+.profile-section .icon { width: 18px; height: 18px; }
 .profile-content { min-width: 0; padding: var(--wx-space-5); }
 .profile-identity { display: flex; align-items: center; gap: var(--wx-space-3); min-width: 0; }
 .profile-identity strong { line-height: 1.5; }
@@ -250,8 +271,9 @@ async function logout() {
 .profile-actions > * { flex: 1 1 180px; }
 @media (min-width: 48rem) {
   .profile-layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); }
-  .profile-sections { padding: var(--wx-space-5) var(--wx-space-3); border-right: 1px solid var(--wx-border); }
-  .profile-section-current { width: 100%; min-height: 44px; }
+  .profile-sections { position: static; padding: var(--wx-space-5) var(--wx-space-3); border-right: 1px solid var(--wx-border); border-bottom: 0; }
+  .profile-section-list { position: sticky; top: calc(45px + var(--wx-space-3) + var(--wx-space-3) + var(--wx-space-5)); flex-direction: column; }
+  .profile-section { width: 100%; text-align: left; }
   .profile-content { padding: var(--wx-space-6); }
   .profile-details { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--wx-space-5); }
   .name-field-row { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }

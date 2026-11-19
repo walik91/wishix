@@ -263,7 +263,7 @@ func (r *Lists) PublicProfile(ctx context.Context, username string) (string, str
 
 func (r *Lists) SearchPeople(ctx context.Context, query, cursor string, limit int) ([]services.PublicPerson, error) {
 	people := make([]services.PublicPerson, 0)
-	err := r.Ctx(ctx).Table("users").Select("username, display_name, (show_avatar AND EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id)) AS has_avatar").
+	err := r.Ctx(ctx).Table("users").Select("username, display_name, EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id) AS has_avatar").
 		Where("username > ? AND (strpos(lower(username), lower(?)) > 0 OR strpos(lower(display_name), lower(?)) > 0)", cursor, query, query).
 		Order("username ASC").Limit(limit).Scan(&people).Error
 	return people, err

@@ -11,6 +11,7 @@ function syncOpen() {
 }
 function close() { if (!props.busy) dialog.value.close() }
 function trapFocus(event) {
+  if (event.target.closest('dialog') !== dialog.value) return
   if (event.key !== 'Tab') return
   const targets = [...dialog.value.querySelectorAll('a[href], button, input, select, textarea, [tabindex]')]
     .filter(element => !element.disabled && element.tabIndex >= 0 && element.getClientRects().length)
@@ -52,7 +53,7 @@ watch(() => props.open, syncOpen)
   .profile-dialog { scrollbar-width: thin; scrollbar-color: #a0a0a0 transparent; }
 }
 .profile-dialog { padding: 0 0 max(var(--wx-space-4), env(safe-area-inset-bottom)); }
-.profile-dialog > header { margin: 0; padding: var(--wx-space-3) var(--wx-space-5); border-bottom: 1px solid var(--wx-border); }
+.profile-dialog > header { position: sticky; z-index: 2; top: 0; margin: 0; padding: var(--wx-space-3) var(--wx-space-5); border-bottom: 1px solid var(--wx-border); background: var(--wx-surface); }
 .profile-dialog > header h2 { font-size: var(--wx-text-lg); }
 header { display: flex; align-items: center; justify-content: space-between; gap: var(--wx-space-4); margin-bottom: var(--wx-space-6); }
 h2 { margin: 0; font-size: var(--wx-text-xl); line-height: 1.3; }

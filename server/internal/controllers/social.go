@@ -65,18 +65,16 @@ func (c *Social) saveSettings(w http.ResponseWriter, r *http.Request, owner stri
 		Biography     *string `json:"biography"`
 		BirthDate     *string `json:"birth_date"`
 		ShowAge       *bool   `json:"show_age"`
-		ShowBiography *bool   `json:"show_biography"`
-		ShowAvatar    *bool   `json:"show_avatar"`
 		ShowFollowers *bool   `json:"show_followers"`
 		ShowFollowing *bool   `json:"show_following"`
 	}
 	if err := readListJSON(r, &input); err != nil {
 		return err
 	}
-	if input.Biography == nil || input.ShowAge == nil || input.ShowBiography == nil || input.ShowAvatar == nil || input.ShowFollowers == nil || input.ShowFollowing == nil {
+	if input.Biography == nil || input.ShowAge == nil || input.ShowFollowers == nil || input.ShowFollowing == nil {
 		return services.ErrInvalidInput
 	}
-	value := services.ProfileSettings{Biography: *input.Biography, BirthDate: input.BirthDate, ShowAge: *input.ShowAge, ShowBiography: *input.ShowBiography, ShowAvatar: *input.ShowAvatar, ShowFollowers: *input.ShowFollowers, ShowFollowing: *input.ShowFollowing}
+	value := services.ProfileSettings{Biography: *input.Biography, BirthDate: input.BirthDate, ShowAge: *input.ShowAge, ShowFollowers: *input.ShowFollowers, ShowFollowing: *input.ShowFollowing}
 	if err := c.service.SaveSettings(r.Context(), owner, value); err != nil {
 		return err
 	}

@@ -22,31 +22,31 @@ func TestIntegrationSocialPrivacyAndProfile(t *testing.T) {
 	alice := f.account(t, "social-alice@example.test", "socialalice")
 	bob := f.account(t, "social-bob@example.test", "socialbob")
 	carol := f.account(t, "social-carol@example.test", "socialcarol")
-	details := map[string]any{"biography": "Private description", "birth_date": "2000-02-29", "show_age": false, "show_biography": false, "show_avatar": false, "show_followers": false, "show_following": false}
+	details := map[string]any{"biography": "Public description", "birth_date": "2000-02-29", "show_age": false, "show_followers": false, "show_following": false}
 	f.listCall(t, "PUT", "/api/profile/details", details, alice, 200)
 	private := f.listCall(t, "GET", "/api/profile/details", nil, alice, 200)
-	if private["birth_date"] != "2000-02-29" || private["biography"] != "Private description" {
+	if private["birth_date"] != "2000-02-29" || private["biography"] != "Public description" {
 		t.Fatal("private settings missing", private)
 	}
 	public := f.listCall(t, "GET", "/api/public/profiles/socialalice/details", nil, nil, 200)
-	if public["birth_date"] != nil || public["age"] != nil || public["biography"] != nil || public["has_avatar"] != false {
-		t.Fatal("private details leaked", public)
+	if public["birth_date"] != nil || public["age"] != nil || public["biography"] != "Public description" || public["has_avatar"] != false {
+		t.Fatal("public description or private age incorrect", public)
 	}
 	image := testImage(t, color.RGBA{R: 180, G: 60, B: 80, A: 255})
 	if res := f.imageRequest(t, "PUT", "/api/profile/avatar", image, "image/png", alice, listOrigin); res.Code != 200 {
 		t.Fatalf("upload: %d %s", res.Code, res.Body.String())
 	}
-	if res := f.imageRequest(t, "GET", "/api/public/profiles/socialalice/avatar", nil, "", nil, listOrigin); res.Code != 404 {
-		t.Fatal("private avatar exposed", res.Code)
+	if res := f.imageRequest(t, "GET", "/api/public/profiles/socialalice/avatar", nil, "", nil, listOrigin); res.Code != 200 || res.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatal("uploaded avatar unavailable", res.Code)
 	}
 	searchItem := f.listCall(t, "GET", "/api/search/people?q=socialalice", nil, bob, 200)["people"].([]any)[0].(map[string]any)
-	if searchItem["has_avatar"] != nil {
-		t.Fatal("private avatar disclosed in search", searchItem)
+	if searchItem["has_avatar"] != true {
+		t.Fatal("public avatar missing in search", searchItem)
 	}
-	details["show_age"], details["show_biography"], details["show_avatar"] = true, true, true
+	details["show_age"] = true
 	f.listCall(t, "PUT", "/api/profile/details", details, alice, 200)
 	public = f.listCall(t, "GET", "/api/public/profiles/socialalice/details", nil, nil, 200)
-	if public["age"] == nil || public["birth_date"] != nil || public["biography"] != "Private description" || public["has_avatar"] != true {
+	if public["age"] == nil || public["birth_date"] != nil || public["biography"] != "Public description" || public["has_avatar"] != true {
 		t.Fatal("public details incorrect", public)
 	}
 	if res := f.imageRequest(t, "GET", "/api/public/profiles/socialalice/avatar", nil, "", nil, listOrigin); res.Code != 200 || res.Header().Get("Content-Type") != "image/jpeg" {
@@ -56,10 +56,11 @@ func TestIntegrationSocialPrivacyAndProfile(t *testing.T) {
 	if searchItem["has_avatar"] != true {
 		t.Fatal("public avatar missing in search", searchItem)
 	}
-	details["show_avatar"] = false
+	details["show_age"] = false
 	f.listCall(t, "PUT", "/api/profile/details", details, alice, 200)
-	if res := f.imageRequest(t, "GET", "/api/public/profiles/socialalice/avatar", nil, "", nil, listOrigin); res.Code != 404 {
-		t.Fatal("avatar privacy not revoked", res.Code)
+	public = f.listCall(t, "GET", "/api/public/profiles/socialalice/details", nil, nil, 200)
+	if public["age"] != nil || public["birth_date"] != nil || public["has_avatar"] != true {
+		t.Fatal("age privacy not restored", public)
 	}
 	if res := f.imageRequest(t, "PUT", "/api/profile/avatar", image, "image/png", alice, "https://attacker.test"); res.Code != 403 {
 		t.Fatal("cross origin upload", res.Code)
@@ -72,6 +73,29 @@ func TestIntegrationSocialPrivacyAndProfile(t *testing.T) {
 	f.listCall(t, "PUT", "/api/social/socialalice/follow", map[string]any{"follow": true}, alice, 400)
 	f.listCall(t, "PUT", "/api/social/socialalice/follow", map[string]any{"follow": true}, nil, 401)
 	f.listCall(t, "GET", "/api/social/socialalice/people/followers", nil, carol, 404)
+	f.listCall(t, "GET", "/api/social/socialalice/people/following", nil, carol, 404)
+	if items := f.listCall(t, "GET", "/api/social/socialbob/people/followers", nil, bob, 200)["people"].([]any); len(items) != 1 || items[0].(map[string]any)["has_avatar"] != true {
+		t.Fatal("public avatar missing in social list", items)
+	}
+	f.listCall(t, "DELETE", "/api/profile/avatar", nil, alice, 200)
+	if res := f.imageRequest(t, "GET", "/api/public/profiles/socialalice/avatar", nil, "", nil, listOrigin); res.Code != 404 {
+		t.Fatal("deleted avatar remained public", res.Code)
+	}
+	details["biography"] = ""
+	f.listCall(t, "PUT", "/api/profile/details", details, alice, 200)
+	public = f.listCall(t, "GET", "/api/public/profiles/socialalice/details", nil, nil, 200)
+	if public["has_avatar"] != false || public["biography"] != nil {
+		t.Fatal("removed public details still visible", public)
+	}
+	details["show_following"] = true
+	f.listCall(t, "PUT", "/api/profile/details", details, alice, 200)
+	if items := f.listCall(t, "GET", "/api/social/socialalice/people/following", nil, nil, 200)["people"].([]any); len(items) != 1 {
+		t.Fatal("public following", items)
+	}
+	f.listCall(t, "GET", "/api/social/socialalice/people/followers", nil, nil, 404)
+	details["show_following"] = false
+	f.listCall(t, "PUT", "/api/profile/details", details, alice, 200)
+	f.listCall(t, "GET", "/api/social/socialalice/people/following", nil, nil, 404)
 	if items := f.listCall(t, "GET", "/api/social/socialalice/people/followers", nil, alice, 200)["people"].([]any); len(items) != 1 {
 		t.Fatal("owner followers", items)
 	}

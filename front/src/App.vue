@@ -24,7 +24,6 @@ import PublicProfilePage from './pages/PublicProfilePage.vue'
 import PublicCollectionPage from './pages/PublicCollectionPage.vue'
 import ReservationPage from './pages/ReservationPage.vue'
 import SearchPage from './pages/SearchPage.vue'
-import ProfilePage from './pages/ProfilePage.vue'
 import SocialPeoplePage from './pages/SocialPeoplePage.vue'
 import { useSession } from './composables/useSession.js'
 import { isNamedSharedListPath } from './sharedListPath.js'
@@ -63,9 +62,8 @@ onMounted(async () => {
     <RegisterPage v-else-if="page === '/register'" />
     <RecoveryPage v-else-if="page === '/forgot-password'" />
     <ReservationPage v-else-if="page === '/reservation'" />
-    <MyPage v-else-if="page === '/my'" />
+    <MyPage v-else-if="page === '/my' || page === '/my/profile'" />
     <SearchPage v-else-if="page === '/my/search'" />
-    <ProfilePage v-else-if="page === '/my/profile'" />
     <SocialPeoplePage v-else-if="page === '/my/following'" own />
     <WishesPage v-else-if="page === '/my/wishes'" />
     <NewWishPage v-else-if="page === '/my/wishes/new'" />

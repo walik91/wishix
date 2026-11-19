@@ -44,7 +44,7 @@ try {
   const gp = await guest.newPage()
   await gp.goto(`${origin}/u/${oldName}`)
   assert.equal(new URL(gp.url()).pathname, `/u/${newName}`)
-  await gp.getByRole('heading', { name: newName }).waitFor()
+  await gp.getByRole('heading', { name: oldName }).waitFor()
   const publicDetails = await call(guest, 'GET', `/public/profiles/${newName}/details`)
   assert.equal(typeof publicDetails.age, 'number'); assert.equal(publicDetails.birth_date, undefined)
   const donorPage = await giver.newPage()
