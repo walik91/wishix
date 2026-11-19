@@ -560,32 +560,31 @@ func (c *Lists) searchPeople(w http.ResponseWriter, r *http.Request, owner strin
 	return nil
 }
 func (c *Lists) getProfileName(w http.ResponseWriter, r *http.Request, owner string) error {
-	name, public, err := c.service.ProfileName(r.Context(), owner)
+	name, err := c.service.ProfileName(r.Context(), owner)
 	if err != nil {
 		return err
 	}
-	c.auth.write(w, 200, map[string]any{"display_name": name, "show_display_name": public})
+	c.auth.write(w, 200, map[string]any{"display_name": name})
 	return nil
 }
 func (c *Lists) setProfileName(w http.ResponseWriter, r *http.Request, owner string) error {
 	var input struct {
-		Name   *string `json:"display_name"`
-		Public *bool   `json:"show_display_name"`
+		Name *string `json:"display_name"`
 	}
 	if err := readListJSON(r, &input); err != nil {
 		return err
 	}
-	if input.Name == nil || input.Public == nil {
+	if input.Name == nil {
 		return services.ErrInvalidInput
 	}
-	if err := c.service.SetProfileName(r.Context(), owner, *input.Name, *input.Public); err != nil {
+	if err := c.service.SetProfileName(r.Context(), owner, *input.Name); err != nil {
 		return err
 	}
-	name, public, err := c.service.ProfileName(r.Context(), owner)
+	name, err := c.service.ProfileName(r.Context(), owner)
 	if err != nil {
 		return err
 	}
-	c.auth.write(w, 200, map[string]any{"display_name": name, "show_display_name": public})
+	c.auth.write(w, 200, map[string]any{"display_name": name})
 	return nil
 }
 

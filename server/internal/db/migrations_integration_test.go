@@ -57,7 +57,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("version: got %d, want %d; %v", version, want, err)
 		}
 	}
-	assertVersion(12)
+	assertVersion(13)
 	if _, err := pool.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'migration_test', 'migration@example.test', 'test-hash', now(), now())`); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 		t.Fatal("repeated up lost wishes or shop links")
 	}
 	statuses, err := migrator.Status(ctx)
-	if err != nil || len(statuses) != 12 {
+	if err != nil || len(statuses) != 13 {
 		t.Fatal("incorrect Goose status:", err)
 	}
 	for _, status := range statuses {
@@ -86,6 +86,10 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("migration not applied: %v", status)
 		}
 	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("display name defaults down:", err)
+	}
+	assertVersion(12)
 	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("social profiles down:", err)
 	}
@@ -191,20 +195,8 @@ func TestIntegrationListsUpgradePreservesExistingCollection(t *testing.T) {
 		}
 	}
 	assertData()
-	if _, err := migrator.Down(ctx); err != nil {
-		t.Fatal("facebook rollback", err)
-	}
-	if _, err := migrator.Down(ctx); err != nil {
-		t.Fatal("google rollback", err)
-	}
-	if _, err := migrator.Down(ctx); err != nil {
-		t.Fatal("reservation message rollback", err)
-	}
-	if _, err := migrator.Down(ctx); err != nil {
-		t.Fatal("reservations rollback", err)
-	}
-	if _, err := migrator.Down(ctx); err != nil {
-		t.Fatal("timezone rollback", err)
+	if _, err := migrator.DownTo(ctx, 4); err != nil {
+		t.Fatal("rollback to lists migration", err)
 	}
 	if err := pool.QueryRowContext(ctx, `SELECT lists_version FROM wishes WHERE id = '00000000-0000-4000-8000-000000000002'`).Scan(&count); err != nil || count != 1 {
 		t.Fatal("existing wish membership version not initialized", err, count)
@@ -248,7 +240,40 @@ func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 		t.Fatal("legacy history was changed")
 	}
 	version, err := fresh.GetDBVersion(ctx)
-	if err != nil || version != 12 {
+	if err != nil || version != 13 {
 		t.Fatal("Goose did not record the adopted version")
+	}
+}
+
+func TestIntegrationDisplayNameUpgradePreservesExistingNames(t *testing.T) {
+	pool, migrator, _ := liveMigrator(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	if _, err := migrator.UpTo(ctx, 12); err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at, display_name, show_display_name) VALUES ('00000000-0000-4000-8000-000000000011', 'empty_user', 'empty@example.test', 'x', now(), now(), '', false)`,
+		`INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at, display_name, show_display_name) VALUES ('00000000-0000-4000-8000-000000000012', 'named_user', 'named@example.test', 'x', now(), now(), 'Валентин', false)`,
+	} {
+		if _, err := pool.ExecContext(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := migrator.Apply(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for username, want := range map[string]string{"empty_user": "empty_user", "named_user": "Валентин"} {
+		var got string
+		if err := pool.QueryRowContext(ctx, `SELECT display_name FROM users WHERE username = $1`, username).Scan(&got); err != nil || got != want {
+			t.Fatalf("%s: name %q, want %q: %v", username, got, want, err)
+		}
+	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var name string
+	if err := pool.QueryRowContext(ctx, `SELECT display_name FROM users WHERE username = 'named_user'`).Scan(&name); err != nil || name != "Валентин" {
+		t.Fatal("rollback must retain the name", name, err)
 	}
 }

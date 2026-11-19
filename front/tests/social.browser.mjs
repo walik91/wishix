@@ -14,7 +14,7 @@ try {
     const page = await context.newPage()
     page.on('pageerror', e => errors.push(e.message))
     page.on('console', m => { if (m.text().includes('[Vue warn]')) errors.push(m.text()) })
-    let username = 'example', name = { display_name: '', show_display_name: false }, state = { self: false, following: false, blocked: false, can_follow: true }
+    let username = 'example', name = { display_name: 'example' }, state = { self: false, following: false, blocked: false, can_follow: true }
     let details = { username, biography: '', birth_date: null, show_age: false, show_biography: false, show_avatar: false, show_followers: false, show_following: false, has_avatar: false, username_changed_at: null }
     let reports = [], failDetails = false, failState = false
     await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { username, email: 'owner@example.test' } } }))
@@ -36,6 +36,19 @@ try {
     await page.route('**/api/social/*/people/*?*', route => route.fulfill({ json: { people: [{ username: 'bob', display_name: 'Bob Example' }], next_cursor: '' } }))
     await page.goto(`${origin}/my/profile`)
     await page.getByRole('heading', { name: texts[lang]['profile.editProfile'] }).waitFor()
+    const nameField = page.locator('#profile-name-page')
+    await nameField.waitFor()
+    assert.equal(await nameField.inputValue(), 'example')
+    const nameForm = nameField.locator('xpath=ancestor::form')
+    assert.equal(await nameForm.locator('input[type=checkbox]').count(), 0)
+    await nameField.fill('   ')
+    await nameForm.getByRole('button', { name: texts[lang]['profile.saveName'] }).click()
+    await page.getByRole('alert').getByText(texts[lang]['profile.nameRequired']).waitFor()
+    assert.equal(name.display_name, 'example')
+    await nameField.fill('Bob Example')
+    await nameForm.getByRole('button', { name: texts[lang]['profile.saveName'] }).click()
+    await page.getByRole('status').getByText(texts[lang]['profile.saved']).waitFor()
+    assert.deepEqual(name, { display_name: 'Bob Example' })
     await page.locator('input[type=file]').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aXcAAAAASUVORK5CYII=', 'base64') })
     await page.getByRole('button', { name: texts[lang]['profile.removeAvatar'] }).waitFor()
     await page.getByLabel(texts[lang]['profile.birthDate'], { exact: true }).fill('2000-02-29')

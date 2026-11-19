@@ -203,7 +203,7 @@ func (g *Google) Complete(ctx context.Context, token, username, session string) 
 			return ErrRegistrationUnavailable
 		}
 		now := g.auth.now()
-		user := &models.User{ID: security.UUID(), Username: username, Email: pending.Email, EmailVerifiedAt: now, CreatedAt: now}
+		user := &models.User{ID: security.UUID(), Username: username, DisplayName: username, Email: pending.Email, EmailVerifiedAt: now, CreatedAt: now}
 		if err := g.auth.repo.CreateUser(txCtx, user); err != nil {
 			return err
 		}

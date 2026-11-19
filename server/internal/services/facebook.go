@@ -209,7 +209,7 @@ func (g *Facebook) Complete(ctx context.Context, token, username, session string
 			return ErrRegistrationUnavailable
 		}
 		now := g.auth.now()
-		user := &models.User{ID: security.UUID(), Username: username, Email: pending.Email, CreatedAt: now}
+		user := &models.User{ID: security.UUID(), Username: username, DisplayName: username, Email: pending.Email, CreatedAt: now}
 		if pending.Email != "" {
 			user.EmailVerifiedAt = now
 		}

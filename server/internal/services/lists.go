@@ -64,8 +64,8 @@ type ListRepository interface {
 	GuestImage(context.Context, string, string, string) (*models.WishImage, error)
 	PublicProfile(context.Context, string) (string, string, bool, []models.Wishlist, error)
 	SearchPeople(context.Context, string, string, int) ([]PublicPerson, error)
-	ProfileName(context.Context, string) (string, bool, error)
-	SetProfileName(context.Context, string, string, bool) error
+	ProfileName(context.Context, string) (string, error)
+	SetProfileName(context.Context, string, string) error
 	CollectionSetting(context.Context, string) (bool, error)
 	SetCollectionSetting(context.Context, string, bool) error
 	PublicCollection(context.Context, string) (bool, []models.Wish, error)
@@ -650,21 +650,21 @@ func (s *Lists) SearchPeople(ctx context.Context, owner, query, cursor string) (
 	return people, next, nil
 }
 
-func (s *Lists) ProfileName(ctx context.Context, owner string) (string, bool, error) {
+func (s *Lists) ProfileName(ctx context.Context, owner string) (string, error) {
 	if owner == "" {
-		return "", false, ErrSession
+		return "", ErrSession
 	}
 	return s.repo.ProfileName(ctx, owner)
 }
-func (s *Lists) SetProfileName(ctx context.Context, owner, name string, public bool) error {
+func (s *Lists) SetProfileName(ctx context.Context, owner, name string) error {
 	if owner == "" {
 		return ErrSession
 	}
 	name = strings.TrimSpace(name)
-	if !validProfileText(name) || (name == "" && public) {
+	if name == "" || !validProfileText(name) {
 		return ErrInvalidInput
 	}
-	return s.repo.SetProfileName(ctx, owner, name, public)
+	return s.repo.SetProfileName(ctx, owner, name)
 }
 
 func (s *Lists) PublicProfile(ctx context.Context, username string) (string, string, bool, []models.Wishlist, error) {

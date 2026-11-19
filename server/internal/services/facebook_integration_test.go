@@ -46,7 +46,7 @@ func TestIntegrationFacebookWithoutEmailAndEmailConfirmation(t *testing.T) {
 	first := create("facebook_first", "facebook-one")
 	second := create("facebook_second", "facebook-two")
 	current, err := f.auth.Current(ctx, first.Token)
-	if err != nil || current.Email != "" || !current.EmailVerifiedAt.IsZero() {
+	if err != nil || current.Email != "" || !current.EmailVerifiedAt.IsZero() || current.DisplayName != "facebook_first" {
 		t.Fatalf("email-less account: %v", err)
 	}
 	provider.identity.Subject = "facebook-one"

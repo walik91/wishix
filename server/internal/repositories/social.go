@@ -147,7 +147,7 @@ func (r *Social) People(ctx context.Context, viewer, username, kind, cursor stri
 		return nil, false, nil
 	}
 	people := make([]services.SocialPerson, 0)
-	query := r.Ctx(ctx).Table("users").Select("users.username, CASE WHEN users.show_display_name THEN users.display_name ELSE '' END AS display_name, (users.show_avatar AND EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id)) AS has_avatar").Where("users.username > ?", cursor)
+	query := r.Ctx(ctx).Table("users").Select("users.username, users.display_name, (users.show_avatar AND EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id)) AS has_avatar").Where("users.username > ?", cursor)
 	// Recheck visibility in the same statement that reads memberships, so a
 	// concurrent privacy change cannot disclose a previously public list.
 	if viewer != owner.ID && kind == "followers" {

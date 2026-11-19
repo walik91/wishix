@@ -87,7 +87,7 @@ func TestIntegrationGoogleHTTPRegistration(t *testing.T) {
 	if session == nil || !session.HttpOnly {
 		t.Fatal("missing session cookie")
 	}
-	if user, err := f.auth.Current(context.Background(), session.Value); err != nil || user.Email != "http-google@example.test" {
+	if user, err := f.auth.Current(context.Background(), session.Value); err != nil || user.Email != "http-google@example.test" || user.DisplayName != "http_google" {
 		t.Fatal("registration session is not usable")
 	}
 }

@@ -231,7 +231,7 @@ func (a *Auth) Verify(ctx context.Context, token, code string) (Authenticated, e
 			return ErrCode
 		}
 		now := a.now()
-		user := &models.User{ID: security.UUID(), Username: challenge.Username, Email: challenge.Email, PasswordHash: challenge.PasswordHash, EmailVerifiedAt: now, CreatedAt: now}
+		user := &models.User{ID: security.UUID(), Username: challenge.Username, DisplayName: challenge.Username, Email: challenge.Email, PasswordHash: challenge.PasswordHash, EmailVerifiedAt: now, CreatedAt: now}
 		if err := a.repo.CreateUser(txCtx, user); err != nil {
 			return err
 		}

@@ -54,7 +54,7 @@ onMounted(load)
     <UiSkeleton v-if="loading" class="list-form-skeleton" />
     <UiCard v-else-if="error" class="list-empty"><EmptyState icon="user" :title="t('lists.profileUnavailable')"><UiButton v-if="error !== 'list_not_found'" @click="load">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
     <template v-else>
-      <header class="list-page-heading"><div class="profile-heading"><UserAvatar :username="displayName || username" :src="details?.has_avatar ? publicAvatarURL(username) : ''" /><div><h1>{{ displayName || username }}</h1><p v-if="displayName" class="list-muted">@{{ username }}</p><p v-if="details?.age !== undefined && details?.age !== null" class="list-muted">{{ t('profile.age') }}: {{ details.age }}</p><p v-if="details?.biography" class="profile-biography">{{ details.biography }}</p></div></div></header>
+      <header class="list-page-heading"><div class="profile-heading"><UserAvatar :username="displayName || username" :src="details?.has_avatar ? publicAvatarURL(username) : ''" /><div><h1>{{ displayName || username }}</h1><p v-if="details?.age !== undefined && details?.age !== null" class="list-muted">{{ t('profile.age') }}: {{ details.age }}</p><p v-if="details?.biography" class="profile-biography">{{ details.biography }}</p></div></div></header>
       <p v-if="notice" role="status">{{ notice }}</p><p v-if="actionError && !dialog" class="profile-error" role="alert">{{ actionError }}</p>
       <div v-if="detailsError || stateError" class="profile-actions" role="alert"><span class="profile-error">{{ t(detailsError ? 'social.detailsError' : 'social.stateError') }}</span><UiButton variant="secondary" @click="detailsError ? load() : loadState()">{{ t('checkAgain') }}</UiButton></div>
       <div class="profile-actions">

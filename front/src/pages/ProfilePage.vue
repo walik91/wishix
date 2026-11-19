@@ -12,23 +12,23 @@ import UiSkeleton from '../components/ui/UiSkeleton.vue'
 import UserAvatar from '../components/ui/UserAvatar.vue'
 const { user, checking, unavailable, refresh } = useSession()
 const loading = ref(true), busy = ref(false), error = ref(''), notice = ref(''), settings = ref(null)
-const displayName = ref(''), showName = ref(false), username = ref(''), redirectOld = ref(true), confirmRename = ref(false), avatarVersion = ref(Date.now()), picker = ref(null)
+const displayName = ref(''), username = ref(''), redirectOld = ref(true), confirmRename = ref(false), avatarVersion = ref(Date.now()), picker = ref(null)
 const avatarURL = computed(() => settings.value?.has_avatar ? `/api/profile/avatar?v=${avatarVersion.value}` : '')
 watchEffect(() => { document.title = `${t('profile.editProfile')} · ${t('appName')}` })
 watch([user, checking, unavailable], async ([account, pending, failed]) => { if (account && !pending && !failed && !settings.value) await load() }, { immediate: true })
-watch(displayName, value => { if (!value.trim()) showName.value = false })
 watch(() => settings.value?.birth_date, value => { if (!value && settings.value) settings.value.show_age = false })
 async function load() {
   loading.value = true; error.value = ''
-  try { const [details, name] = await Promise.all([getProfileDetails(), getProfileName()]); details.birth_date ||= ''; settings.value = details; username.value = details.username; displayName.value = name.display_name; showName.value = name.show_display_name }
+  try { const [details, name] = await Promise.all([getProfileDetails(), getProfileName()]); details.birth_date ||= ''; settings.value = details; username.value = details.username; displayName.value = name.display_name }
   catch { error.value = t('profile.loadError') }
   finally { loading.value = false }
 }
 async function saveName() {
   if (busy.value) return
+  if (!displayName.value.trim()) { error.value = t('profile.nameRequired'); return }
   if ([...displayName.value.trim()].length > 100) { error.value = t('profile.nameTooLong'); return }
   busy.value = true; error.value = ''; notice.value = ''
-  try { const data = await setProfileName(displayName.value, !!displayName.value.trim() && showName.value); displayName.value = data.display_name; showName.value = data.show_display_name; notice.value = t('profile.saved') }
+  try { const data = await setProfileName(displayName.value); displayName.value = data.display_name; notice.value = t('profile.saved') }
   catch { error.value = t('profile.nameError') } finally { busy.value = false }
 }
 async function saveDetails() {
@@ -73,7 +73,7 @@ async function removeAvatar() {
         <h2>{{ t('profile.avatar') }}</h2><p>{{ t('profile.avatarHint') }}</p>
         <div class="avatar-row"><UserAvatar :username="username" :src="avatarURL" /><input ref="picker" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" tabindex="-1" :aria-label="t('profile.chooseAvatar')" :disabled="busy" @change="selectAvatar" /><UiButton variant="secondary" :disabled="busy" @click="picker.click()">{{ t('profile.chooseAvatar') }}</UiButton><UiButton v-if="settings.has_avatar" variant="secondary" :disabled="busy" @click="removeAvatar">{{ t('profile.removeAvatar') }}</UiButton></div>
       </UiCard>
-      <UiCard class="profile-panel"><form @submit.prevent="saveName"><h2>{{ t('profile.displayName') }}</h2><TextField id="profile-name-page" v-model="displayName" :label="t('profile.displayName')" :hint="t('profile.nameHint')" maxlength="200" :disabled="busy" /><label class="privacy"><input v-model="showName" type="checkbox" :disabled="busy || !displayName.trim()" />{{ t('profile.showName') }}</label><p>{{ t('profile.showNameHint') }}</p><UiButton type="submit" :loading="busy">{{ t('profile.saveName') }}</UiButton></form></UiCard>
+      <UiCard class="profile-panel"><form @submit.prevent="saveName"><h2>{{ t('profile.displayName') }}</h2><TextField id="profile-name-page" v-model="displayName" :label="t('profile.displayName')" :hint="t('profile.nameHint')" maxlength="200" required :disabled="busy" /><UiButton type="submit" :loading="busy">{{ t('profile.saveName') }}</UiButton></form></UiCard>
       <UiCard class="profile-panel"><form @submit.prevent="saveDetails"><h2>{{ t('profile.about') }}</h2>
         <TextField id="profile-birth-date" v-model="settings.birth_date" type="date" :label="t('profile.birthDate')" :hint="t('profile.birthDateHint')" :disabled="busy" />
         <label class="privacy"><input v-model="settings.show_age" type="checkbox" :disabled="busy || !settings.birth_date" />{{ t('profile.showAge') }}</label>

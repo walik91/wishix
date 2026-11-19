@@ -31,11 +31,11 @@ const { busy: emailBusy, error: emailError, remaining: emailRemaining, cooldown:
 const signingOut = ref(false)
 const error = ref('')
 const collectionEnabled = ref(false), collectionLoading = ref(false), collectionReady = ref(false), collectionError = ref('')
-const displayName = ref(''), showDisplayName = ref(false), nameReady = ref(false), nameLoading = ref(false), nameError = ref(''), nameSaved = ref(false)
+const displayName = ref(''), nameReady = ref(false), nameLoading = ref(false), nameError = ref(''), nameSaved = ref(false)
 watch(profileOpen, async open => {
   if (!open) return
   nameLoading.value = true; nameReady.value = false; nameError.value = ''; nameSaved.value = false
-  try { const data = await getProfileName(); displayName.value = data.display_name; showDisplayName.value = data.show_display_name; nameReady.value = true }
+  try { const data = await getProfileName(); displayName.value = data.display_name; nameReady.value = true }
   catch { nameError.value = t('profile.nameError') }
   finally { nameLoading.value = false }
   try { const status = await googleStatus(); googleEnabled.value = status.enabled; googleLinked.value = status.linked }
@@ -47,13 +47,14 @@ watch(profileOpen, async open => {
   catch { collectionError.value = t('profile.settingsError') }
   finally { collectionLoading.value = false }
 }, { immediate: true })
-watch(displayName, value => { if (!value.trim()) showDisplayName.value = false; nameSaved.value = false })
+watch(displayName, () => { nameSaved.value = false })
 async function saveName() {
   if (nameLoading.value) return
   nameError.value = ''; nameSaved.value = false
+  if (!displayName.value.trim()) { nameError.value = t('profile.nameRequired'); return }
   if ([...displayName.value.trim()].length > 100) { nameError.value = t('profile.nameTooLong'); return }
   nameLoading.value = true
-  try { const data = await setProfileName(displayName.value, showDisplayName.value); displayName.value = data.display_name; showDisplayName.value = data.show_display_name; nameSaved.value = true }
+  try { const data = await setProfileName(displayName.value); displayName.value = data.display_name; nameSaved.value = true }
   catch { nameError.value = t('profile.nameError') }
   finally { nameLoading.value = false }
 }
@@ -157,11 +158,9 @@ async function logout() {
             </dl>
             <form class="name-setting" @submit.prevent="saveName">
               <div class="name-field-row">
-                <TextField id="profile-display-name" v-model="displayName" :label="t('profile.displayName')" :hint="t('profile.nameHint')" maxlength="200" :disabled="nameLoading || !nameReady" />
+                <TextField id="profile-display-name" v-model="displayName" :label="t('profile.displayName')" :hint="t('profile.nameHint')" maxlength="200" required :disabled="nameLoading || !nameReady" />
                 <UiButton type="submit" variant="secondary" :loading="nameLoading" :disabled="!nameReady">{{ t('profile.saveName') }}</UiButton>
               </div>
-              <label class="name-visibility"><input v-model="showDisplayName" type="checkbox" :disabled="nameLoading || !nameReady || !displayName.trim()" /><strong>{{ t('profile.showName') }}</strong></label>
-              <p class="name-hint">{{ t('profile.showNameHint') }}</p>
               <p v-if="nameSaved" role="status">{{ t('profile.nameSaved') }}</p>
               <p v-if="nameError" class="auth-error" role="alert">{{ nameError }}</p>
             </form>
@@ -241,9 +240,9 @@ async function logout() {
 .name-setting { display: grid; gap: var(--wx-space-1); }
 .name-field-row, .email-setting form { display: grid; gap: var(--wx-space-3); }
 .name-setting p { margin: 0; }
-.name-visibility, .collection-setting label { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; font-size: var(--wx-text-sm); }
-.name-visibility input, .collection-setting input { flex: 0 0 auto; width: 20px; height: 20px; accent-color: var(--wx-primary); }
-.name-hint, .collection-setting p { color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
+.collection-setting label { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; font-size: var(--wx-text-sm); }
+.collection-setting input { flex: 0 0 auto; width: 20px; height: 20px; accent-color: var(--wx-primary); }
+.collection-setting p { color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
 .collection-setting p { margin: 0; }
 .google-setting { display: grid; gap: var(--wx-space-2); font-size: var(--wx-text-sm); }.google-setting p { margin: 0; line-height: 1.5; }
 .email-setting { display: grid; gap: var(--wx-space-3); }.email-setting p { margin: 0; line-height: 1.5; }
