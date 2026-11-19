@@ -43,6 +43,7 @@ export function startAnalytics() {
   started = true
   window.dataLayer = window.dataLayer || []
   window.gtag = function () { window.dataLayer.push(arguments) }
+  window.gtag('set', { ...context(), send_page_view: false })
   window.gtag('js', new Date())
   window.gtag('config', measurementId, { ...context(), send_page_view: false, allow_google_signals: false, allow_ad_personalization_signals: false, transport_type: 'beacon' })
   window.gtag('event', 'page_view', context())
@@ -51,7 +52,7 @@ export function startAnalytics() {
   script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(measurementId)
   document.head.appendChild(script)
 }
-const allowedEvents = new Set(['sign_up_started', 'sign_up_completed', 'wish_created', 'list_created', 'share_link_copied', 'reservation_started', 'reservation_completed'])
+const allowedEvents = new Set(['sign_up_started', 'sign_up_completed', 'wish_created', 'list_created', 'share_link_copied', 'reservation_started', 'reservation_completed', 'shop_link_opened'])
 export function trackEvent(name) {
   if (!started || analyticsConsent.value !== 'granted' || !allowedEvents.has(name)) return
   window.gtag('event', name, context())

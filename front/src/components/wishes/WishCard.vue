@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { locale, t } from '../../i18n.js'
 import { copyWish } from '../../api/wishes.js'
+import { trackEvent } from '../../analytics.js'
 import AppIcon from '../ui/AppIcon.vue'
 import UiCard from '../ui/UiCard.vue'
 import UiBadge from '../ui/UiBadge.vue'
@@ -43,7 +44,7 @@ function shopHost(link) { try { return new URL(link).hostname } catch { return l
     <UiBadge v-if="wish.received" class="priority">{{ t('lists.received') }}</UiBadge>
     <p v-if="wish.description" class="description">{{ wish.description }}</p>
     <ul v-if="wish.shop_links.length" class="shop-links" :aria-label="t('wishes.shopLinks')">
-      <li v-for="(link, index) in wish.shop_links" :key="index"><a :href="link" target="_blank" rel="noopener noreferrer"><AppIcon name="link" /><span>{{ shopHost(link) }}</span><span class="sr-only"> · {{ t('wishes.newTab') }}</span></a></li>
+      <li v-for="(link, index) in wish.shop_links" :key="index"><a :href="link" target="_blank" rel="noopener noreferrer" @click="trackEvent('shop_link_opened')"><AppIcon name="link" /><span>{{ shopHost(link) }}</span><span class="sr-only"> · {{ t('wishes.newTab') }}</span></a></li>
     </ul>
     <div v-if="!readOnly || $slots.actions" class="wish-actions"><a v-if="!readOnly" class="edit-wish" :href="`/my/wishes/${encodeURIComponent(wish.id)}/edit${removeFromList ? `?list=${encodeURIComponent(windowListID)}` : ''}`">{{ t('wishes.edit') }}</a><UiButton v-if="!readOnly" variant="secondary" :loading="copying" @click="copy">{{ t('wishes.copy') }}</UiButton><slot name="actions" /></div>
     <p v-if="copyError" class="copy-error" role="alert">{{ t('wishes.copyError') }}</p>
