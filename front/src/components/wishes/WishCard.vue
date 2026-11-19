@@ -1,13 +1,25 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { locale, t } from '../../i18n.js'
+import { copyWish } from '../../api/wishes.js'
 import AppIcon from '../ui/AppIcon.vue'
 import UiCard from '../ui/UiCard.vue'
 import UiBadge from '../ui/UiBadge.vue'
+import UiButton from '../ui/UiButton.vue'
 
 const props = defineProps({ wish: { type: Object, required: true }, readOnly: Boolean, removeFromList: Boolean })
 const windowListID = window.location.pathname.split('/').pop()
-defineEmits(['delete', 'image'])
+const emit = defineEmits(['delete', 'image', 'copied'])
+const copying = ref(false), copyError = ref(false)
+async function copy() {
+  if (copying.value) return
+  copying.value = true; copyError.value = false
+  try { const { wish } = await copyWish(props.wish.id); emit('copied', wish) }
+  catch (failure) {
+    if (failure.status === 401) window.location.replace('/login')
+    else copyError.value = true
+  } finally { copying.value = false }
+}
 const price = computed(() => {
   if (props.wish.price === null) return ''
   try {
@@ -33,7 +45,8 @@ function shopHost(link) { try { return new URL(link).hostname } catch { return l
     <ul v-if="wish.shop_links.length" class="shop-links" :aria-label="t('wishes.shopLinks')">
       <li v-for="(link, index) in wish.shop_links" :key="index"><a :href="link" target="_blank" rel="noopener noreferrer"><AppIcon name="link" /><span>{{ shopHost(link) }}</span><span class="sr-only"> · {{ t('wishes.newTab') }}</span></a></li>
     </ul>
-    <div v-if="!readOnly || $slots.actions" class="wish-actions"><a v-if="!readOnly" class="edit-wish" :href="`/my/wishes/${encodeURIComponent(wish.id)}/edit${removeFromList ? `?list=${encodeURIComponent(windowListID)}` : ''}`">{{ t('wishes.edit') }}</a><slot name="actions" /></div>
+    <div v-if="!readOnly || $slots.actions" class="wish-actions"><a v-if="!readOnly" class="edit-wish" :href="`/my/wishes/${encodeURIComponent(wish.id)}/edit${removeFromList ? `?list=${encodeURIComponent(windowListID)}` : ''}`">{{ t('wishes.edit') }}</a><UiButton v-if="!readOnly" variant="secondary" :loading="copying" @click="copy">{{ t('wishes.copy') }}</UiButton><slot name="actions" /></div>
+    <p v-if="copyError" class="copy-error" role="alert">{{ t('wishes.copyError') }}</p>
   </UiCard>
 </template>
 
@@ -55,6 +68,7 @@ h2 { margin: 0; font-size: var(--wx-text-md); line-height: 1.5; font-weight: 650
 .priority { margin-top: var(--wx-space-4); color: var(--wx-text-muted); background: var(--wx-background); }
 .priority.high { color: var(--wx-primary-pressed); background: var(--wx-lavender); }
 .description { margin: var(--wx-space-3) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.65; white-space: pre-wrap; }
+.copy-error { color: var(--wx-error); font-size: var(--wx-text-sm); line-height: 1.5; }
 .shop-links { display: flex; flex-wrap: wrap; gap: var(--wx-space-1) var(--wx-space-3); margin: var(--wx-space-3) 0 0; padding: 0; list-style: none; }
 .shop-links li { min-width: 0; max-width: 100%; }
 .shop-links a { display: inline-flex; align-items: center; gap: var(--wx-space-2); min-width: 44px; min-height: 44px; max-width: 100%; border-radius: var(--wx-radius-sm); color: var(--wx-primary-pressed); font-size: var(--wx-text-xs); text-decoration-thickness: 1px; text-underline-offset: 3px; }

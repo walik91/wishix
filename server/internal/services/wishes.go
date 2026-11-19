@@ -254,6 +254,48 @@ func (s *Wishes) Create(ctx context.Context, ownerID string, input WishInput) (*
 	return result, err
 }
 
+// Copy creates a separate wish in the owner's collection, without list memberships or reservations.
+func (s *Wishes) Copy(ctx context.Context, ownerID, sourceID string) (*models.Wish, error) {
+	if ownerID == "" {
+		return nil, ErrSession
+	}
+	if !wishIDPattern.MatchString(sourceID) {
+		return nil, ErrWishNotFound
+	}
+	id, imageVersion, createdAt := security.UUID(), security.UUID(), time.Now().UTC()
+	var result *models.Wish
+	err := s.tx.WithTransaction(ctx, func(txCtx context.Context) error {
+		source, err := s.repo.Get(txCtx, ownerID, sourceID)
+		if err != nil {
+			return err
+		}
+		if source == nil {
+			return ErrWishNotFound
+		}
+		copy := &models.Wish{ID: id, OwnerID: ownerID, Title: source.Title, Description: source.Description, Price: source.Price, Currency: source.Currency, Priority: source.Priority, CreatedAt: createdAt}
+		for _, link := range source.ShopLinks {
+			copy.ShopLinks = append(copy.ShopLinks, models.WishShopLink{WishID: id, Position: link.Position, URL: link.URL})
+		}
+		if source.ImageVersion != "" {
+			image, err := s.repo.Image(txCtx, ownerID, sourceID)
+			if err != nil {
+				return err
+			}
+			if image == nil {
+				return ErrWishNotFound
+			}
+			copy.ImageVersion = imageVersion
+			copy.Image = &models.WishImage{WishID: id, Version: imageVersion, Data: image.Data}
+		}
+		if err := s.repo.Create(txCtx, copy); err != nil {
+			return err
+		}
+		result = copy
+		return nil
+	})
+	return result, err
+}
+
 func (s *Wishes) Delete(ctx context.Context, ownerID, id string) error {
 	if ownerID == "" {
 		return ErrSession

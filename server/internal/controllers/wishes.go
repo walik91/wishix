@@ -59,12 +59,34 @@ func wishImageURL(id, version string) *string {
 func (c *Wishes) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/wishes", c.authorized(c.list))
 	mux.HandleFunc("POST /api/wishes", c.authorized(c.create))
+	mux.HandleFunc("POST /api/wishes/{id}/copy", c.authorized(c.copy))
 	mux.HandleFunc("GET /api/wishes/{id}", c.authorized(c.get))
 	mux.HandleFunc("PUT /api/wishes/{id}", c.authorized(c.update))
 	mux.HandleFunc("DELETE /api/wishes/{id}", c.authorized(c.delete))
 	mux.HandleFunc("GET /api/wishes/{id}/image", c.authorized(c.image))
 	mux.HandleFunc("PUT /api/wishes/{id}/image", c.authorized(c.saveImage))
 	mux.HandleFunc("DELETE /api/wishes/{id}/image", c.authorized(c.deleteImage))
+}
+
+func (c *Wishes) copy(w http.ResponseWriter, r *http.Request, ownerID string) error {
+	mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if mediaType != "application/json" {
+		return services.ErrInvalidInput
+	}
+	decoder := json.NewDecoder(r.Body)
+	var body map[string]json.RawMessage
+	if err := decoder.Decode(&body); err != nil || body == nil || len(body) != 0 {
+		return services.ErrInvalidInput
+	}
+	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
+		return services.ErrInvalidInput
+	}
+	wish, err := c.service.Copy(r.Context(), ownerID, r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, http.StatusCreated, map[string]any{"wish": privateWish(wish)})
+	return nil
 }
 
 func (c *Wishes) authorized(handler func(http.ResponseWriter, *http.Request, string) error) http.HandlerFunc {

@@ -3,6 +3,9 @@ import { requestJSON } from './client.js'
 const headers = { 'Content-Type': 'application/json', 'X-Wishix-Request': '1' }
 export const listWishes = () => requestJSON('/wishes')
 export const getWish = id => requestJSON(`/wishes/${encodeURIComponent(id)}`)
+export const copyWish = id => requestJSON(`/wishes/${encodeURIComponent(id)}/copy`, {
+  method: 'POST', headers, body: '{}', signal: AbortSignal.timeout(20000),
+})
 export const updateWish = (id, data) => requestJSON(`/wishes/${encodeURIComponent(id)}`, {
   method: 'PUT', headers, body: JSON.stringify(data), signal: AbortSignal.timeout(20000),
 })

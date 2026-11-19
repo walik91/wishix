@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -8,6 +9,69 @@ import (
 
 	"wishix/server/internal/models"
 )
+
+type copyWishRepository struct {
+	WishRepository
+	source    *models.Wish
+	image     *models.WishImage
+	created   *models.Wish
+	createErr error
+}
+
+func (r *copyWishRepository) Get(_ context.Context, owner, id string) (*models.Wish, error) {
+	if r.source == nil || r.source.OwnerID != owner || r.source.ID != id {
+		return nil, nil
+	}
+	return r.source, nil
+}
+func (r *copyWishRepository) Image(_ context.Context, owner, id string) (*models.WishImage, error) {
+	return r.image, nil
+}
+func (r *copyWishRepository) Create(_ context.Context, wish *models.Wish) error {
+	r.created = wish
+	return r.createErr
+}
+
+func TestCopyWishIsIndependent(t *testing.T) {
+	id := "00000000-0000-4000-8000-000000000001"
+	price := "42.00"
+	repo := &copyWishRepository{source: &models.Wish{ID: id, OwnerID: "owner", Title: "Gift", Description: "Notes", Price: &price, Currency: "EUR", Priority: "high", ImageVersion: "old", Reserved: true, Received: true, ShopLinks: []models.WishShopLink{{WishID: id, Position: 0, URL: "https://shop.test"}}, Members: []models.WishlistWish{{WishID: id}}}, image: &models.WishImage{WishID: id, Version: "old", Data: []byte("image")}}
+	service := NewWishes(repo, editWishTransaction{})
+	if _, err := service.Copy(t.Context(), "other", id); !errors.Is(err, ErrWishNotFound) {
+		t.Fatalf("other owner: %v", err)
+	}
+	if _, err := service.Copy(t.Context(), "owner", "bad"); !errors.Is(err, ErrWishNotFound) {
+		t.Fatalf("invalid id: %v", err)
+	}
+	copy, err := service.Copy(t.Context(), "owner", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copy.ID == id || copy.OwnerID != "owner" || copy.Title != "Gift" || copy.Description != "Notes" || *copy.Price != price || copy.Currency != "EUR" || copy.Priority != "high" || copy.CreatedAt.IsZero() {
+		t.Fatalf("wrong copied fields: %+v", copy)
+	}
+	if copy.Reserved || copy.Received || len(copy.Members) != 0 {
+		t.Fatalf("copied status or lists: %+v", copy)
+	}
+	if len(copy.ShopLinks) != 1 || copy.ShopLinks[0].WishID != copy.ID || copy.ShopLinks[0].URL != "https://shop.test" {
+		t.Fatal("shop links not copied")
+	}
+	if copy.Image == nil || copy.Image.WishID != copy.ID || copy.Image.Version == "old" || copy.ImageVersion != copy.Image.Version || !bytes.Equal(copy.Image.Data, repo.image.Data) {
+		t.Fatal("image not copied")
+	}
+	if repo.created != copy {
+		t.Fatal("copy was not persisted")
+	}
+	repo.source.ImageVersion = ""
+	copy, err = service.Copy(t.Context(), "owner", id)
+	if err != nil || copy.Image != nil || copy.ImageVersion != "" {
+		t.Fatalf("copy without image: %+v %v", copy, err)
+	}
+	repo.createErr = errors.New("storage error")
+	if _, err := service.Copy(t.Context(), "owner", id); err == nil {
+		t.Fatal("storage failure hidden")
+	}
+}
 
 type editWishRepository struct {
 	WishRepository

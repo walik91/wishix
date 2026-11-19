@@ -91,7 +91,7 @@ async function removeSelected() {
         <img :src="gift" alt="" width="220" height="180" aria-hidden="true" />
         <EmptyState :title="t('my.emptyWishesTitle')" :description="t('wishes.emptyDescription')"><UiButton href="/my/wishes/new"><AppIcon name="plus" />{{ t('wishes.firstWish') }}</UiButton></EmptyState>
       </UiCard>
-      <div v-else class="wish-grid"><WishCard v-for="wish in wishes" :key="wish.id" :wish="wish" @delete="confirmDelete" @image="editImage"><template #actions><UiButton variant="secondary" @click="listsWish = wish; listsOpen = true"><AppIcon name="list" />{{ t('lists.wishLists') }}</UiButton></template></WishCard></div>
+      <div v-else class="wish-grid"><WishCard v-for="wish in wishes" :key="wish.id" :wish="wish" @delete="confirmDelete" @image="editImage" @copied="wishes.unshift($event); showNotice('copied')"><template #actions><UiButton variant="secondary" @click="listsWish = wish; listsOpen = true"><AppIcon name="list" />{{ t('lists.wishLists') }}</UiButton></template></WishCard></div>
       <p class="privacy-note"><AppIcon name="lock" /><span>{{ t('wishes.privateNote') }}</span></p>
     </template>
     <WishImageDialog v-model:open="imageOpen" :wish="imageWish" @updated="imageUpdated" />
