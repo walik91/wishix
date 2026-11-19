@@ -55,7 +55,7 @@ func New(options ...fx.Option) *fx.App {
 			func(mailer *auth.Mailer) services.ReservationMailer { return mailer },
 			services.NewReservations,
 			controllers.NewReservations,
-			func() *productimport.Importer { return productimport.New() },
+			func() *productimport.Importer { return productimport.New(productimport.MaximumAdapter{}) },
 			services.NewProductImport,
 			controllers.NewProductImport,
 			fx.Annotate(db.NewMigrator, fx.As(new(infrastructure.Schema))),

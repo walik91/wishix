@@ -23,13 +23,19 @@ type Document struct {
 }
 
 type Metadata struct {
-	Title       string
-	Description string
-	Price       string
-	Currency    string
-	ShopName    string
-	Images      []string
-	NotProduct  bool
+	Title               string
+	Description         string
+	Price               string
+	Currency            string
+	ShopName            string
+	Images              []string
+	NotProduct          bool
+	descriptionResource *descriptionResource
+}
+
+type descriptionResource struct {
+	url     string
+	extract func([]byte) string
 }
 
 // Adapter is an optional override for a confirmed site-specific incompatibility.

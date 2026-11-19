@@ -82,6 +82,15 @@ func (i *Importer) Preview(ctx context.Context, raw, locale string) (Preview, er
 		result.ImageReason, result.ImageHTTPStatus = "", 0
 		break
 	}
+	if metadata.descriptionResource != nil && result.Description == "" && ctx.Err() == nil {
+		// Supplemental content has its own small budget and cannot discard the main result.
+		frameCtx, frameCancel := context.WithTimeout(ctx, 3*time.Second)
+		frame, _, frameErr := i.fetch.getWithRedirects(frameCtx, metadata.descriptionResource.url, locale, 1024*1024, false, false)
+		frameCancel()
+		if frameErr == nil {
+			result.Description = plainText(metadata.descriptionResource.extract(frame), 5000)
+		}
+	}
 	if ctx.Err() != nil && result.Title == "" && result.Description == "" && result.Price == "" {
 		return Preview{}, ErrFetch
 	}

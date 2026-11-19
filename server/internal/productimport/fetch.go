@@ -193,6 +193,11 @@ func secureFetcher(dns resolver, dial dialFunc) *fetcher {
 }
 
 func (f *fetcher) get(ctx context.Context, raw, locale string, max int64, image bool) ([]byte, *url.URL, error) {
+	return f.getWithRedirects(ctx, raw, locale, max, image, true)
+}
+
+// Extra description resources cannot redirect, even to another public host.
+func (f *fetcher) getWithRedirects(ctx context.Context, raw, locale string, max int64, image, allowRedirects bool) ([]byte, *url.URL, error) {
 	u, err := ValidateURL(raw)
 	if err != nil {
 		return nil, nil, err
@@ -224,6 +229,9 @@ func (f *fetcher) get(ctx context.Context, raw, locale string, max int64, image 
 		if res.StatusCode == 301 || res.StatusCode == 302 || res.StatusCode == 303 || res.StatusCode == 307 || res.StatusCode == 308 {
 			location := res.Header.Get("Location")
 			res.Body.Close()
+			if !allowRedirects {
+				return nil, nil, failure(ErrFetch, "redirect_forbidden", res.StatusCode)
+			}
 			if hop == 3 || location == "" {
 				return nil, nil, failure(ErrFetch, "redirect_limit_or_missing_location", res.StatusCode)
 			}
