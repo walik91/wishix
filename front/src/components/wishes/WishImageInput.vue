@@ -71,4 +71,11 @@ h2 { margin: 0; font-size: var(--wx-text-sm); font-weight: 600; line-height: 1.5
 .file-name { flex-basis: 100%; min-width: 0; margin: 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.6; overflow-wrap: anywhere; }
 .image-error { margin: var(--wx-space-3) 0 0; color: var(--wx-error); font-size: var(--wx-text-sm); line-height: 1.6; }
 
+@media (max-width: 30rem) {
+  .image-picker { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--wx-space-2) var(--wx-space-3); }
+  .image-preview { width: 64px; height: 64px; }
+  .image-actions { display: contents; }
+  .image-hint { grid-column: 2; grid-row: 1; }
+  .image-actions > .button, .file-name { grid-column: 1 / -1; }
+}
 </style>
