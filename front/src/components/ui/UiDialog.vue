@@ -45,11 +45,11 @@ watch(() => props.open, syncOpen)
 .dialog::backdrop { background: color-mix(in srgb, var(--wx-text) 35%, transparent); }
 .profile-dialog::-webkit-scrollbar { width: 12px; }
 .profile-dialog::-webkit-scrollbar-track { margin-block: var(--wx-space-5); background: transparent; }
-.profile-dialog::-webkit-scrollbar-thumb { border: 4px solid transparent; border-radius: var(--wx-radius-pill); background: var(--wx-secondary) padding-box; }
-.profile-dialog::-webkit-scrollbar-thumb:hover { background-color: var(--wx-primary); }
+.profile-dialog::-webkit-scrollbar-thumb { border: 4px solid transparent; border-radius: var(--wx-radius-pill); background: #a0a0a0 padding-box; }
+.profile-dialog::-webkit-scrollbar-thumb:hover { background-color: #808080; }
 .profile-dialog::-webkit-scrollbar-button { display: none; }
 @supports not selector(::-webkit-scrollbar) {
-  .profile-dialog { scrollbar-width: thin; scrollbar-color: var(--wx-secondary) transparent; }
+  .profile-dialog { scrollbar-width: thin; scrollbar-color: #a0a0a0 transparent; }
 }
 header { display: flex; align-items: center; justify-content: space-between; gap: var(--wx-space-4); margin-bottom: var(--wx-space-6); }
 h2 { margin: 0; font-size: var(--wx-text-xl); line-height: 1.3; }
