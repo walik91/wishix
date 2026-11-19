@@ -51,7 +51,7 @@ type SocialRepository interface {
 	Settings(context.Context, string) (*ProfileSettings, error)
 	PublicInfo(context.Context, string) (*PublicSocialProfile, error)
 	SaveSettings(context.Context, string, ProfileSettings) error
-	Rename(context.Context, string, string, bool, time.Time) error
+	Rename(context.Context, string, string, time.Time) error
 	TargetID(context.Context, string) (string, error)
 	LockPair(context.Context, string, string) error
 	BlockedEither(context.Context, string, string) (bool, error)
@@ -114,7 +114,7 @@ func (s *Social) SaveSettings(ctx context.Context, owner string, value ProfileSe
 	}
 	return s.repo.SaveSettings(ctx, owner, value)
 }
-func (s *Social) Rename(ctx context.Context, owner, username string, redirect bool) error {
+func (s *Social) Rename(ctx context.Context, owner, username string) error {
 	if owner == "" {
 		return ErrSession
 	}
@@ -123,7 +123,7 @@ func (s *Social) Rename(ctx context.Context, owner, username string, redirect bo
 		return ErrUsernameInvalid
 	}
 	return s.tx.WithTransaction(ctx, func(ctx context.Context) error {
-		return s.repo.Rename(ctx, owner, username, redirect, time.Now().UTC())
+		return s.repo.Rename(ctx, owner, username, time.Now().UTC())
 	})
 }
 func (s *Social) withPair(ctx context.Context, owner, username string, fn func(context.Context, string) error) error {

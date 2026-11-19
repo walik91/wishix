@@ -11,7 +11,7 @@ import UiSkeleton from '../components/ui/UiSkeleton.vue'
 import UserAvatar from '../components/ui/UserAvatar.vue'
 const { user, checking, unavailable, refresh } = useSession()
 const loading = ref(true), busy = ref(false), error = ref(''), notice = ref(''), settings = ref(null)
-const username = ref(''), redirectOld = ref(true), confirmRename = ref(false), avatarVersion = ref(Date.now()), picker = ref(null)
+const username = ref(''), confirmRename = ref(false), avatarVersion = ref(Date.now()), picker = ref(null)
 const avatarURL = computed(() => settings.value?.has_avatar ? `/api/profile/avatar?v=${avatarVersion.value}` : '')
 watch([user, checking, unavailable], async ([account, pending, failed]) => { if (account && !pending && !failed && !settings.value) await load() }, { immediate: true })
 watch(() => settings.value?.birth_date, value => { if (!value && settings.value) settings.value.show_age = false })
@@ -31,7 +31,7 @@ async function saveDetails() {
 async function rename() {
   if (busy.value) return
   busy.value = true; error.value = ''; notice.value = ''
-  try { const updated = await changeUsername(username.value, redirectOld.value); settings.value.username = updated.username; settings.value.username_changed_at = updated.username_changed_at; username.value = updated.username; confirmRename.value = false; await refresh(); notice.value = t('profile.usernameSaved') }
+  try { const updated = await changeUsername(username.value); settings.value.username = updated.username; settings.value.username_changed_at = updated.username_changed_at; username.value = updated.username; confirmRename.value = false; await refresh(); notice.value = t('profile.usernameSaved') }
   catch (failure) { error.value = t({ username_taken: 'profile.usernameTaken', username_cooldown: 'profile.usernameCooldown', username_invalid: 'profile.usernameInvalid' }[failure.code] || 'profile.saveError') }
   finally { busy.value = false }
 }
@@ -71,7 +71,7 @@ async function removeAvatar() {
         <label class="privacy"><input v-model="settings.show_following" type="checkbox" :disabled="busy" />{{ t('profile.showFollowing') }}</label>
         <UiButton type="submit" :loading="busy">{{ t('profile.saveSettings') }}</UiButton>
       </form></section>
-      <section class="profile-panel"><form @submit.prevent="confirmRename = true"><h3>{{ t('profile.changeUsername') }}</h3><TextField id="profile-username" v-model="username" :label="t('register.username')" maxlength="30" :hint="t('profile.usernameHint')" :disabled="busy" /><label class="privacy"><input v-model="redirectOld" type="checkbox" :disabled="busy" />{{ t('profile.redirectOld') }}</label><p>{{ t(redirectOld ? 'profile.redirectHint' : 'profile.noRedirectHint') }}</p><UiButton type="submit" variant="secondary" :disabled="busy || username.trim().toLowerCase() === settings.username">{{ t('profile.changeUsername') }}</UiButton></form></section>
+      <section class="profile-panel"><form @submit.prevent="confirmRename = true"><h3>{{ t('profile.changeUsername') }}</h3><TextField id="profile-username" v-model="username" :label="t('register.username')" maxlength="30" :hint="t('profile.usernameHint')" :disabled="busy" /><p>{{ t('profile.redirectHint') }}</p><UiButton type="submit" variant="secondary" :disabled="busy || username.trim().toLowerCase() === settings.username">{{ t('profile.changeUsername') }}</UiButton></form></section>
       <UiDialog v-model:open="confirmRename" :title="t('profile.changeUsername')" :busy="busy"><p>{{ t('profile.renameConfirm') }} <strong>{{ username }}</strong></p><p>{{ t('profile.usernameHint') }}</p><p v-if="error" class="profile-error" role="alert">{{ error }}</p><div class="profile-actions"><UiButton :loading="busy" @click="rename">{{ t('profile.changeUsername') }}</UiButton><UiButton variant="secondary" :disabled="busy" @click="confirmRename = false">{{ t('wishes.cancel') }}</UiButton></div></UiDialog>
     </template>
   </div>

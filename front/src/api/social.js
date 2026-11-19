@@ -4,7 +4,7 @@ const mutate = (path, method, value) => requestJSON(path, { method, headers, bod
 const person = username => `/social/${encodeURIComponent(username)}`
 export const getProfileDetails = () => requestJSON('/profile/details')
 export const saveProfileDetails = value => mutate('/profile/details', 'PUT', value)
-export const changeUsername = (username, redirect) => mutate('/profile/username', 'PUT', { username, redirect })
+export const changeUsername = username => mutate('/profile/username', 'PUT', { username })
 export const publicDetails = username => requestJSON(`/public/profiles/${encodeURIComponent(username)}/details`)
 export const socialState = username => requestJSON(`${person(username)}/state`)
 export const setFollow = (username, follow) => mutate(`${person(username)}/follow`, 'PUT', { follow })

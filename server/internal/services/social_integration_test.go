@@ -133,7 +133,14 @@ func TestIntegrationSocialPrivacyAndProfile(t *testing.T) {
 	f.listCall(t, "GET", "/api/social/socialalice/people/blocked", nil, bob, 404)
 	f.listCall(t, "PUT", "/api/social/socialbob/block", map[string]any{"block": false}, alice, 200)
 	f.listCall(t, "PUT", "/api/social/socialalice/follow", map[string]any{"follow": true}, bob, 200)
-	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "socialnew", "redirect": true}, alice, 200)
+	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "socialnew"}, alice, 200)
+	var redirectExpiry struct{ ExpiresAt time.Time }
+	if err := f.database.Table("username_registry").Select("expires_at").Where("username = ?", "socialalice").Scan(&redirectExpiry).Error; err != nil {
+		t.Fatal(err)
+	}
+	if remaining := time.Until(redirectExpiry.ExpiresAt); remaining < 60*24*time.Hour-time.Minute || remaining > 60*24*time.Hour {
+		t.Fatalf("unexpected redirect duration: %v", remaining)
+	}
 	oldURL := httptest.NewRecorder()
 	f.handler.ServeHTTP(oldURL, httptest.NewRequest("GET", "/u/socialalice", nil))
 	if oldURL.Code != http.StatusFound || oldURL.Header().Get("Location") != "/u/socialnew" || oldURL.Header().Get("Cache-Control") != "no-store" {
@@ -174,12 +181,16 @@ func TestIntegrationSocialPrivacyAndProfile(t *testing.T) {
 	if p := f.listCall(t, "GET", "/api/public/profiles/pendingclaim", nil, nil, 200); p["username"] != "carolfinal" {
 		t.Fatal("stale signup changed redirect target", p)
 	}
-	f.listCall(t, "GET", "/api/public/profiles/socialcarol", nil, nil, 404)
+	if p := f.listCall(t, "GET", "/api/public/profiles/socialcarol", nil, nil, 200); p["username"] != "carolfinal" {
+		t.Fatal("legacy redirect=false disabled automatic redirect", p)
+	}
 	if err := f.database.Exec("UPDATE users SET username_changed_at = ? WHERE username = ?", time.Now().Add(-31*24*time.Hour), "socialnew").Error; err != nil {
 		t.Fatal(err)
 	}
 	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "socialalice", "redirect": false}, alice, 200)
-	f.listCall(t, "GET", "/api/public/profiles/socialnew", nil, nil, 404)
+	if p := f.listCall(t, "GET", "/api/public/profiles/socialnew", nil, nil, 200); p["username"] != "socialalice" {
+		t.Fatal("previous username did not redirect after reclaiming an old username", p)
+	}
 }
 
 func TestIntegrationSocialConcurrentBlockAndUsernameClaim(t *testing.T) {
@@ -218,8 +229,8 @@ func TestIntegrationSocialConcurrentBlockAndUsernameClaim(t *testing.T) {
 	var first, second error
 	start = make(chan struct{})
 	wg.Add(2)
-	go func() { defer wg.Done(); <-start; first = social.Rename(ctx, a.ID, "shared_target", true) }()
-	go func() { defer wg.Done(); <-start; second = social.Rename(ctx, b.ID, "shared_target", true) }()
+	go func() { defer wg.Done(); <-start; first = social.Rename(ctx, a.ID, "shared_target") }()
+	go func() { defer wg.Done(); <-start; second = social.Rename(ctx, b.ID, "shared_target") }()
 	close(start)
 	wg.Wait()
 	if !((first == nil && second == services.ErrUsernameTaken) || (second == nil && first == services.ErrUsernameTaken)) {
@@ -235,7 +246,7 @@ func TestIntegrationSocialConcurrentBlockAndUsernameClaim(t *testing.T) {
 	var renameErr, signupErr error
 	start = make(chan struct{})
 	wg.Add(2)
-	go func() { defer wg.Done(); <-start; renameErr = social.Rename(ctx, thirdUser.ID, "race_signup", true) }()
+	go func() { defer wg.Done(); <-start; renameErr = social.Rename(ctx, thirdUser.ID, "race_signup") }()
 	go func() { defer wg.Done(); <-start; _, signupErr = f.auth.Verify(ctx, pending, code) }()
 	close(start)
 	wg.Wait()

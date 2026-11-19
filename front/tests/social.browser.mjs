@@ -23,7 +23,7 @@ try {
     await page.route('**/u/bob', route => route.fulfill({ contentType: 'text/html', body: indexHTML }))
     await page.route('**/api/profile/name', route => { if (route.request().method() === 'PUT') name = route.request().postDataJSON(); return route.fulfill({ json: name }) })
     await page.route('**/api/profile/details', route => { if (route.request().method() === 'PUT') details = { ...details, ...route.request().postDataJSON() }; return route.fulfill({ json: details }) })
-    await page.route('**/api/profile/username', route => { username = route.request().postDataJSON().username; details.username = username; return route.fulfill({ json: details }) })
+    await page.route('**/api/profile/username', route => { assert.deepEqual(Object.keys(route.request().postDataJSON()), ['username']); username = route.request().postDataJSON().username; details.username = username; return route.fulfill({ json: details }) })
     await page.route('**/api/profile/avatar*', route => {
       if (route.request().method() === 'PUT') { details.has_avatar = true; return route.fulfill({ json: { status: 'ok' } }) }
       if (route.request().method() === 'DELETE') { details.has_avatar = false; return route.fulfill({ json: { status: 'ok' } }) }
@@ -83,6 +83,9 @@ try {
     assert.equal(sticky, true, `${lang}/${width}: dialog header and section navigation remain visible`)
     if (width < 1024) assert.equal(await page.locator('.bottom-navigation a, .bottom-navigation button').evaluateAll(nodes => nodes.every(node => { const rect = node.getBoundingClientRect(); return !rect.width || (rect.width >= 44 && rect.height >= 44) })), true, `${lang}/${width}/navigation`)
     if (lang === 'ru' && [390, 1440].includes(width)) await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/profile-${width}.png`, import.meta.url)), fullPage: true })
+    const usernameForm = page.locator('#profile-username').locator('xpath=ancestor::form')
+    assert.equal(await usernameForm.locator('input[type=checkbox]').count(), 0)
+    assert.equal(await usernameForm.getByText(texts[lang]['profile.redirectHint']).isVisible(), true)
     await page.locator('#profile-username').fill('example_new')
     await page.getByRole('button', { name: texts[lang]['profile.changeUsername'], exact: true }).first().click()
     await page.getByRole('dialog', { name: texts[lang]['profile.changeUsername'] }).getByRole('button', { name: texts[lang]['profile.changeUsername'], exact: true }).click()

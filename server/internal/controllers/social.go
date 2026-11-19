@@ -83,15 +83,12 @@ func (c *Social) saveSettings(w http.ResponseWriter, r *http.Request, owner stri
 func (c *Social) rename(w http.ResponseWriter, r *http.Request, owner string) error {
 	var input struct {
 		Username string `json:"username"`
-		Redirect *bool  `json:"redirect"`
+		Redirect *bool  `json:"redirect"` // Accepted for older clients; redirects are always enabled.
 	}
 	if err := readListJSON(r, &input); err != nil {
 		return err
 	}
-	if input.Redirect == nil {
-		return services.ErrInvalidInput
-	}
-	if err := c.service.Rename(r.Context(), owner, input.Username, *input.Redirect); err != nil {
+	if err := c.service.Rename(r.Context(), owner, input.Username); err != nil {
 		return err
 	}
 	return c.settings(w, r, owner)

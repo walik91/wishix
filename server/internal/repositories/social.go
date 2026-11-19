@@ -35,7 +35,7 @@ func (r *Social) PublicInfo(ctx context.Context, username string) (*services.Pub
 func (r *Social) SaveSettings(ctx context.Context, owner string, settings services.ProfileSettings) error {
 	return r.Ctx(ctx).Model(&models.User{}).Where("id = ?", owner).Updates(map[string]any{"biography": settings.Biography, "birth_date": settings.BirthDate, "show_age": settings.ShowAge, "show_followers": settings.ShowFollowers, "show_following": settings.ShowFollowing}).Error
 }
-func (r *Social) Rename(ctx context.Context, owner, username string, redirect bool, now time.Time) error {
+func (r *Social) Rename(ctx context.Context, owner, username string, now time.Time) error {
 	var user struct {
 		Username          string
 		UsernameChangedAt *time.Time
@@ -70,10 +70,7 @@ func (r *Social) Rename(ctx context.Context, owner, username string, redirect bo
 	if result.Error != nil {
 		return result.Error
 	}
-	expires := now
-	if redirect {
-		expires = now.Add(60 * 24 * time.Hour)
-	}
+	expires := now.Add(60 * 24 * time.Hour)
 	return r.Ctx(ctx).Exec(`INSERT INTO username_registry (username, user_id, expires_at) VALUES (?, ?, ?) ON CONFLICT (username) DO UPDATE SET user_id = excluded.user_id, expires_at = excluded.expires_at`, user.Username, owner, expires).Error
 }
 func (r *Social) TargetID(ctx context.Context, username string) (string, error) {
