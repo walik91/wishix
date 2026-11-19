@@ -22,7 +22,7 @@ const inFollowing = window.location.pathname === '/my/following'
 
 <style scoped>
 .app-navigation { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--wx-space-1); }
-.nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--wx-space-1); min-width: 0; min-height: 56px; padding: var(--wx-space-2) var(--wx-space-1); border: 0; border-radius: var(--wx-radius-md); color: var(--wx-text-muted); background: transparent; font-size: var(--wx-text-xs); font-weight: 500; line-height: 1.4; text-decoration: none; overflow-wrap: anywhere; cursor: pointer; }
+.nav-item { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--wx-space-1); min-width: 0; min-height: 56px; padding: var(--wx-space-2) var(--wx-space-1); border: 0; border-radius: var(--wx-radius-md); color: var(--wx-text-muted); background: transparent; font-size: var(--wx-text-xs); font-weight: 500; line-height: 1.4; text-align: center; text-decoration: none; overflow-wrap: anywhere; cursor: pointer; }
 .nav-item .icon { width: 22px; height: 22px; }
 .active { color: var(--wx-primary); background: var(--wx-lavender); font-weight: 600; }
 .nav-item:hover:not(:disabled, .active) { color: var(--wx-primary); background: var(--wx-background); }
@@ -32,7 +32,7 @@ small { display: none; }
 .following { display: none; }
 @media (min-width: 64rem) {
   .app-navigation { grid-template-columns: 1fr; gap: var(--wx-space-2); }
-  .nav-item { flex-direction: row; justify-content: flex-start; gap: var(--wx-space-3); min-height: 48px; padding: var(--wx-space-3); font-size: var(--wx-text-sm); }
+  .nav-item { flex-direction: row; justify-content: flex-start; gap: var(--wx-space-3); min-height: 48px; padding: var(--wx-space-3); font-size: var(--wx-text-sm); text-align: left; }
   small { display: inline; margin-left: auto; font-size: var(--wx-text-xs); font-weight: 400; }
   .following { display: flex; }
 }
