@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watchEffect } from 'vue'
 import { t } from '../i18n.js'
+import { trackEvent } from '../analytics.js'
 import { searchPeople } from '../api/search.js'
 import { publicAvatarURL } from '../api/social.js'
 import AppIcon from '../components/ui/AppIcon.vue'
@@ -20,6 +21,7 @@ async function find(more = false) {
   loading.value = true; error.value = ''
   try {
     const result = await searchPeople(text, more ? cursor.value : '')
+    if (!more) trackEvent('people_search_completed')
     people.value = more ? [...people.value, ...result.people] : result.people
     cursor.value = result.next_cursor
     searched.value = true

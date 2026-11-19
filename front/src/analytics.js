@@ -52,7 +52,7 @@ export function startAnalytics() {
   script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(measurementId)
   document.head.appendChild(script)
 }
-const allowedEvents = new Set(['sign_up_started', 'sign_up_completed', 'wish_created', 'list_created', 'share_link_copied', 'reservation_started', 'reservation_completed', 'shop_link_opened'])
+const allowedEvents = new Set(['sign_up_started', 'sign_up_completed', 'wish_created', 'list_created', 'share_link_copied', 'reservation_started', 'reservation_completed', 'shop_link_opened', 'people_search_completed'])
 export function trackEvent(name) {
   if (!started || analyticsConsent.value !== 'granted' || !allowedEvents.has(name)) return
   window.gtag('event', name, context())
