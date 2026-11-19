@@ -61,6 +61,9 @@ func TestProductDescription(t *testing.T) {
 	for _, tt := range []struct{ name, html, want string }{
 		{"microdata", `<div itemscope itemtype="//schema.org/Product"><meta itemprop="name" content="Chair"><span itemprop="description">Soft <b>chair</b><script>bad()</script></span></div>`, "Soft chair"},
 		{"json ld html", `<script type="application/ld+json">{"@type":"Product","name":"Chair","description":"Soft <b>chair</b>\u003cscript>bad()\u003c/script>"}</script>`, "Soft chair"},
+		{"maximum escaped iframe", `<script type="application/ld+json">{"@type":"Product","name":"Vacuum","description":"&lt;iframe class=&quot;mx-richcontent-autosize&quot; src=&quot;https://plus.maximum.md/RichContentViewer/Models/332146/index.html?culture=ro&quot;&gt;&lt;/iframe&gt;"}</script>`, ""},
+		{"encoded markup and frame fallback", `<script type="application/ld+json">{"@type":"Product","name":"Chair","description":"Useful &amp;lt;b&amp;gt;details&amp;lt;/b&amp;gt; &amp;lt;iframe src='https://example.org'&amp;gt;do not use&amp;lt;/iframe&amp;gt;"}</script>`, "Useful details"},
+		{"microdata iframe fallback", `<div itemscope itemtype="//schema.org/Product"><div itemprop="description">Good <iframe src="https://example.org">do not use</iframe> chair <object>not visible</object></div></div>`, "Good chair"},
 		{"meta", `<div itemscope itemtype="https://schema.org/Product"><meta itemprop="description" content="Warm &amp; soft"></div>`, "Warm & soft"},
 		{"unrelated description", `<title>Chair</title><p>Unrelated</p><meta name="description" content="Store marketing">`, ""},
 		{"category", `<script type="application/ld+json">{"@type":"CollectionPage","description":"Category"}</script>`, ""},
@@ -76,6 +79,36 @@ func TestProductDescription(t *testing.T) {
 	m, err := extract([]byte(`<div itemscope itemtype="//schema.org/Product"><span itemprop="description">`+long+`</span></div>`), page, nil)
 	if err != nil || len([]rune(m.Description)) != 5000 {
 		t.Fatalf("description limit: %d, %v", len([]rune(m.Description)), err)
+	}
+}
+
+type markupAdapter struct{}
+
+func (markupAdapter) Match(*url.URL) bool { return true }
+func (markupAdapter) Enrich(_ Document, m Metadata) Metadata {
+	m.Title = "&lt;b&gt;Adapter title&lt;/b&gt;"
+	m.Description = "Text &lt;iframe&gt;do not import&lt;/iframe&gt;"
+	m.ShopName = "<b>Shop</b><script>ignored</script>"
+	return m
+}
+
+func TestImportedTextNormalization(t *testing.T) {
+	page, _ := url.Parse("https://shop.example.com/product")
+	for _, tt := range []struct{ name, html, title, description, shop, price, currency string }{
+		{"json ld", `<meta property="og:site_name" content="&lt;b&gt;Shop&lt;/b&gt;"><script type="application/ld+json">{"@type":"Product","name":"&lt;b&gt;Chair&lt;/b&gt;","description":"Nice &lt;i&gt;chair&lt;/i&gt;","offers":{"price":"<b>45</b>","priceCurrency":"<b>MDL</b>"}}</script>`, "Chair", "Nice chair", "Shop", "45.00", "MDL"},
+		{"og title", `<meta property="og:title" content="&lt;b&gt;Chair&lt;/b&gt;"><meta property="og:site_name" content="&lt;i&gt;Shop&lt;/i&gt;">`, "Chair", "", "Shop", "", ""},
+		{"literal comparisons", `<script type="application/ld+json">{"@type":"Product","name":"A & B <3","description":"Less than 5 < 10 and 10 > 5"}</script>`, "A & B <3", "Less than 5 < 10 and 10 > 5", "", "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := extract([]byte(tt.html), page, nil)
+			if err != nil || got.Title != tt.title || got.Description != tt.description || got.ShopName != tt.shop || got.Price != tt.price || got.Currency != tt.currency {
+				t.Fatalf("unexpected metadata: %+v, %v", got, err)
+			}
+		})
+	}
+	m, err := extract([]byte(`<title>Original</title>`), page, []Adapter{markupAdapter{}})
+	if err != nil || m.Title != "Adapter title" || m.Description != "Text" || m.ShopName != "Shop" {
+		t.Fatalf("adapter output not normalized: %+v, %v", m, err)
 	}
 }
 

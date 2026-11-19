@@ -3,6 +3,7 @@ package productimport
 import (
 	"bytes"
 	"encoding/json"
+	stdhtml "html"
 	"io"
 	"net/url"
 	"regexp"
@@ -65,8 +66,14 @@ func nodeTextLimit(n *html.Node, limit int) string {
 	var b strings.Builder
 	var walk func(*html.Node, int)
 	walk = func(n *html.Node, depth int) {
-		if depth > 64 || b.Len() > 24000 || n.Data == "script" || n.Data == "style" {
+		if depth > 64 || b.Len() > 24000 {
 			return
+		}
+		if n.Type == html.ElementNode {
+			switch n.Data {
+			case "script", "style", "iframe", "object", "embed", "template", "noscript", "svg", "canvas":
+				return
+			}
 		}
 		if n.Type == html.TextNode {
 			b.WriteString(n.Data)
@@ -80,16 +87,24 @@ func nodeTextLimit(n *html.Node, limit int) string {
 	return clean(b.String(), limit)
 }
 
-// Structured descriptions may contain HTML. Extract text without running markup or scripts.
-func descriptionText(s string) string {
+// Imported text can contain raw or entity-escaped markup. Decode bounded layers
+// before parsing it inertly; never load embedded resources or execute scripts.
+func plainText(s string, limit int) string {
 	if len(s) > 50000 {
 		s = s[:50000]
+	}
+	for i := 0; i < 4; i++ {
+		decoded := stdhtml.UnescapeString(s)
+		if decoded == s {
+			break
+		}
+		s = decoded
 	}
 	doc, err := html.Parse(strings.NewReader(s))
 	if err != nil {
 		return ""
 	}
-	return nodeTextLimit(doc, 5000)
+	return nodeTextLimit(doc, limit)
 }
 func clean(s string, limit int) string {
 	s = strings.Map(func(r rune) rune {
@@ -273,10 +288,10 @@ func priceFrom(offers any, page *url.URL) (string, string) {
 	}
 	price, currency := "", ""
 	for _, o := range valid {
-		p, c := decimal(str(o["price"])), strings.ToUpper(strings.TrimSpace(str(o["priceCurrency"])))
+		p, c := decimal(plainText(str(o["price"]), 100)), strings.ToUpper(plainText(str(o["priceCurrency"]), 100))
 		if p == "" {
 			for _, spec := range objects(o["priceSpecification"]) {
-				p, c = decimal(str(spec["price"])), strings.ToUpper(str(spec["priceCurrency"]))
+				p, c = decimal(plainText(str(spec["price"]), 100)), strings.ToUpper(plainText(str(spec["priceCurrency"]), 100))
 				if p != "" {
 					break
 				}
@@ -429,7 +444,7 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 	if count > 100000 {
 		return Metadata{}, failure(ErrFetch, "html_too_complex", 0)
 	}
-	result := Metadata{ShopName: clean(meta["og:site_name"], 120)}
+	result := Metadata{ShopName: plainText(meta["og:site_name"], 120)}
 	var product map[string]any
 	bestScore, tied := 0, false
 	for _, p := range products {
@@ -442,7 +457,7 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 				score = 90
 			}
 		}
-		name := clean(str(p["name"]), 200)
+		name := plainText(str(p["name"]), 200)
 		if name != "" && score == 0 {
 			for _, heading := range h1 {
 				if strings.EqualFold(name, heading) {
@@ -465,7 +480,7 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 	}
 	if product != nil {
 		result.Title = str(product["name"])
-		result.Description = descriptionText(str(product["description"]))
+		result.Description = plainText(str(product["description"]), 5000)
 		result.Price, result.Currency = priceFrom(product["offers"], page)
 		result.Images = append(result.Images, imageValues(product["image"])...)
 	}
@@ -485,18 +500,18 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 				case "description":
 					if result.Description == "" {
 						if v := attr(n, "content"); v != "" {
-							result.Description = descriptionText(v)
+							result.Description = plainText(v, 5000)
 						} else {
 							result.Description = nodeTextLimit(n, 5000)
 						}
 					}
 				case "price":
 					if result.Price == "" {
-						result.Price = decimal(content(n))
+						result.Price = decimal(plainText(content(n), 100))
 					}
 				case "priceCurrency":
 					if result.Currency == "" {
-						result.Currency = strings.ToUpper(content(n))
+						result.Currency = strings.ToUpper(plainText(content(n), 100))
 					}
 				case "image":
 					result.Images = append(result.Images, content(n))
@@ -550,7 +565,7 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 		}
 		if result.Price == "" {
 			for _, prefix := range []string{"product:price:", "og:price:"} {
-				p, c := decimal(meta[prefix+"amount"]), strings.ToUpper(meta[prefix+"currency"])
+				p, c := decimal(plainText(meta[prefix+"amount"], 100)), strings.ToUpper(plainText(meta[prefix+"currency"], 100))
 				if p != "" && currencyPattern.MatchString(c) {
 					result.Price, result.Currency = p, c
 					break
@@ -579,11 +594,11 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 	if result.NotProduct {
 		return Metadata{NotProduct: true}, nil
 	}
-	result.Title = clean(result.Title, 200)
-	result.Description = clean(result.Description, 5000)
-	result.ShopName = clean(result.ShopName, 120)
-	result.Price = decimal(result.Price)
-	result.Currency = strings.ToUpper(strings.TrimSpace(result.Currency))
+	result.Title = plainText(result.Title, 200)
+	result.Description = plainText(result.Description, 5000)
+	result.ShopName = plainText(result.ShopName, 120)
+	result.Price = decimal(plainText(result.Price, 100))
+	result.Currency = strings.ToUpper(plainText(result.Currency, 100))
 	if result.Price == "" || !currencyPattern.MatchString(result.Currency) {
 		result.Price, result.Currency = "", ""
 	}
