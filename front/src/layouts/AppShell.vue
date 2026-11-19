@@ -137,7 +137,7 @@ async function logout() {
       <AppNavigation :profile-available="!!account" @profile="profileOpen = true" />
     </div>
 
-    <UiDialog v-model:open="profileOpen" :title="t('my.profile')">
+    <UiDialog v-model:open="profileOpen" class="profile-dialog" :title="t('my.profile')">
       <template v-if="account">
         <div class="profile-identity">
           <UserAvatar :username="account.username" />

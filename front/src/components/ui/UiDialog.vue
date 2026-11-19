@@ -43,6 +43,14 @@ watch(() => props.open, syncOpen)
 <style scoped>
 .dialog { position: fixed; inset: auto 0 0; width: 100%; max-width: 100%; max-height: calc(100svh - 24px); margin: 0; padding: var(--wx-space-6) var(--wx-space-5) max(var(--wx-space-6), env(safe-area-inset-bottom)); overflow: auto; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-hero) var(--wx-radius-hero) 0 0; color: var(--wx-text); background: var(--wx-surface); box-shadow: var(--wx-shadow-panel); overflow-wrap: anywhere; }
 .dialog::backdrop { background: color-mix(in srgb, var(--wx-text) 35%, transparent); }
+.profile-dialog::-webkit-scrollbar { width: 12px; }
+.profile-dialog::-webkit-scrollbar-track { margin-block: var(--wx-space-5); background: transparent; }
+.profile-dialog::-webkit-scrollbar-thumb { border: 4px solid transparent; border-radius: var(--wx-radius-pill); background: var(--wx-secondary) padding-box; }
+.profile-dialog::-webkit-scrollbar-thumb:hover { background-color: var(--wx-primary); }
+.profile-dialog::-webkit-scrollbar-button { display: none; }
+@supports not selector(::-webkit-scrollbar) {
+  .profile-dialog { scrollbar-width: thin; scrollbar-color: var(--wx-secondary) transparent; }
+}
 header { display: flex; align-items: center; justify-content: space-between; gap: var(--wx-space-4); margin-bottom: var(--wx-space-6); }
 h2 { margin: 0; font-size: var(--wx-text-xl); line-height: 1.3; }
 .close { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: var(--wx-radius-md); color: var(--wx-text-muted); background: var(--wx-background); cursor: pointer; }
