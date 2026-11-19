@@ -48,7 +48,7 @@ try {
     await page.locator('.search-form').getByRole('button', { name: texts[lang]['my.search'] }).click()
     await page.getByText(texts[lang]['search.empty'], { exact: true }).waitFor()
     await page.locator('.profile-button').click()
-    const dialog = page.getByRole('dialog', { name: texts[lang]['my.profile'] })
+    const dialog = page.getByRole('dialog', { name: texts[lang]['profile.general'] })
     const display = dialog.getByLabel(texts[lang]['profile.displayName'], { exact: true })
     assert.equal(await display.inputValue(), 'example')
     assert.equal(await dialog.locator('.name-setting input[type=checkbox]').count(), 0)

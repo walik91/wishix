@@ -28,6 +28,7 @@ try {
   await account(giver, otherName)
   const page = await owner.newPage()
   await page.goto(`${origin}/my/profile`)
+  await page.locator('dialog.profile-dialog .profile-section').nth(1).click()
   await page.locator('#profile-birth-date').fill('2000-02-29')
   await page.getByRole('checkbox', { name: 'Show my age publicly' }).check()
   await page.getByRole('checkbox', { name: 'Show my followers publicly' }).check()

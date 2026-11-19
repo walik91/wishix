@@ -27,7 +27,7 @@ const googleResult = new URLSearchParams(window.location.search).get('google')
 const facebookResult = new URLSearchParams(window.location.search).get('facebook')
 const profileLink = window.location.pathname.replace(/\/+$/, '') === '/my/profile'
 const profileOpen = ref(profileLink || ['linked', 'error', 'conflict'].includes(googleResult) || ['linked', 'error', 'conflict'].includes(facebookResult) || new URLSearchParams(window.location.search).has('add_email'))
-const profileSection = ref(profileLink ? 'profile' : 'general'), profileVisited = ref(profileLink)
+const profileSection = ref('general'), profileVisited = ref(false)
 const profileDialog = ref(null)
 const googleEnabled = ref(false), googleLinked = ref(false), googleBusy = ref(false), googleError = ref('')
 const facebookEnabled = ref(false), facebookLinked = ref(false), facebookBusy = ref(false), facebookError = ref('')
@@ -153,7 +153,7 @@ async function logout() {
       <AppNavigation :profile-available="!!account" :profile-active="profileOpen" @profile="profileOpen = true" />
     </div>
 
-    <UiDialog ref="profileDialog" v-model:open="profileOpen" class="profile-dialog" :title="t('my.profile')">
+    <UiDialog ref="profileDialog" v-model:open="profileOpen" class="profile-dialog" :title="t(profileSection === 'general' ? 'profile.general' : 'my.profile')">
       <template v-if="profileAccount">
         <div class="profile-layout">
           <nav class="profile-sections" :aria-label="t('my.profile')">
