@@ -93,7 +93,7 @@ func types(v any, wanted string) bool {
 	switch v := v.(type) {
 	case string:
 		for _, token := range strings.Fields(v) {
-			token = strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(token, "https://schema.org/"), "http://schema.org/"), "schema:")
+			token = strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(token, "https://schema.org/"), "http://schema.org/"), "//schema.org/"), "schema:")
 			if strings.EqualFold(strings.TrimSuffix(token, "/"), wanted) {
 				return true
 			}
