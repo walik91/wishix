@@ -5,8 +5,8 @@ import { analyticsConfigured, analyticsConsent, setAnalyticsConsent } from '../.
 import UiButton from './UiButton.vue'
 
 const settingsOpen = ref(false)
-const selection = ref(analyticsConsent.value === 'granted')
-function showSettings() { selection.value = analyticsConsent.value === 'granted'; settingsOpen.value = true }
+const selection = ref(analyticsConsent.value !== 'denied')
+function showSettings() { selection.value = analyticsConsent.value !== 'denied'; settingsOpen.value = true }
 function save(value) { settingsOpen.value = false; setAnalyticsConsent(value) }
 </script>
 
@@ -18,9 +18,9 @@ function save(value) { settingsOpen.value = false; setAnalyticsConsent(value) }
       <template v-if="settingsOpen">
         <div class="cookie-option"><div><strong>{{ t('cookies.essential') }}</strong><p>{{ t('cookies.essentialDescription') }}</p></div><span>{{ t('cookies.always') }}</span></div>
         <label class="cookie-option"><div><strong>{{ t('cookies.analytics') }}</strong><p>{{ t('cookies.analyticsDescription') }}</p></div><input v-model="selection" type="checkbox" /></label>
-        <div class="cookie-actions"><UiButton @click="save(selection)">{{ t('cookies.save') }}</UiButton><UiButton variant="secondary" @click="save(false)">{{ t('cookies.reject') }}</UiButton></div>
+        <div class="cookie-actions"><UiButton @click="save(true)">{{ t('cookies.accept') }}</UiButton><UiButton variant="secondary" @click="save(selection)">{{ t('cookies.save') }}</UiButton></div>
       </template>
-      <div v-else class="cookie-actions"><UiButton @click="save(true)">{{ t('cookies.accept') }}</UiButton><UiButton variant="secondary" @click="save(false)">{{ t('cookies.reject') }}</UiButton><UiButton variant="secondary" @click="showSettings">{{ t('cookies.settings') }}</UiButton></div>
+      <div v-else class="cookie-actions"><UiButton @click="save(true)">{{ t('cookies.accept') }}</UiButton><UiButton variant="secondary" @click="showSettings">{{ t('cookies.settings') }}</UiButton></div>
     </section>
     <button v-else type="button" class="cookie-settings" @click="showSettings">{{ t('cookies.settings') }}</button>
   </div>
