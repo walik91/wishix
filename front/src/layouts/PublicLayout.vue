@@ -2,9 +2,11 @@
 import { t } from '../i18n.js'
 import PublicHeader from '../components/navigation/PublicHeader.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
+import CookieSettingsLink from '../components/ui/CookieSettingsLink.vue'
 import logo from '../assets/brand/logo-lockup.svg'
 import { useSession } from '../composables/useSession.js'
 const { user } = useSession()
+defineEmits(['cookie-settings'])
 </script>
 
 <template>
@@ -15,6 +17,7 @@ const { user } = useSession()
     <footer class="public-footer">
       <a class="brand" href="/" :aria-label="t('appName')"><img :src="logo" :alt="t('appName')" width="118" height="36" loading="lazy" /></a>
       <p>{{ t('login.footer') }}</p>
+      <CookieSettingsLink @open="$emit('cookie-settings')" />
       <a class="login-link" :href="user ? '/my' : '/login'">{{ t(user ? 'auth.my' : 'login.submit') }}<AppIcon name="arrow" /></a>
     </footer>
   </div>

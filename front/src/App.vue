@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import LoginPage from './pages/LoginPage.vue'
 import GoogleFinishPage from './pages/GoogleFinishPage.vue'
 import RegisterPage from './pages/RegisterPage.vue'
@@ -45,6 +45,7 @@ if (aliases[path]) {
   window.history.replaceState(null, '', `${page}${window.location.search}${window.location.hash}`)
 }
 const { user, unavailable, initialize } = useSession()
+const cookieConsent = ref(null)
 onMounted(async () => {
   startAnalytics()
   await initialize()
@@ -55,7 +56,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <component :is="privatePage ? AppShell : PublicLayout">
+  <component :is="privatePage ? AppShell : PublicLayout" @cookie-settings="cookieConsent?.showSettings()">
     <GuestHomePage v-if="page === '/'" />
     <LoginPage v-else-if="page === '/login'" />
     <GoogleFinishPage v-else-if="page === '/google/finish' || page === '/facebook/finish'" />
@@ -83,7 +84,7 @@ onMounted(async () => {
       <UiButton href="/">{{ t('notFound.home') }}</UiButton>
     </section>
   </component>
-  <CookieConsent />
+  <CookieConsent ref="cookieConsent" />
 </template>
 
 <style scoped>

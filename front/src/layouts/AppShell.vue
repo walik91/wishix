@@ -12,12 +12,15 @@ import LanguagePicker from '../components/ui/LanguagePicker.vue'
 import UserAvatar from '../components/ui/UserAvatar.vue'
 import UiDialog from '../components/ui/UiDialog.vue'
 import UiButton from '../components/ui/UiButton.vue'
+import CookieSettingsLink from '../components/ui/CookieSettingsLink.vue'
+import { analyticsConfigured } from '../analytics.js'
 import SocialAuthButtons from '../components/auth/SocialAuthButtons.vue'
 import CodeVerification from '../components/auth/CodeVerification.vue'
 import TextField from '../components/ui/TextField.vue'
 import logo from '../assets/brand/logo-lockup.svg'
 
 const { user, checking, unavailable, signOut, refresh } = useSession()
+defineEmits(['cookie-settings'])
 const account = computed(() => !checking.value && !unavailable.value ? user.value : null)
 const googleResult = new URLSearchParams(window.location.search).get('google')
 const facebookResult = new URLSearchParams(window.location.search).get('facebook')
@@ -125,9 +128,10 @@ async function logout() {
           </button>
         </div>
       </header>
-      <main id="main-content" class="app-content" tabindex="-1">
+      <main id="main-content" class="app-content" :class="{ 'app-content-with-footer': analyticsConfigured }" tabindex="-1">
         <slot />
       </main>
+      <footer v-if="analyticsConfigured" class="app-footer"><CookieSettingsLink @open="$emit('cookie-settings')" /></footer>
     </div>
 
     <div class="bottom-navigation">
@@ -200,7 +204,7 @@ async function logout() {
 <style scoped>
 .app-shell { min-height: 100svh; }
 .sidebar { display: none; }
-.workspace { min-width: 0; }
+.workspace { display: flex; flex-direction: column; min-width: 0; min-height: 100svh; }
 .app-header { display: flex; align-items: center; justify-content: space-between; gap: var(--wx-space-2); min-height: 80px; padding: var(--wx-space-4); border-bottom: 1px solid var(--wx-border); background: var(--wx-surface); }
 .brand { display: inline-flex; align-items: center; flex-shrink: 0; min-height: 44px; width: fit-content; border-radius: var(--wx-radius-sm); }
 .brand img { display: block; max-width: 100%; height: auto; }
@@ -211,7 +215,10 @@ async function logout() {
 .profile-button:active:not(:disabled), .account-link:active { background: var(--wx-lavender); }
 .profile-button:disabled { opacity: .55; cursor: default; }
 .header-username, .profile-chevron { display: none; }
-.app-content { width: 100%; max-width: var(--wx-content-max); margin-inline: auto; padding: var(--wx-space-6) var(--wx-space-4) calc(104px + env(safe-area-inset-bottom)); }
+.app-content { flex: 1; width: 100%; max-width: var(--wx-content-max); margin-inline: auto; padding: var(--wx-space-6) var(--wx-space-4) calc(104px + env(safe-area-inset-bottom)); }
+.app-content-with-footer { padding-bottom: var(--wx-space-6); }
+.app-footer { width: 100%; max-width: var(--wx-content-max); margin-inline: auto; padding: 0 var(--wx-space-4) calc(128px + env(safe-area-inset-bottom)); }
+.app-footer :deep(.cookie-settings-link) { scroll-margin-bottom: calc(128px + env(safe-area-inset-bottom)); }
 .bottom-navigation { position: fixed; z-index: 5; inset: auto 0 0; padding: var(--wx-space-2) var(--wx-space-2) max(var(--wx-space-2), env(safe-area-inset-bottom)); border-top: 1px solid var(--wx-border); background: var(--wx-surface); }
 .profile-identity { display: flex; align-items: center; gap: var(--wx-space-3); min-width: 0; }
 .profile-identity strong { line-height: 1.5; }
@@ -234,6 +241,8 @@ dd + dt { margin-top: var(--wx-space-4); }
   .profile-chevron { display: block; }
   .profile-button { padding-right: var(--wx-space-2); }
   .app-content { padding: var(--wx-space-8) var(--wx-space-6) calc(104px + env(safe-area-inset-bottom)); }
+  .app-content-with-footer { padding-bottom: var(--wx-space-6); }
+  .app-footer { padding-inline: var(--wx-space-6); }
 }
 @media (min-width: 64rem) {
   .app-shell { display: grid; grid-template-columns: var(--wx-sidebar-width) minmax(0, 1fr); width: min(100%, 1600px); margin-inline: auto; border-inline: 1px solid var(--wx-border); }
@@ -251,6 +260,7 @@ dd + dt { margin-top: var(--wx-space-4); }
   .header-title { display: block; }
   .app-header { padding-inline: var(--wx-space-8); }
   .app-content { padding: var(--wx-space-8); }
+  .app-footer { padding: 0 var(--wx-space-8) var(--wx-space-6); }
   .bottom-navigation { display: none; }
 }
 </style>
