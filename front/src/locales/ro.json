@@ -225,7 +225,7 @@
   "wishes.error.wish_conflict": "Dorința a fost modificată într-o altă filă. Modificările tale nu au fost salvate.",
   "wishes.reloadEdit": "Reîncarcă dorința (renunță la modificări)",
   "lists.notice.wishUpdated": "Dorința a fost actualizată.",
-  "wishes.import.hint": "Primul link poate completa titlul, imaginea și prețul aproximativ. Poți modifica totul sau adăuga dorința manual.",
+  "wishes.import.hint": "Primul link poate completa titlul, descrierea, imaginea și prețul aproximativ. Poți modifica totul sau adăuga dorința manual.",
   "wishes.import.loading": "Încărcăm datele produsului. Poți continua să completezi formularul.",
   "wishes.import.ok": "Datele produsului au fost adăugate. Verifică-le înainte de salvare.",
   "wishes.import.partial": "O parte din date a fost adăugată. Completează ce lipsește și verifică prețul.",

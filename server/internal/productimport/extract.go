@@ -22,12 +22,13 @@ type Document struct {
 }
 
 type Metadata struct {
-	Title      string
-	Price      string
-	Currency   string
-	ShopName   string
-	Images     []string
-	NotProduct bool
+	Title       string
+	Description string
+	Price       string
+	Currency    string
+	ShopName    string
+	Images      []string
+	NotProduct  bool
 }
 
 // Adapter is an optional override for a confirmed site-specific incompatibility.
@@ -58,10 +59,13 @@ func content(n *html.Node) string {
 	return nodeText(n)
 }
 func nodeText(n *html.Node) string {
+	return nodeTextLimit(n, 1000)
+}
+func nodeTextLimit(n *html.Node, limit int) string {
 	var b strings.Builder
 	var walk func(*html.Node, int)
 	walk = func(n *html.Node, depth int) {
-		if depth > 64 || b.Len() > 8192 || n.Data == "script" || n.Data == "style" {
+		if depth > 64 || b.Len() > 24000 || n.Data == "script" || n.Data == "style" {
 			return
 		}
 		if n.Type == html.TextNode {
@@ -73,7 +77,19 @@ func nodeText(n *html.Node) string {
 		}
 	}
 	walk(n, 0)
-	return clean(b.String(), 1000)
+	return clean(b.String(), limit)
+}
+
+// Structured descriptions may contain HTML. Extract text without running markup or scripts.
+func descriptionText(s string) string {
+	if len(s) > 50000 {
+		s = s[:50000]
+	}
+	doc, err := html.Parse(strings.NewReader(s))
+	if err != nil {
+		return ""
+	}
+	return nodeTextLimit(doc, 5000)
 }
 func clean(s string, limit int) string {
 	s = strings.Map(func(r rune) rune {
@@ -449,6 +465,7 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 	}
 	if product != nil {
 		result.Title = str(product["name"])
+		result.Description = descriptionText(str(product["description"]))
 		result.Price, result.Currency = priceFrom(product["offers"], page)
 		result.Images = append(result.Images, imageValues(product["image"])...)
 	}
@@ -464,6 +481,14 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 				case "name":
 					if result.Title == "" {
 						result.Title = content(n)
+					}
+				case "description":
+					if result.Description == "" {
+						if v := attr(n, "content"); v != "" {
+							result.Description = descriptionText(v)
+						} else {
+							result.Description = nodeTextLimit(n, 5000)
+						}
 					}
 				case "price":
 					if result.Price == "" {
@@ -555,6 +580,7 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 		return Metadata{NotProduct: true}, nil
 	}
 	result.Title = clean(result.Title, 200)
+	result.Description = clean(result.Description, 5000)
 	result.ShopName = clean(result.ShopName, 120)
 	result.Price = decimal(result.Price)
 	result.Currency = strings.ToUpper(strings.TrimSpace(result.Currency))

@@ -225,7 +225,7 @@
   "wishes.error.wish_conflict": "This wish was changed in another tab. Your edits have not been saved.",
   "wishes.reloadEdit": "Reload wish (discard these edits)",
   "lists.notice.wishUpdated": "Wish updated.",
-  "wishes.import.hint": "The first link can fill in the title, image and approximate price. You can edit everything or add a wish by hand.",
+  "wishes.import.hint": "The first link can fill in the title, description, image and approximate price. You can edit everything or add a wish by hand.",
   "wishes.import.loading": "Reading the product page. You can keep filling in the form.",
   "wishes.import.ok": "Product details added. Check them before saving.",
   "wishes.import.partial": "Some product details were added. Fill in anything missing and check the price.",

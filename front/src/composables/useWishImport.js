@@ -48,6 +48,7 @@ export function useWishImport(firstLink, fields, onApplied) {
       const image = importedImage(result.image)
       const applied = []
       if (!dirty.has('title') && result.title) { fields.title.value = result.title; applied.push('title') }
+      if (!dirty.has('description') && result.description) { fields.description.value = result.description; applied.push('description') }
       if (!dirty.has('price') && !dirty.has('currency') && result.price && result.currency) {
         fields.price.value = result.price; fields.currency.value = result.currency
         applied.push('price', 'currency')

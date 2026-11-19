@@ -56,6 +56,29 @@ func TestExactDecimal(t *testing.T) {
 	}
 }
 
+func TestProductDescription(t *testing.T) {
+	page, _ := url.Parse("https://shop.example.com/product")
+	for _, tt := range []struct{ name, html, want string }{
+		{"microdata", `<div itemscope itemtype="//schema.org/Product"><meta itemprop="name" content="Chair"><span itemprop="description">Soft <b>chair</b><script>bad()</script></span></div>`, "Soft chair"},
+		{"json ld html", `<script type="application/ld+json">{"@type":"Product","name":"Chair","description":"Soft <b>chair</b>\u003cscript>bad()\u003c/script>"}</script>`, "Soft chair"},
+		{"meta", `<div itemscope itemtype="https://schema.org/Product"><meta itemprop="description" content="Warm &amp; soft"></div>`, "Warm & soft"},
+		{"unrelated description", `<title>Chair</title><p>Unrelated</p><meta name="description" content="Store marketing">`, ""},
+		{"category", `<script type="application/ld+json">{"@type":"CollectionPage","description":"Category"}</script>`, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := extract([]byte(tt.html), page, nil)
+			if err != nil || got.Description != tt.want {
+				t.Fatalf("description = %q, err = %v", got.Description, err)
+			}
+		})
+	}
+	long := strings.Repeat("я", 5100)
+	m, err := extract([]byte(`<div itemscope itemtype="//schema.org/Product"><span itemprop="description">`+long+`</span></div>`), page, nil)
+	if err != nil || len([]rune(m.Description)) != 5000 {
+		t.Fatalf("description limit: %d, %v", len([]rune(m.Description)), err)
+	}
+}
+
 type exampleAdapter struct{}
 
 func (exampleAdapter) Match(u *url.URL) bool { return u.Hostname() == "special.example.com" }

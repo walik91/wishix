@@ -18,7 +18,7 @@ async function setup(lang = 'en', width = 390) {
   await page.goto(`${origin}/my/wishes/new`)
   await page.locator('#wish-link-1').waitFor()
   const jpeg = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 40; c.height = 40; return c.toDataURL('image/jpeg').split(',')[1] })
-  return { context, page, result: { status: 'ok', title: 'Imported product', price: '49.95', currency: 'MDL', shop_name: 'Store', image: { mime: 'image/jpeg', data_base64: jpeg } } }
+  return { context, page, result: { status: 'ok', title: 'Imported product', description: 'Imported details', price: '49.95', currency: 'MDL', shop_name: 'Store', image: { mime: 'image/jpeg', data_base64: jpeg } } }
 }
 async function waitStatus(page, text) { await page.locator('.import-status').filter({ hasText: text }).waitFor() }
 try {
@@ -32,6 +32,8 @@ try {
     await page.route('**/api/wishes/import-preview', async route => { started(); await gate; await route.fulfill({ json: result }).catch(() => {}) })
     await page.locator('#wish-title').fill('My own title')
     await page.locator('#wish-title').fill('')
+    await page.locator('#wish-description').fill('My description')
+    await page.locator('#wish-description').fill('')
     await page.locator('#wish-link-1').fill('https://shop.example.com/product')
     await pending
     await page.locator('#wish-price').fill('12.50')
@@ -40,6 +42,7 @@ try {
     release()
     await waitStatus(page, texts.en['wishes.import.kept'])
     assert.equal(await page.locator('#wish-title').inputValue(), '')
+    assert.equal(await page.locator('#wish-description').inputValue(), '')
     assert.equal(await page.locator('#wish-price').inputValue(), '12.50')
     assert.equal(await page.locator('#wish-currency').inputValue(), 'EUR')
     assert.equal(await page.locator('.file-name').innerText(), 'mine.jpg')
@@ -70,13 +73,29 @@ try {
     await page.locator('#wish-import').click()
     await waitStatus(page, texts.en['wishes.import.ok'])
     assert.equal(await page.locator('#wish-title').inputValue(), 'Second product')
+    assert.equal(await page.locator('#wish-description').inputValue(), 'Imported details')
     assert.deepEqual(urls, ['https://shop.example.com/first', 'https://shop.example.com/second'])
     // Keep manual edits, remove pristine values from the previous source on URL change.
     await page.locator('#wish-title').fill('Keep this title')
     await page.locator('#wish-link-1').fill('https://shop.example.com/third')
     assert.equal(await page.locator('#wish-title').inputValue(), 'Keep this title')
     assert.equal(await page.locator('#wish-price').inputValue(), '')
+    assert.equal(await page.locator('#wish-description').inputValue(), '')
     assert.equal(await page.locator('.file-name').count(), 0)
+    checks++; await context.close()
+  }
+  // A manually edited imported description survives source changes and retries.
+  {
+    const { page, context, result } = await setup()
+    await page.route('**/api/wishes/import-preview', route => route.fulfill({ json: result }))
+    await page.locator('#wish-link-1').fill('https://shop.example.com/first')
+    await waitStatus(page, texts.en['wishes.import.ok'])
+    await page.locator('#wish-description').fill('Keep my description')
+    await page.locator('#wish-link-1').fill('https://shop.example.com/second')
+    assert.equal(await page.locator('#wish-description').inputValue(), 'Keep my description')
+    await page.locator('#wish-import').click()
+    await waitStatus(page, texts.en['wishes.import.ok'])
+    assert.equal(await page.locator('#wish-description').inputValue(), 'Keep my description')
     checks++; await context.close()
   }
   // Save stays available when import fails, returns a category, or is in progress.
@@ -97,9 +116,27 @@ try {
     await page.locator('#wish-link-1').fill('https://shop.example.com/item'); await pending
     if (mode !== 'loading') await waitStatus(page, texts.en[`wishes.import.${mode}`])
     await page.locator('#wish-title').fill('Manual gift')
-    await page.locator('button[type=submit]').click()
+    await page.locator('.new-wish-page form button[type=submit]').click()
     await page.waitForURL('**/my/wishes?notice=wish-added')
     assert.equal(saved.title, 'Manual gift'); assert.equal(saved.price, null)
+    checks++; await context.close()
+  }
+  // Imported description can be edited and is sent with the saved wish.
+  {
+    const { page, context, result } = await setup()
+    await page.route('**/api/wishes/import-preview', route => route.fulfill({ json: { ...result, status: 'partial', image: undefined } }))
+    let saved
+    await page.route('**/api/wishes', async route => {
+      if (route.request().method() === 'POST') { saved = route.request().postDataJSON(); await route.fulfill({ status: 201, json: { wish: { id: 'saved' } } }) }
+      else await route.fulfill({ json: { wishes: [] } })
+    })
+    await page.locator('#wish-link-1').fill('https://shop.example.com/item')
+    await waitStatus(page, texts.en['wishes.import.partial'])
+    assert.equal(await page.locator('#wish-description').inputValue(), 'Imported details')
+    await page.locator('#wish-description').fill('Edited details')
+    await page.locator('.new-wish-page form button[type=submit]').click()
+    await page.waitForURL('**/my/wishes?notice=wish-added')
+    assert.equal(saved.description, 'Edited details')
     checks++; await context.close()
   }
   // Inspect the imported state, loading/error messages, touch targets and overflow in all layouts/languages.
@@ -112,6 +149,7 @@ try {
       await waitStatus(page, texts[lang]['wishes.import.ok'])
       await page.evaluate(() => document.fonts.ready)
       assert.equal(await page.locator('html').getAttribute('lang'), lang)
+      assert.equal(await page.locator('#wish-description').inputValue(), 'Imported details')
       assert.equal(await page.locator('.image-preview img').evaluate(img => img.complete && img.naturalWidth > 0), true)
       const state = await page.evaluate(() => {
         const visible = el => el.getClientRects().length && !el.classList.contains('sr-only')

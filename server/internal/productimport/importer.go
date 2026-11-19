@@ -16,6 +16,7 @@ type Image struct {
 type Preview struct {
 	Status          string `json:"status"`
 	Title           string `json:"title,omitempty"`
+	Description     string `json:"description,omitempty"`
 	Price           string `json:"price,omitempty"`
 	Currency        string `json:"currency,omitempty"`
 	ShopName        string `json:"shop_name,omitempty"`
@@ -62,7 +63,7 @@ func (i *Importer) Preview(ctx context.Context, raw, locale string) (Preview, er
 	if metadata.NotProduct {
 		return Preview{Status: "not_product"}, nil
 	}
-	result := Preview{Status: "partial", Title: metadata.Title, Price: metadata.Price, Currency: metadata.Currency, ShopName: metadata.ShopName, ImageReason: "no_candidate"}
+	result := Preview{Status: "partial", Title: metadata.Title, Description: metadata.Description, Price: metadata.Price, Currency: metadata.Currency, ShopName: metadata.ShopName, ImageReason: "no_candidate"}
 	for index, candidate := range metadata.Images {
 		if index >= 3 || ctx.Err() != nil {
 			break
@@ -81,13 +82,13 @@ func (i *Importer) Preview(ctx context.Context, raw, locale string) (Preview, er
 		result.ImageReason, result.ImageHTTPStatus = "", 0
 		break
 	}
-	if ctx.Err() != nil && result.Title == "" && result.Price == "" {
+	if ctx.Err() != nil && result.Title == "" && result.Description == "" && result.Price == "" {
 		return Preview{}, ErrFetch
 	}
 	if result.Title != "" && result.Price != "" && result.Image != nil {
 		result.Status = "ok"
 	}
-	if result.Title == "" && result.Price == "" && result.Image == nil {
+	if result.Title == "" && result.Description == "" && result.Price == "" && result.Image == nil {
 		result.Status = "empty"
 	}
 	return result, nil

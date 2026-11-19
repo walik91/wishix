@@ -46,7 +46,7 @@ async function loadLists() {
 }
 watch([user, checking, unavailable], ([account, pending, failed]) => { if (account && !pending && !failed) loadLists() }, { immediate: true })
 const firstLink = computed(() => links.value[0]?.value || '')
-const { status: importStatus, shopName, canImport, loading: importing, markDirty, cancel: cancelImport, run: importLink, firstLinkBlur } = useWishImport(firstLink, { title, price, currency, image }, applied => {
+const { status: importStatus, shopName, canImport, loading: importing, markDirty, cancel: cancelImport, run: importLink, firstLinkBlur } = useWishImport(firstLink, { title, description, price, currency, image }, applied => {
   for (const field of applied) delete errors.value[field]
 })
 const currencies = ['EUR', 'USD', 'GBP', 'MDL', 'RON', 'UAH', 'RUB', 'CHF', 'CAD', 'AUD', 'JPY']
@@ -139,7 +139,7 @@ async function submit() {
             </section>
             <TextField id="wish-title" v-model="title" :label="t('wishes.titleLabel')" :placeholder="t('wishes.titlePlaceholder')" :hint="t('wishes.titleHint')" :error="errors.title ? t(`wishes.error.${errors.title}`) : ''" required maxlength="400" autocomplete="off" @input="markDirty('title')" />
             <WishImageInput id="wish-image" v-model="image" :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" @manual-change="markDirty('image')" />
-            <TextField id="wish-description" v-model="description" multiline rows="4" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" maxlength="10000" />
+            <TextField id="wish-description" v-model="description" multiline rows="4" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" maxlength="10000" @input="markDirty('description')" />
             <div class="price-fields">
               <TextField id="wish-price" v-model="price" :label="t('wishes.priceLabel')" :hint="t('wishes.priceHint')" :error="errors.price ? t(`wishes.error.${errors.price}`) : ''" inputmode="decimal" placeholder="0.00" maxlength="13" @input="markDirty('price')" />
               <TextField id="wish-currency" v-model="currency" :label="t('wishes.currencyLabel')" :hint="t('wishes.currencyHint')" :error="errors.currency ? t(`wishes.error.${errors.currency}`) : ''" list="wish-currencies" maxlength="3" placeholder="USD" autocomplete="off" @input="markDirty('currency')" />

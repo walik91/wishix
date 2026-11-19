@@ -24,7 +24,7 @@ func TestPreviewFallsBackAndNormalizesImage(t *testing.T) {
 		switch r.URL.Path {
 		case "/product":
 			w.Header().Set("Content-Type", "text/html")
-			_, _ = w.Write([]byte(`<script type="application/ld+json">{"@type":"Product","name":"Gift","image":["/broken.jpg","/broken.jpg","/fake.png"],"offers":{"price":"49.95","priceCurrency":"MDL"}}</script><gallery :imgs='"/valid.png"'></gallery>`))
+			_, _ = w.Write([]byte(`<script type="application/ld+json">{"@type":"Product","name":"Gift","description":"Product details","image":["/broken.jpg","/broken.jpg","/fake.png"],"offers":{"price":"49.95","priceCurrency":"MDL"}}</script><gallery :imgs='"/valid.png"'></gallery>`))
 		case "/fake.png":
 			w.Header().Set("Content-Type", "image/png")
 			_, _ = w.Write([]byte(`<svg><script>bad</script></svg>`))
@@ -38,7 +38,7 @@ func TestPreviewFallsBackAndNormalizesImage(t *testing.T) {
 	i := New()
 	i.fetch = f
 	result, err := i.Preview(context.Background(), "http://shop.example.com/product", "ru")
-	if err != nil || result.Status != "ok" || result.Image == nil {
+	if err != nil || result.Status != "ok" || result.Image == nil || result.Description != "Product details" {
 		t.Fatalf("preview: %+v %v", result, err)
 	}
 	data, err := base64.StdEncoding.DecodeString(result.Image.Data)
