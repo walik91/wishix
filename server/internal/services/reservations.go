@@ -125,6 +125,9 @@ func (s *Reservations) Start(ctx context.Context, input ReservationInput, user *
 		if err != nil {
 			return err
 		}
+		if user != nil && c.Wish.OwnerID == user.ID {
+			return ErrReservationUnavailable
+		}
 		if c.List != nil {
 			challenge.ListID = &c.List.ID
 		} else {
@@ -179,6 +182,9 @@ func (s *Reservations) Confirm(ctx context.Context, input ReservationInput, user
 		c, err := s.context(tx, input)
 		if err != nil {
 			return err
+		}
+		if user != nil && c.Wish.OwnerID == user.ID {
+			return ErrReservationUnavailable
 		}
 		// A guest must prove control of the address before learning whether an
 		// account exists. Do this inside the transaction so registration racing

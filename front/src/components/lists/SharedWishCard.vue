@@ -10,7 +10,7 @@ import UiDialog from '../ui/UiDialog.vue'
 import TextField from '../ui/TextField.vue'
 import { guestWishImage, publicCollectionImage } from '../../api/lists.js'
 import WishCard from '../wishes/WishCard.vue'
-const props = defineProps({ wish: { type: Object, required: true }, listId: { type: String, default: '' }, token: { type: String, default: '' }, username: { type: String, default: '' } })
+const props = defineProps({ wish: { type: Object, required: true }, listId: { type: String, default: '' }, token: { type: String, default: '' }, username: { type: String, default: '' }, isOwner: Boolean })
 const emit = defineEmits(['updated'])
 const { user } = useSession()
 const open = ref(false), mode = ref('start'), email = ref(''), code = ref(''), challenge = ref(''), busy = ref(false), failure = ref(''), success = ref(''), refreshNeeded = ref(false)
@@ -53,7 +53,7 @@ onBeforeUnmount(reset)
 </script>
 <template>
   <div ref="container" class="shared-wish">
-    <WishCard :wish="wish" read-only><template v-if="!username && !wish.received" #actions><div class="reservation-actions"><template v-if="wish.reserved"><span class="reservation-status">{{ t('reservation.reserved') }}</span><UiButton v-if="wish.guest_recoverable" variant="secondary" @click="show('recover')">{{ t('reservation.needLink') }}</UiButton></template><UiButton v-else @click="show('start')">{{ t('reservation.reserve') }}</UiButton></div></template></WishCard>
+    <WishCard :wish="wish" read-only><template v-if="!username && !isOwner && !wish.received" #actions><div class="reservation-actions"><template v-if="wish.reserved"><span class="reservation-status">{{ t('reservation.reserved') }}</span><UiButton v-if="wish.guest_recoverable" variant="secondary" @click="show('recover')">{{ t('reservation.needLink') }}</UiButton></template><UiButton v-else @click="show('start')">{{ t('reservation.reserve') }}</UiButton></div></template></WishCard>
     <UiDialog v-model:open="open" :busy="busy" :title="t(mode === 'recover' ? 'reservation.needLink' : 'reservation.reserve')">
       <div v-if="mode === 'login'" class="reservation-form" role="status"><p>{{ t('reservation.accountExists') }}</p><UiButton href="/login" @click="rememberReturn">{{ t('reservation.signIn') }}</UiButton></div>
       <div v-else-if="mode === 'start' && user && !user.email" class="reservation-form" role="status"><p>{{ t('reservation.addEmailFirst') }}</p><UiButton href="/my?add_email=1">{{ t('profile.addEmail') }}</UiButton></div>

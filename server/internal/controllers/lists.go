@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -442,7 +443,11 @@ func (c *Lists) guest(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	c.auth.write(w, 200, map[string]any{"list": publicList(list, false), "username": username, "wishes": publicWishes(wishes)})
+	user, err := c.optionalUser(r)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, guestListResponse(list, username, wishes, user))
 	return nil
 }
 func (c *Lists) guestImage(w http.ResponseWriter, r *http.Request) error {
@@ -504,9 +509,32 @@ func (c *Lists) shared(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	result := publicWishes(wishes)
-	c.auth.write(w, 200, map[string]any{"list": publicList(list, false), "username": username, "wishes": result})
+	user, err := c.optionalUser(r)
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, 200, guestListResponse(list, username, wishes, user))
 	return nil
+}
+func (c *Lists) optionalUser(r *http.Request) (*models.User, error) {
+	user, err := c.auth.service.Current(r.Context(), c.auth.token(r))
+	if errors.Is(err, services.ErrSession) {
+		return nil, nil
+	}
+	return user, err
+}
+
+func guestListResponse(list *models.Wishlist, username string, wishes []models.Wish, user *models.User) map[string]any {
+	isOwner := user != nil && user.ID != "" && user.ID == list.OwnerID
+	var result any = publicWishes(wishes)
+	if isOwner {
+		items := make([]map[string]any, 0, len(wishes))
+		for _, wish := range publicWishes(wishes) {
+			items = append(items, map[string]any{"id": wish.ID, "title": wish.Title, "description": wish.Description, "price": wish.Price, "currency": wish.Currency, "priority": wish.Priority, "shop_links": wish.ShopLinks, "has_image": wish.HasImage, "received": wish.Received})
+		}
+		result = items
+	}
+	return map[string]any{"list": publicList(list, false), "username": username, "wishes": result, "is_owner": isOwner}
 }
 func publicWishes(wishes []models.Wish) []publicWishResponse {
 	result := make([]publicWishResponse, 0, len(wishes))

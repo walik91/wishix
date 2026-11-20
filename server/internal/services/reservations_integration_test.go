@@ -53,6 +53,14 @@ func TestIntegrationReservationsAndListChanges(t *testing.T) {
 	messages := &reservationMessages{}
 	config := &security.Config{Origin: "https://wishix.test", Secret: strings.Repeat("integration-secret", 3)}
 	bookings := services.NewReservations(repositories.NewReservations(executor), db.NewTransactionManager(executor), f.auth, f.mail, messages, config)
+	authController := controllers.NewAuth(f.auth, config, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	listsController := controllers.NewLists(services.NewLists(repositories.NewLists(executor), db.NewTransactionManager(executor)), authController)
+	controllers.NewReservations(bookings, authController, listsController).RegisterRoutes(f.handler.(*http.ServeMux))
+	selfRequest := map[string]any{"wish_id": wishID, "list_id": listID, "list_token": listToken, "email": "booking-owner@example.test", "locale": "en"}
+	selfResponse := f.listCall(t, "POST", "/api/reservations/start", selfRequest, owner, 409)
+	if selfResponse["error"] != "reservation_unavailable" {
+		t.Fatal("owner could start booking own wish", selfResponse)
+	}
 	ctx, stop := context.WithTimeout(context.Background(), 90*time.Second)
 	defer stop()
 	input := services.ReservationInput{WishID: wishID, ListID: listID, ListToken: listToken, Email: "guest@example.test", Locale: "en"}
@@ -97,6 +105,25 @@ func TestIntegrationReservationsAndListChanges(t *testing.T) {
 	publicWish := guest["wishes"].([]any)[0].(map[string]any)
 	if publicWish["reserved"] != true || publicWish["guest_recoverable"] != true {
 		t.Fatal("reservation not visible through other list", publicWish)
+	}
+	for _, req := range []struct {
+		path string
+		body map[string]string
+	}{
+		{"/api/public/lists/guest", map[string]string{"id": listID, "token": listToken}},
+		{"/api/public/lists/view", map[string]string{"token": listToken}},
+	} {
+		ownerView := f.listCall(t, "POST", req.path, req.body, owner, 200)
+		item := ownerView["wishes"].([]any)[0].(map[string]any)
+		if ownerView["is_owner"] != true {
+			t.Fatalf("owner was not identified: %s", req.path)
+		}
+		if _, ok := item["reserved"]; ok {
+			t.Fatalf("reservation disclosed to owner: %s", req.path)
+		}
+		if _, ok := item["guest_recoverable"]; ok {
+			t.Fatalf("reservation recovery disclosed to owner: %s", req.path)
+		}
 	}
 	private := f.currentList(t, owner, listID)["wishes"].([]any)[0].(map[string]any)
 	if _, exists := private["reserved"]; exists {
