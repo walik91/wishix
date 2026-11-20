@@ -56,6 +56,33 @@ func TestExactDecimal(t *testing.T) {
 	}
 }
 
+func TestSamePageIgnoresOnlyTrackingParameters(t *testing.T) {
+	page, _ := url.Parse("https://maximum.md/ru/6917541/?utm_source=chatgpt.com&variant=white")
+	for _, tt := range []struct {
+		raw  string
+		want bool
+	}{
+		{"https://maximum.md/ru/6917541/?variant=white", true},
+		{"https://maximum.md/ru/6917541/?utm_medium=chat&variant=white", true},
+		{"https://maximum.md/ru/6917541/?variant=black", false},
+		{"https://maximum.md/ru/6917541/", false},
+		{"https://other.example/ru/6917541/?variant=white", false},
+	} {
+		if got := samePage(tt.raw, page); got != tt.want {
+			t.Errorf("samePage(%q) = %v, want %v", tt.raw, got, tt.want)
+		}
+	}
+}
+
+func TestTrackedURLSelectsMatchingProduct(t *testing.T) {
+	page, _ := url.Parse("https://maximum.md/ru/6917541/?utm_source=chatgpt.com")
+	html := `<script type="application/ld+json">[{"@type":"Product","url":"https://maximum.md/ru/6917541/","name":"Cuisinart ICE21E"},{"@type":"Product","url":"https://maximum.md/ru/other/","name":"Other product"}]</script>`
+	got, err := extract([]byte(html), page, nil)
+	if err != nil || got.NotProduct || got.Title != "Cuisinart ICE21E" {
+		t.Fatalf("tracked page selected wrong product: %+v, %v", got, err)
+	}
+}
+
 func TestProductDescription(t *testing.T) {
 	page, _ := url.Parse("https://shop.example.com/product")
 	for _, tt := range []struct{ name, html, want string }{
@@ -77,7 +104,7 @@ func TestProductDescription(t *testing.T) {
 	}
 	long := strings.Repeat("я", 5100)
 	m, err := extract([]byte(`<div itemscope itemtype="//schema.org/Product"><span itemprop="description">`+long+`</span></div>`), page, nil)
-	if err != nil || len([]rune(m.Description)) != 5000 {
+	if err != nil || len([]rune(m.Description)) != 500 || !strings.HasSuffix(m.Description, "…") {
 		t.Fatalf("description limit: %d, %v", len([]rune(m.Description)), err)
 	}
 }

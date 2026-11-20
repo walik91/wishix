@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/charset"
+	"wishix/server/internal/wishlimits"
 )
 
 // MaximumAdapter recognizes only the store's product description frame.
@@ -120,13 +121,5 @@ func maximumDescription(raw []byte) string {
 	if count > 100000 || tooDeep || len(main) != 1 {
 		return ""
 	}
-	description := nodeTextLimit(main[0], 5001)
-	if runes := []rune(description); len(runes) > 5000 {
-		clipped := string(runes[:4999])
-		if space := strings.LastIndex(clipped, " "); space > len(clipped)/2 {
-			clipped = clipped[:space]
-		}
-		return strings.TrimSpace(clipped) + "…"
-	}
-	return description
+	return limitDescription(nodeTextLimit(main[0], wishlimits.Description+1))
 }

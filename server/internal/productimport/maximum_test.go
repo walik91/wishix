@@ -101,7 +101,7 @@ func TestMaximumPreviewUsesBoundedDescriptionResource(t *testing.T) {
 
 func TestMaximumDescriptionLengthAndMarkup(t *testing.T) {
 	description := maximumDescription([]byte(`<main role="main">` + strings.Repeat("текст ", 1100) + `</main>`))
-	if len([]rune(description)) > 5000 || !strings.HasSuffix(description, "…") || !strings.HasSuffix(description, "текст…") {
+	if len([]rune(description)) > 500 || !strings.HasSuffix(description, "…") || !strings.HasSuffix(description, "текст…") {
 		t.Fatalf("description not truncated at a word boundary: %d runes", len([]rune(description)))
 	}
 	if got := maximumDescription([]byte(`<main role="main"><p>Use &lt;b&gt;plain&lt;/b&gt; text</p><style>hidden</style></main>`)); plainText(got, 5000) != "Use plain text" {

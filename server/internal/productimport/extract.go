@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/charset"
+	"wishix/server/internal/wishlimits"
 )
 
 // Document is bounded, inert HTML. Adapters may inspect it but do not fetch URLs.
@@ -125,6 +126,18 @@ func clean(s string, limit int) string {
 		s = string(runes[:limit])
 	}
 	return s
+}
+
+func limitDescription(s string) string {
+	runes := []rune(s)
+	if len(runes) <= wishlimits.Description {
+		return s
+	}
+	clipped := string(runes[:wishlimits.Description-1])
+	if space := strings.LastIndex(clipped, " "); space > len(clipped)/2 {
+		clipped = clipped[:space]
+	}
+	return strings.TrimSpace(clipped) + "…"
 }
 func types(v any, wanted string) bool {
 	switch v := v.(type) {
@@ -246,7 +259,21 @@ func samePage(raw string, base *url.URL) bool {
 		return false
 	}
 	u = base.ResolveReference(u)
-	return strings.EqualFold(u.Host, base.Host) && strings.TrimRight(u.Path, "/") == strings.TrimRight(base.Path, "/") && u.RawQuery == base.RawQuery
+	queryWithoutTracking := func(u *url.URL) (string, bool) {
+		values, err := url.ParseQuery(u.RawQuery)
+		if err != nil {
+			return "", false
+		}
+		for key := range values {
+			if strings.HasPrefix(strings.ToLower(key), "utm_") {
+				delete(values, key)
+			}
+		}
+		return values.Encode(), true
+	}
+	uq, validU := queryWithoutTracking(u)
+	bq, validBase := queryWithoutTracking(base)
+	return validU && validBase && strings.EqualFold(u.Host, base.Host) && strings.TrimRight(u.Path, "/") == strings.TrimRight(base.Path, "/") && uq == bq
 }
 
 func imageValues(v any) []string {
@@ -486,7 +513,7 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 	}
 	if product != nil {
 		result.Title = str(product["name"])
-		result.Description = plainText(str(product["description"]), 5000)
+		result.Description = plainText(str(product["description"]), wishlimits.Description+1)
 		result.Price, result.Currency = priceFrom(product["offers"], page)
 		result.Images = append(result.Images, imageValues(product["image"])...)
 	}
@@ -506,9 +533,9 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 				case "description":
 					if result.Description == "" {
 						if v := attr(n, "content"); v != "" {
-							result.Description = plainText(v, 5000)
+							result.Description = plainText(v, wishlimits.Description+1)
 						} else {
-							result.Description = nodeTextLimit(n, 5000)
+							result.Description = nodeTextLimit(n, wishlimits.Description+1)
 						}
 					}
 				case "price":
@@ -601,7 +628,7 @@ func extract(raw []byte, page *url.URL, adapters []Adapter) (Metadata, error) {
 		return Metadata{NotProduct: true}, nil
 	}
 	result.Title = plainText(result.Title, 200)
-	result.Description = plainText(result.Description, 5000)
+	result.Description = limitDescription(plainText(result.Description, wishlimits.Description+1))
 	result.ShopName = plainText(result.ShopName, 120)
 	result.Price = decimal(plainText(result.Price, 100))
 	result.Currency = strings.ToUpper(plainText(result.Currency, 100))

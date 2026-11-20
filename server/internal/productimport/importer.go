@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"wishix/server/internal/wishimage"
+	"wishix/server/internal/wishlimits"
 )
 
 type Image struct {
@@ -88,7 +89,7 @@ func (i *Importer) Preview(ctx context.Context, raw, locale string) (Preview, er
 		frame, _, frameErr := i.fetch.getWithRedirects(frameCtx, metadata.descriptionResource.url, locale, 1024*1024, false, false)
 		frameCancel()
 		if frameErr == nil {
-			result.Description = plainText(metadata.descriptionResource.extract(frame), 5000)
+			result.Description = limitDescription(plainText(metadata.descriptionResource.extract(frame), wishlimits.Description+1))
 		}
 	}
 	if ctx.Err() != nil && result.Title == "" && result.Description == "" && result.Price == "" {
