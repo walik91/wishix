@@ -102,5 +102,5 @@ function imageUpdated(id, url) { const wish = wishes.value.find(wish => wish.id 
   </div>
 </template>
 <style scoped>
-.wish-grid { display: grid; gap: var(--wx-space-4); align-items: start; }.share-input-row { display: flex; gap: var(--wx-space-2); align-items: center; }.share-input-row .list-share-path { flex: 1; width: 0; }.share-icon { flex: 0 0 48px; width: 48px; padding: 0; }@media(min-width:48rem) { .wish-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+.wish-grid { display: grid; grid-auto-rows: 1fr; gap: var(--wx-space-4); }.share-input-row { display: flex; gap: var(--wx-space-2); align-items: center; }.share-input-row .list-share-path { flex: 1; width: 0; }.share-icon { flex: 0 0 48px; width: 48px; padding: 0; }@media(min-width:48rem) { .wish-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 </style>

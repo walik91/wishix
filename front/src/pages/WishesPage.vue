@@ -114,7 +114,7 @@ h1 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--wx-space-3)
 .wish-count { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; padding: var(--wx-space-1) var(--wx-space-2); border-radius: var(--wx-radius-pill); color: var(--wx-primary-pressed); background: var(--wx-lavender); font-size: var(--wx-text-sm); letter-spacing: 0; }
 .collection-heading > div > p:last-child { margin: var(--wx-space-2) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.65; }
 .collection-heading > .button { width: 100%; }
-.wish-grid { display: grid; align-items: start; gap: var(--wx-space-4); }
+.wish-grid { display: grid; grid-auto-rows: 1fr; gap: var(--wx-space-4); }
 .wishes-empty { display: flex; flex-direction: column; align-items: center; padding: var(--wx-space-8) var(--wx-space-5) var(--wx-space-10); }
 .wishes-empty > img { display: block; width: 180px; max-width: 100%; height: auto; margin-bottom: var(--wx-space-4); }
 .wishes-empty :deep(.empty-state > .empty-icon) { display: none; }

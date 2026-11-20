@@ -53,8 +53,7 @@ onBeforeUnmount(reset)
 </script>
 <template>
   <div ref="container" class="shared-wish">
-    <WishCard :wish="wish" read-only />
-    <div v-if="!username && !wish.received" class="reservation-actions"><template v-if="wish.reserved"><span class="reservation-status">{{ t('reservation.reserved') }}</span><UiButton v-if="wish.guest_recoverable" variant="secondary" @click="show('recover')">{{ t('reservation.needLink') }}</UiButton></template><UiButton v-else @click="show('start')">{{ t('reservation.reserve') }}</UiButton></div>
+    <WishCard :wish="wish" read-only><template v-if="!username && !wish.received" #actions><div class="reservation-actions"><template v-if="wish.reserved"><span class="reservation-status">{{ t('reservation.reserved') }}</span><UiButton v-if="wish.guest_recoverable" variant="secondary" @click="show('recover')">{{ t('reservation.needLink') }}</UiButton></template><UiButton v-else @click="show('start')">{{ t('reservation.reserve') }}</UiButton></div></template></WishCard>
     <UiDialog v-model:open="open" :busy="busy" :title="t(mode === 'recover' ? 'reservation.needLink' : 'reservation.reserve')">
       <div v-if="mode === 'login'" class="reservation-form" role="status"><p>{{ t('reservation.accountExists') }}</p><UiButton href="/login" @click="rememberReturn">{{ t('reservation.signIn') }}</UiButton></div>
       <div v-else-if="mode === 'start' && user && !user.email" class="reservation-form" role="status"><p>{{ t('reservation.addEmailFirst') }}</p><UiButton href="/my?add_email=1">{{ t('profile.addEmail') }}</UiButton></div>
@@ -70,4 +69,4 @@ onBeforeUnmount(reset)
     </UiDialog>
   </div>
 </template>
-<style scoped>.shared-wish { min-width: 0; }.reservation-actions { display: flex; gap: var(--wx-space-3); align-items: center; flex-wrap: wrap; margin-top: var(--wx-space-2); }.reservation-status { color: var(--wx-text-muted); font-weight: 600; }.reservation-form { display: grid; gap: var(--wx-space-4); }.reservation-hint { color: var(--wx-text-muted); }.reservation-error { color: var(--wx-error); }</style>
+<style scoped>.shared-wish { display: flex; min-width: 0; }.shared-wish :deep(.wish-card) { flex: 1; }.reservation-actions { display: flex; gap: var(--wx-space-3); align-items: center; flex-wrap: wrap; }.reservation-status { color: var(--wx-text-muted); font-weight: 600; }.reservation-form { display: grid; gap: var(--wx-space-4); }.reservation-hint { color: var(--wx-text-muted); }.reservation-error { color: var(--wx-error); }</style>

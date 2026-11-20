@@ -30,5 +30,5 @@ onMounted(load)
   </div>
 </template>
 <style scoped>
-.public-collection { padding-block: var(--wx-space-8); }.list-eyebrow a { display: inline-flex; align-items: center; min-height: 44px; color: var(--wx-primary-pressed); }.shared-wish-grid { display: grid; gap: var(--wx-space-4); align-items: start; }@media(min-width:48rem) { .shared-wish-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+.public-collection { padding-block: var(--wx-space-8); }.list-eyebrow a { display: inline-flex; align-items: center; min-height: 44px; color: var(--wx-primary-pressed); }.shared-wish-grid { display: grid; grid-auto-rows: 1fr; gap: var(--wx-space-4); }@media(min-width:48rem) { .shared-wish-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 </style>
