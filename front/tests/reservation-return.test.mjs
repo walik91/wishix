@@ -12,6 +12,11 @@ const list = `/u/person/wishlist/00000000-0000-4000-8000-000000000001/${'a'.repe
 rememberReservationReturn(list)
 assert.equal(consumeReservationReturn(), list)
 assert.equal(consumeReservationReturn(), '/my', 'return path is single-use')
+const wishID = '00000000-0000-4000-8000-000000000002'
+rememberReservationReturn(list, wishID)
+assert.equal(consumeReservationReturn(), `${list}#reserve-${wishID}`)
+rememberReservationReturn(list, 'not-a-wish')
+assert.equal(consumeReservationReturn(), list, 'invalid wish IDs must not enter the redirect')
 rememberReservationReturn('/u/person/wishes')
 assert.equal(consumeReservationReturn(), '/u/person/wishes')
 rememberReservationReturn('https://attacker.example/path')

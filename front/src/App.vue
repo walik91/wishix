@@ -49,7 +49,7 @@ onMounted(async () => {
   startAnalytics()
   await initialize()
   if (user.value && page === '/login') window.location.replace(consumeReservationReturn())
-  else if (user.value && page === '/register') window.location.replace('/my')
+  else if (user.value && page === '/register') window.location.replace(consumeReservationReturn())
   else if (!user.value && !unavailable.value && privatePage) window.location.replace('/login')
 })
 </script>

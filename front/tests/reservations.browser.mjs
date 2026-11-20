@@ -25,6 +25,7 @@ await page.route('**/api/reservations/manage', route => { const body = route.req
 try {
   await page.goto(`${origin}/u/example/wishlist/${listId}/${token}`)
   await page.getByRole('button', { name: texts['reservation.reserve'] }).click()
+  await page.getByRole('button', { name: texts['reservation.continueGuest'] }).click()
   await page.getByLabel(texts['reservation.email']).fill('guest@example.test')
   await page.getByRole('button', { name: texts['reservation.sendCode'] }).click()
   await page.getByLabel(texts['reservation.code']).fill('123456')
