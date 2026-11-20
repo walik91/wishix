@@ -65,7 +65,7 @@ func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
 	}
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
-	if dec.Decode(&input) != nil || dec.Decode(new(any)) != io.EOF || len(input.Username) > 256 || len(input.Password) > 512 {
+	if dec.Decode(&input) != nil || dec.Decode(new(any)) != io.EOF || len(input.Username) > 256 {
 		http.Error(w, `{"error":"invalid_input"}`, 400)
 		return
 	}

@@ -24,13 +24,13 @@ func run(args []string, in io.Reader) error {
 	if len(args) != 1 {
 		return errors.New("usage: set-admin-pwd /path/to/.env (password on stdin)")
 	}
-	line, err := bufio.NewReader(io.LimitReader(in, 514)).ReadString('\n')
+	line, err := bufio.NewReader(in).ReadString('\n')
 	if err != nil && err != io.EOF {
 		return err
 	}
 	password := strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
-	if !utf8.ValidString(password) || utf8.RuneCountInString(password) < 12 || len(password) > 512 {
-		return errors.New("password must be 12 or more characters and at most 512 bytes")
+	if !utf8.ValidString(password) {
+		return errors.New("password must be valid UTF-8")
 	}
 	path := args[0]
 	data, err := os.ReadFile(path)

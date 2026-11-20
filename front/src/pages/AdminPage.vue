@@ -65,7 +65,7 @@ onMounted(load)
         <p class="intro">{{ t('admin.description') }}</p>
         <form @submit.prevent="login">
           <TextField id="admin-username" v-model="username" :label="t('admin.username')" name="username" autocomplete="username" required maxlength="256" />
-          <TextField id="admin-password" v-model="password" :label="t('admin.password')" type="password" name="password" autocomplete="current-password" required maxlength="512" />
+          <TextField id="admin-password" v-model="password" :label="t('admin.password')" type="password" name="password" autocomplete="current-password" />
           <p v-if="error" class="error" role="alert">{{ error }}</p>
           <UiButton type="submit" :loading="busy">{{ t('admin.signIn') }}</UiButton>
         </form>

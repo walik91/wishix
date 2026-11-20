@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,7 +35,7 @@ func TestAdminAuthenticationAndOverview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config := &security.Config{Origin: "https://wishix.test", Secret: "test-secret", SecureCookie: true, AdminUsername: "admin", AdminPasswordHash: base64.RawURLEncoding.EncodeToString([]byte(security.HashPassword("a-long-password")))}
+	config := &security.Config{Origin: "https://wishix.test", Secret: "test-secret", SecureCookie: true, AdminUsername: "admin", AdminPasswordHash: base64.RawURLEncoding.EncodeToString([]byte(security.HashPassword("12345")))}
 	repo := &adminLimitRepo{}
 	limiter := services.NewAuth(repo, nil, nil, config)
 	admin := NewAdmin(config, &Auth{config: config}, limiter, database)
@@ -58,18 +59,18 @@ func TestAdminAuthenticationAndOverview(t *testing.T) {
 	if w := call("GET", "/api/admin/overview", "", nil, false); w.Code != 401 {
 		t.Fatal(w.Code)
 	}
-	if w := call("POST", "/api/admin/login", `{"username":"admin","password":"a-long-password"}`, nil, false); w.Code != 403 {
+	if w := call("POST", "/api/admin/login", `{"username":"admin","password":"12345"}`, nil, false); w.Code != 403 {
 		t.Fatal(w.Code)
 	}
 	if w := call("POST", "/api/admin/login", `{"username":"admin","password":"wrong"}`, nil, true); w.Code != 401 {
 		t.Fatal(w.Code)
 	}
 	repo.deny = true
-	if w := call("POST", "/api/admin/login", `{"username":"admin","password":"a-long-password"}`, nil, true); w.Code != 429 {
+	if w := call("POST", "/api/admin/login", `{"username":"admin","password":"12345"}`, nil, true); w.Code != 429 {
 		t.Fatal(w.Code)
 	}
 	repo.deny = false
-	w := call("POST", "/api/admin/login", `{"username":"admin","password":"a-long-password"}`, nil, true)
+	w := call("POST", "/api/admin/login", `{"username":"admin","password":"12345"}`, nil, true)
 	if w.Code != 204 || len(w.Result().Cookies()) != 1 {
 		t.Fatalf("login %d", w.Code)
 	}
@@ -94,4 +95,15 @@ func TestAdminAuthenticationAndOverview(t *testing.T) {
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
 	}
+	for _, password := range []string{"", strings.Repeat("a", 600)} {
+		config.AdminPasswordHash = base64.RawURLEncoding.EncodeToString([]byte(security.HashPassword(password)))
+		body, err := json.Marshal(map[string]string{"username": "admin", "password": password})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w := call("POST", "/api/admin/login", string(body), nil, true); w.Code != http.StatusNoContent {
+			t.Fatalf("login with password length %d: %d", len(password), w.Code)
+		}
+	}
+
 }

@@ -31,11 +31,18 @@ func TestUpdatePasswordPreservesEnv(t *testing.T) {
 	if err != nil || !auth.CheckPassword("long-enough-password", string(hash)) {
 		t.Fatal("invalid hash")
 	}
-	if err = run([]string{path}, strings.NewReader("short\n")); err == nil {
-		t.Fatal("short password accepted")
-	}
-	after, _ := os.ReadFile(path)
-	if string(after) != content {
-		t.Fatal("failed update changed env")
+	for _, password := range []string{"12345", "", strings.Repeat("a", 600)} {
+		if err = run([]string{path}, strings.NewReader(password+"\n")); err != nil {
+			t.Fatalf("set password: %v", err)
+		}
+		updated, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		value := strings.Split(strings.Split(string(updated), "ADMIN_PASSWORD_HASH=")[1], "\n")[0]
+		decoded, decodeErr := base64.RawURLEncoding.DecodeString(value)
+		if decodeErr != nil || !auth.CheckPassword(password, string(decoded)) {
+			t.Fatal("password hash did not verify")
+		}
 	}
 }

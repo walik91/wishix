@@ -40,10 +40,6 @@ else
   read -rs -p 'Admin password: ' password
   printf '\n'
 fi
-if ((${#password} < 12)); then
-  printf 'Error: password must contain at least 12 characters.\n' >&2
-  exit 2
-fi
 if [[ $password == *$'\n'* || $password == *$'\r'* ]]; then
   printf 'Error: password cannot contain a newline.\n' >&2
   exit 2
