@@ -12,6 +12,7 @@ const props = defineProps({ wish: { type: Object, required: true }, readOnly: Bo
 const windowListID = window.location.pathname.split('/').pop()
 const emit = defineEmits(['delete', 'image', 'copied'])
 const copying = ref(false), copyError = ref(false)
+const descriptionExpanded = ref(false)
 async function copy() {
   if (copying.value) return
   copying.value = true; copyError.value = false
@@ -42,7 +43,8 @@ function shopHost(link) { try { return new URL(link).hostname } catch { return l
     </div>
     <UiBadge class="priority" :class="wish.priority">{{ t(`wishes.priority.${wish.priority}`) }}</UiBadge>
     <UiBadge v-if="wish.received" class="priority">{{ t('lists.received') }}</UiBadge>
-    <p v-if="wish.description" class="description">{{ wish.description }}</p>
+    <p v-if="wish.description" :id="`wish-description-${wish.id}`" class="description" :class="{ collapsed: !descriptionExpanded }">{{ wish.description }}</p>
+    <button v-if="wish.description" class="description-toggle" type="button" :aria-expanded="descriptionExpanded" :aria-controls="`wish-description-${wish.id}`" @click="descriptionExpanded = !descriptionExpanded">{{ t(descriptionExpanded ? 'wishes.showLess' : 'wishes.showMore') }}</button>
     <ul v-if="wish.shop_links.length" class="shop-links" :aria-label="t('wishes.shopLinks')">
       <li v-for="(link, index) in wish.shop_links" :key="index"><a :href="link" target="_blank" rel="noopener noreferrer" @click="trackEvent('shop_link_opened')"><AppIcon name="link" /><span>{{ shopHost(link) }}</span><span class="sr-only"> · {{ t('wishes.newTab') }}</span></a></li>
     </ul>
@@ -69,6 +71,8 @@ h2 { margin: 0; font-size: var(--wx-text-md); line-height: 1.5; font-weight: 650
 .priority { margin-top: var(--wx-space-4); color: var(--wx-text-muted); background: var(--wx-background); }
 .priority.high { color: var(--wx-primary-pressed); background: var(--wx-lavender); }
 .description { margin: var(--wx-space-3) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.65; white-space: pre-wrap; }
+.description.collapsed { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.description-toggle { min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--wx-primary-pressed); font: inherit; font-size: var(--wx-text-sm); cursor: pointer; }
 .copy-error { color: var(--wx-error); font-size: var(--wx-text-sm); line-height: 1.5; }
 .shop-links { display: flex; flex-wrap: wrap; gap: var(--wx-space-1) var(--wx-space-3); margin: var(--wx-space-3) 0 0; padding: 0; list-style: none; }
 .shop-links li { min-width: 0; max-width: 100%; }

@@ -16,6 +16,7 @@ import (
 	security "wishix/server/internal/auth"
 	"wishix/server/internal/models"
 	"wishix/server/internal/wishimage"
+	"wishix/server/internal/wishlimits"
 )
 
 type WishError string
@@ -77,7 +78,7 @@ func validateWish(input WishInput) (WishInput, error) {
 	if !utf8.ValidString(input.Title) || utf8.RuneCountInString(input.Title) < 1 || utf8.RuneCountInString(input.Title) > 200 || strings.ContainsRune(input.Title, 0) {
 		return input, ErrWishTitle
 	}
-	if !utf8.ValidString(input.Description) || utf8.RuneCountInString(input.Description) > 5000 || strings.ContainsRune(input.Description, 0) {
+	if !utf8.ValidString(input.Description) || utf8.RuneCountInString(input.Description) > wishlimits.Description || strings.ContainsRune(input.Description, 0) {
 		return input, ErrWishDescription
 	}
 	input.Currency = strings.ToUpper(strings.TrimSpace(input.Currency))

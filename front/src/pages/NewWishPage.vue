@@ -19,6 +19,12 @@ import { listLists } from '../api/lists.js'
 const { user, checking, unavailable, refresh } = useSession()
 const title = ref('')
 const description = ref('')
+function limitDescription(event) {
+  const limited = [...event.target.value].slice(0, 500).join('')
+  event.target.value = limited
+  description.value = limited
+  markDirty('description')
+}
 const price = ref('')
 const currency = ref('')
 const priority = ref('medium')
@@ -82,7 +88,7 @@ async function submit() {
   const invalid = {}
   const normalizedPrice = price.value.trim().replace(',', '.')
   if (!title.value.trim() || [...title.value.trim()].length > 200) invalid.title = 'wish_title_invalid'
-  if ([...description.value.trim()].length > 5000) invalid.description = 'wish_description_invalid'
+  if ([...description.value.trim()].length > 500) invalid.description = 'wish_description_invalid'
   if (normalizedPrice && !/^(0|[1-9][0-9]{0,9})(\.[0-9]{1,2})?$/.test(normalizedPrice)) invalid.price = 'wish_price_invalid'
   if (normalizedPrice && !/^[A-Z]{3}$/.test(currency.value.trim().toUpperCase())) invalid.currency = 'wish_currency_invalid'
   for (const link of links.value) {
@@ -144,7 +150,7 @@ async function submit() {
             </section>
             <TextField id="wish-title" v-model="title" :label="t('wishes.titleLabel')" :placeholder="t('wishes.titlePlaceholder')" :hint="t('wishes.titleHint')" :error="errors.title ? t(`wishes.error.${errors.title}`) : ''" required maxlength="400" autocomplete="off" @input="markDirty('title')" />
             <WishImageInput id="wish-image" v-model="image" :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" @manual-change="markDirty('image')" />
-            <TextField id="wish-description" v-model="description" multiline rows="3" class="description-field" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" maxlength="10000" @input="markDirty('description')" />
+            <TextField id="wish-description" v-model="description" multiline rows="3" class="description-field" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" @input="limitDescription" />
             <div class="price-fields">
               <TextField id="wish-price" v-model="price" :label="t('wishes.priceLabel')" :hint="t('wishes.priceHint')" :error="errors.price ? t(`wishes.error.${errors.price}`) : ''" inputmode="decimal" placeholder="0.00" maxlength="13" @input="markDirty('price')" />
               <TextField id="wish-currency" v-model="currency" :label="t('wishes.currencyLabel')" :hint="t('wishes.currencyHint')" :error="errors.currency ? t(`wishes.error.${errors.currency}`) : ''" list="wish-currencies" maxlength="3" placeholder="USD" autocomplete="off" @input="markDirty('currency')" />
