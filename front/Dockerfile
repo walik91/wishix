@@ -17,7 +17,7 @@ ENV VITE_GA_MEASUREMENT_ID=$VITE_GA_MEASUREMENT_ID
 RUN npm run build
 
 FROM nginx/nginx-unprivileged:1.30.6-alpine AS production
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chmod=0644 nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
 

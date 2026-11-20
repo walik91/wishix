@@ -70,7 +70,9 @@ git fetch --no-tags origin main
 target_commit=$(git rev-parse --verify 'FETCH_HEAD^{commit}')
 checkout_commit=$(git rev-parse --verify 'HEAD^{commit}')
 git merge-base --is-ancestor "$checkout_commit" "$target_commit" || die 'Local main cannot be fast-forwarded to origin/main.'
-git merge --ff-only --no-overwrite-ignore "$target_commit"
+# Tracked application files must remain readable by non-root container users;
+# retain the restrictive umask for deployment state and temporary files.
+(umask 022; git merge --ff-only --no-overwrite-ignore "$target_commit")
 
 phase=configuration
 "${compose[@]}" config --quiet
