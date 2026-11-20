@@ -50,33 +50,14 @@ cat .wishix-deploy/incomplete
 
 ## Администратор
 
-Для доступа к `/cp` добавьте в серверный `.env` строку `ADMIN_USERNAME=выбранное_имя`. Пароль вводится отдельно, не сохраняется в открытом виде и должен содержать не менее 12 символов. Хэш записывает команда из образа сервера; запускать из каталога проекта на Linux, не включая пароль в аргументы или историю команд:
+Для доступа к `/cp` добавьте в серверный `.env` строку `ADMIN_USERNAME=выбранное_имя`. В каталоге проекта задайте пароль из 12 или более символов:
 
 ```bash
-docker compose build server
-read -rs -p 'Admin password: ' WISHIX_ADMIN_PASSWORD; echo
-printf '%s\n' "$WISHIX_ADMIN_PASSWORD" | docker compose run --rm --no-deps -i --user "$(id -u):$(id -g)" -v "$PWD:/config" server ./set-admin-pwd /config/.env
-unset WISHIX_ADMIN_PASSWORD
-docker compose up -d --force-recreate server
+./scripts/set-admin-pwd.sh 'ваш-новый-пароль'
 ```
 
-Для production добавьте `-f compose.prod.yaml` после каждого `docker compose`. Команда меняет только `ADMIN_PASSWORD_HASH` в существующем `.env`, не выводит пароль или хэш и требует прав на запись в каталог проекта. Пересоздание сервера применяет новые значения и завершает все сессии администратора. Обе настройки необязательны: без них вход закрыт. Для публичной среды нужен HTTPS; ограничение входа использует настройки доверенных прокси `AUTH_TRUSTED_PROXY_CIDRS`. Лимит общий для администраторской учётной записи: 30 попыток за 15 минут и 10 на IP за 15 минут.
+Для production используйте `./scripts/set-admin-pwd.sh --production 'ваш-новый-пароль'`. Пароль в аргументе может остаться в истории команд и быть виден в списке процессов. Чтобы не передавать его параметром, запустите скрипт без пароля — он запросит его без отображения; для production используйте `./scripts/set-admin-pwd.sh --production`.
 
-На Windows в PowerShell аналогично можно использовать скрытый ввод (переменная с открытым паролем существует только на время команды):
+Скрипт собирает образ сервера, записывает только кодированный Argon2id-хэш в существующий `.env` и пересоздаёт сервер, дожидаясь его готовности. Остальные значения `.env` сохраняются. Нужны работающий Docker, Docker Compose, доступ на запись в каталог проекта и запущенная база данных. Пересоздание сервера завершает административные сессии. Обе настройки необязательны: без них вход закрыт. Для публичной среды нужен HTTPS; ограничение входа использует настройки доверенных прокси `AUTH_TRUSTED_PROXY_CIDRS`. Лимит общий для администраторской учётной записи: 30 попыток за 15 минут и 10 на IP за 15 минут.
 
-```powershell
-docker compose build server
-$wishixSecret = Read-Host 'Admin password' -AsSecureString
-$wishixPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($wishixSecret)
-$wishixPreviousEncoding = $OutputEncoding
-$OutputEncoding = [System.Text.UTF8Encoding]::new()
-try {
-  $wishixPlain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($wishixPointer)
-  $wishixPlain | docker compose run --rm --no-deps -i -u 0 -v "${PWD}:/config" server ./set-admin-pwd /config/.env
-} finally {
-  [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($wishixPointer)
-  $OutputEncoding = $wishixPreviousEncoding
-  Remove-Variable wishixPlain, wishixPointer, wishixSecret, wishixPreviousEncoding -ErrorAction SilentlyContinue
-}
-docker compose up -d --force-recreate server
-```
+Если обновление хэша прошло, но пересоздание сервера завершилось ошибкой, значение в `.env` уже изменено, а старый процесс может ещё использовать прежние настройки. Проверьте состояние контейнера и повторите запуск скрипта либо пересоздайте сервер соответствующим Compose-файлом.
