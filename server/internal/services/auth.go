@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/mail"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -68,6 +69,39 @@ func NewAuth(repo AuthRepository, tx Transactor, mail CodeMailer, config *securi
 
 var usernamePattern = regexp.MustCompile(`^[a-z0-9_]{3,30}$`)
 var codePattern = regexp.MustCompile(`^[0-9]{6}$`)
+
+// Suggestions are advisory: a name is only claimed when registration completes.
+func (a *Auth) UsernameSuggestions(ctx context.Context, base string) ([]string, error) {
+	base = strings.ToLower(strings.TrimSpace(base))
+	if !usernamePattern.MatchString(base) {
+		return nil, ErrUsernameInvalid
+	}
+	suggestions := make([]string, 0, 4)
+	seen := make(map[string]bool)
+	for i := 0; i < 100 && len(suggestions) < 4; i++ {
+		suffix := ""
+		if i > 0 {
+			suffix = strconv.Itoa(i)
+		}
+		prefix := base
+		if len(prefix)+len(suffix) > 30 {
+			prefix = prefix[:30-len(suffix)]
+		}
+		candidate := prefix + suffix
+		if seen[candidate] {
+			continue
+		}
+		seen[candidate] = true
+		exists, err := a.repo.UsernameExists(ctx, candidate)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			suggestions = append(suggestions, candidate)
+		}
+	}
+	return suggestions, nil
+}
 
 func normalizeEmail(email string) (string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))

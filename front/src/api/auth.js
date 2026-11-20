@@ -8,6 +8,7 @@ const post = (action, body) => requestJSON(`/auth/${action}`, {
 })
 
 export const register = data => post('register', data)
+export const usernameSuggestions = username => post('username-suggestions', { username })
 export const verifyEmail = (challenge, code) => post('verify-email', { challenge, code })
 export const resendCode = challenge => post('resend', { challenge })
 export const login = data => post('login', data)

@@ -50,6 +50,7 @@ func privateAccount(user *models.User) accountResponse {
 
 func (c *Auth) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/register", c.mutation("register", c.register))
+	mux.HandleFunc("POST /api/auth/username-suggestions", c.mutation("username-suggestions", c.usernameSuggestions))
 	mux.HandleFunc("POST /api/auth/verify-email", c.mutation("verify-email", c.verify))
 	mux.HandleFunc("POST /api/auth/resend", c.mutation("resend", c.resend))
 	mux.HandleFunc("POST /api/auth/login", c.mutation("login", c.login))
@@ -59,6 +60,15 @@ func (c *Auth) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/add-email", c.mutation("add-email", c.addEmail))
 	mux.HandleFunc("POST /api/auth/confirm-added-email", c.mutation("confirm-added-email", c.confirmAddedEmail))
 	mux.HandleFunc("GET /api/auth/me", c.me)
+}
+
+func (c *Auth) usernameSuggestions(w http.ResponseWriter, r *http.Request, input authRequest) error {
+	suggestions, err := c.service.UsernameSuggestions(r.Context(), input.Username)
+	if err != nil {
+		return err
+	}
+	c.write(w, http.StatusOK, map[string]any{"suggestions": suggestions})
+	return nil
 }
 
 func (c *Auth) addEmail(w http.ResponseWriter, r *http.Request, input authRequest) error {

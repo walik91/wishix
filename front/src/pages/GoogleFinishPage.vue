@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onMounted, ref, watchEffect } from 'vue'
+import { computed, nextTick, onMounted, ref, watch, watchEffect } from 'vue'
 import { t } from '../i18n.js'
 import { completeGoogle, completeFacebook, facebookStatus } from '../api/auth.js'
 import { useAuthForm } from '../composables/useAuthForm.js'
@@ -17,10 +17,12 @@ onMounted(async () => {
   window.location.replace('/login')
 })
 const field = ref(null)
-const invalid = ref(false)
+const submitted = ref(false)
+const invalid = computed(() => submitted.value && !/^[a-z0-9_]{3,30}$/i.test(username.value.trim()))
 const { busy, error, run } = useAuthForm()
+watch(username, () => { error.value = '' })
 async function submit() {
-  invalid.value = !/^[a-z0-9_]{3,30}$/i.test(username.value.trim())
+  submitted.value = true
   if (invalid.value) { await nextTick(); field.value.focus(); return }
   await run(async () => { await (facebook ? completeFacebook(username.value) : completeGoogle(username.value)); window.location.assign(consumeReservationReturn()) })
 }
@@ -31,6 +33,7 @@ watchEffect(() => { document.title = `${t('google.finishTitle')} · ${t('appName
   <AuthLayout v-if="ready" :title="t('google.finishTitle')" :description="t('google.finishDescription')" title-id="google-finish-title" :divider-label="''" :show-social="false">
     <form class="finish-form" novalidate :aria-busy="busy" @submit.prevent="submit">
       <TextField id="username" ref="field" v-model="username" name="username" autocomplete="username" autocapitalize="none" :spellcheck="false" required maxlength="30" :label="t('register.username')" :placeholder="t('register.usernamePlaceholder')" :hint="t('register.usernameHint')" :error="invalid ? t('auth.error.username_invalid') : ''" />
+      <p class="profile-url">{{ t('register.profileUrl') }} <bdi>/u/{{ username.trim().toLowerCase() || t('register.usernamePlaceholder') }}</bdi></p>
       <UiButton type="submit" :loading="busy">{{ t('google.finishButton') }}</UiButton>
     </form>
     <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
@@ -38,4 +41,4 @@ watchEffect(() => { document.title = `${t('google.finishTitle')} · ${t('appName
   </AuthLayout>
 </template>
 
-<style scoped>.finish-form { display: grid; gap: var(--wx-space-5); }</style>
+<style scoped>.finish-form { display: grid; gap: var(--wx-space-5); }.profile-url { margin: calc(-1 * var(--wx-space-3)) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); overflow-wrap: anywhere; }</style>
