@@ -19,6 +19,7 @@ import (
 	security "wishix/server/internal/auth"
 	"wishix/server/internal/controllers"
 	"wishix/server/internal/db"
+	"wishix/server/internal/models"
 	"wishix/server/internal/repositories"
 	"wishix/server/internal/services"
 )
@@ -198,5 +199,78 @@ func TestIntegrationGooglePendingConsumedOnce(t *testing.T) {
 	wg.Wait()
 	if succeeded.Load() != 1 {
 		t.Fatalf("%d accounts created", succeeded.Load())
+	}
+}
+
+func TestIntegrationGoogleReregisterAfterSoftDeletion(t *testing.T) {
+	f := newAuthFixture(t)
+	ctx := context.Background()
+	executor := db.NewExecutor(f.database)
+	provider := &fakeGoogle{identity: security.GoogleIdentity{Subject: "google-reused", Email: "reused@example.test", EmailVerified: true}}
+	google := services.NewGoogle(f.auth, repositories.NewGoogle(executor), provider)
+	create := func() services.Authenticated {
+		t.Helper()
+		state, _, err := google.Start(ctx, "login", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		pending, err := google.Callback(ctx, state, "", "code")
+		if err != nil || pending.Mode != "register" {
+			t.Fatalf("registration callback: %+v %v", pending, err)
+		}
+		account, err := google.Complete(ctx, pending.Pending, "reused_user", "")
+		if err != nil {
+			t.Fatal("complete registration", err)
+		}
+		return account
+	}
+	original := create()
+	oldCookie := &http.Cookie{Name: "wishix_session", Value: original.Token}
+	oldList := f.newList(t, oldCookie, "Old list", "private")
+	oldWish := f.newWish(t, oldCookie, "Old wish", oldList["id"].(string))
+	admin := repositories.NewAdmin(executor)
+	err := db.NewTransactionManager(executor).WithTransaction(ctx, func(tx context.Context) error {
+		ok, err := admin.SoftDeleteUser(tx, original.User.ID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			t.Fatal("account was not deleted")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal("soft delete", err)
+	}
+	if _, err = f.auth.Current(ctx, original.Token); err != services.ErrSession {
+		t.Fatalf("old session remains valid: %v", err)
+	}
+	replacement := create()
+	if replacement.User.ID == original.User.ID {
+		t.Fatal("deleted account was reused instead of creating a new one")
+	}
+	var users, identities, claims, oldWishCount int64
+	if err = f.database.Unscoped().Model(&models.User{}).Where("email = ?", provider.identity.Email).Count(&users).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = f.database.Unscoped().Model(&models.AuthGoogleIdentity{}).Where("subject = ?", provider.identity.Subject).Count(&identities).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = f.database.Unscoped().Model(&models.UsernameClaim{}).Where("username = ?", "reused_user").Count(&claims).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err = f.database.Unscoped().Model(&models.Wish{}).Where("id = ? AND deleted_at IS NOT NULL", oldWish["id"]).Count(&oldWishCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if users != 2 || identities != 2 || claims != 2 || oldWishCount != 1 {
+		t.Fatalf("historical data missing: users=%d identities=%d claims=%d wishes=%d", users, identities, claims, oldWishCount)
+	}
+	state, _, err := google.Start(ctx, "login", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := google.Callback(ctx, state, "", "code")
+	if err != nil || result.Mode != "login" || result.Authenticated.User.ID != replacement.User.ID {
+		t.Fatalf("new Google login failed: %v", err)
 	}
 }

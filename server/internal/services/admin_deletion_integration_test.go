@@ -178,8 +178,11 @@ func TestIntegrationAdminSoftDelete(t *testing.T) {
 	}
 	f.listCall(t, "POST", "/api/public/lists/guest-image", map[string]string{"id": listID, "token": token, "wish_id": wishID}, nil, 404)
 	f.listCall(t, "POST", "/api/public/lists/image", map[string]string{"token": token, "wish_id": wishID}, nil, 404)
-	if status, _, _ := f.request(t, "register", map[string]string{"email": deleted.Email, "username": "replacement", "password": initialPassword}, nil); status != 409 {
-		t.Fatal("deleted email was not reserved", status)
+	if occupied, err := f.repo.EmailTaken(context.Background(), deleted.Email); err != nil || occupied {
+		t.Fatal("deleted email is not reusable", err)
+	}
+	if occupied, err := f.repo.UsernameExists(context.Background(), deleted.Username); err != nil || occupied {
+		t.Fatal("deleted username is not reusable", err)
 	}
 
 	f.listCall(t, "POST", "/api/public/lists/guest", map[string]string{"id": listID, "token": token}, nil, 404)

@@ -41,8 +41,9 @@ type AuthSession struct {
 }
 
 type AuthGoogleIdentity struct {
+	DeletedAt gorm.DeletedAt
 	Subject   string `gorm:"primaryKey"`
-	UserID    string
+	UserID    string `gorm:"primaryKey"`
 	CreatedAt time.Time
 }
 
@@ -64,8 +65,9 @@ type AuthGooglePending struct {
 func (AuthGooglePending) TableName() string { return "auth_google_pending" }
 
 type AuthFacebookIdentity struct {
+	DeletedAt gorm.DeletedAt
 	Subject   string `gorm:"primaryKey"`
-	UserID    string
+	UserID    string `gorm:"primaryKey"`
 	CreatedAt time.Time
 }
 
@@ -85,3 +87,13 @@ type AuthFacebookPending struct {
 }
 
 func (AuthFacebookPending) TableName() string { return "auth_facebook_pending" }
+
+// UsernameClaim retains historical claims while GORM hides released ones.
+type UsernameClaim struct {
+	Username  string `gorm:"primaryKey"`
+	UserID    string `gorm:"primaryKey"`
+	ExpiresAt *time.Time
+	DeletedAt gorm.DeletedAt
+}
+
+func (UsernameClaim) TableName() string { return "username_registry" }

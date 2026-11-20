@@ -45,7 +45,7 @@ func liveMigrator(t *testing.T) (*sql.DB, *db.Migrator, string) {
 
 func TestIntegrationGooseUpDownUp(t *testing.T) {
 	pool, migrator, schema := liveMigrator(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 	if err := migrator.Apply(ctx); err != nil {
 		t.Fatal("automatic up:", err)
@@ -57,7 +57,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("version: got %d, want %d; %v", version, want, err)
 		}
 	}
-	assertVersion(15)
+	assertVersion(16)
 	if _, err := pool.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'migration_test', 'migration@example.test', 'test-hash', now(), now())`); err != nil {
 		t.Fatal(err)
 	}
@@ -74,6 +74,19 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("prepare old identities:", err)
+	}
+	assertVersion(15)
+	if _, err := pool.ExecContext(ctx, `INSERT INTO auth_google_identities (subject, user_id, created_at) VALUES ('legacy-google', '00000000-0000-4000-8000-000000000001', now())`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.ExecContext(ctx, `INSERT INTO auth_facebook_identities (subject, user_id, created_at) VALUES ('legacy-facebook', '00000000-0000-4000-8000-000000000001', now())`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.ExecContext(ctx, `INSERT INTO username_registry (username, user_id) VALUES ('migration_test', '00000000-0000-4000-8000-000000000001')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("prepare old version:", err)
 	}
 	assertVersion(14)
@@ -87,9 +100,34 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM wishlists WHERE deleted_at IS NOT NULL").Scan(&hiddenLists); err != nil || hiddenLists != 1 {
 		t.Fatal("list backfill", err)
 	}
+	for _, table := range []string{"auth_google_identities", "auth_facebook_identities", "username_registry"} {
+		var hidden int
+		if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM "+table+" WHERE deleted_at IS NOT NULL").Scan(&hidden); err != nil || hidden != 1 {
+			t.Fatalf("identity backfill for %s: %v", table, err)
+		}
+	}
 	if err := migrator.Apply(ctx); err != nil {
 		t.Fatal("repeated up:", err)
 	}
+	// Reused values are allowed for a new active account, but rollback must
+	// fail before changing schema while old and new identities coexist.
+	if _, err := pool.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000004', 'migration_test', 'migration@example.test', 'new-hash', now(), now())`); err != nil {
+		t.Fatal("reused account", err)
+	}
+	if _, err := pool.ExecContext(ctx, `INSERT INTO auth_google_identities (subject, user_id, created_at) VALUES ('legacy-google', '00000000-0000-4000-8000-000000000004', now())`); err != nil {
+		t.Fatal("reused Google identity", err)
+	}
+	if _, err := pool.ExecContext(ctx, `INSERT INTO username_registry (username, user_id) VALUES ('migration_test', '00000000-0000-4000-8000-000000000004')`); err != nil {
+		t.Fatal("reused username claim", err)
+	}
+	if _, err := migrator.Down(ctx); err == nil {
+		t.Fatal("unsafe rollback accepted duplicate historical identities")
+	}
+	assertVersion(16)
+	if _, err := pool.ExecContext(ctx, "DELETE FROM users WHERE id = '00000000-0000-4000-8000-000000000004'"); err != nil {
+		t.Fatal("cleanup isolated test account", err)
+	}
+
 	var count int
 	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM users").Scan(&count); err != nil || count != 1 {
 		t.Fatal("repeated up lost account data")
@@ -98,7 +136,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 		t.Fatal("repeated up lost wishes or shop links")
 	}
 	statuses, err := migrator.Status(ctx)
-	if err != nil || len(statuses) != 15 {
+	if err != nil || len(statuses) != 16 {
 		t.Fatal("incorrect Goose status:", err)
 	}
 	for _, status := range statuses {
@@ -106,6 +144,10 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("migration not applied: %v", status)
 		}
 	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("active identity uniqueness down:", err)
+	}
+	assertVersion(15)
 	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("owned content soft delete down:", err)
 	}
@@ -268,7 +310,7 @@ func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 		t.Fatal("legacy history was changed")
 	}
 	version, err := fresh.GetDBVersion(ctx)
-	if err != nil || version != 15 {
+	if err != nil || version != 16 {
 		t.Fatal("Goose did not record the adopted version")
 	}
 }

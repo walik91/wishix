@@ -252,7 +252,7 @@ func (r *Lists) GuestImage(ctx context.Context, id, token, wishID string) (*mode
 }
 func (r *Lists) PublicProfile(ctx context.Context, username string) (string, string, bool, []models.Wishlist, error) {
 	var users []models.User
-	err := r.Ctx(ctx).Select("id, username, show_all_wishes, display_name").Where("username = ? OR id = (SELECT user_id FROM username_registry WHERE username = ? AND expires_at > now())", username, username).Limit(1).Find(&users).Error
+	err := r.Ctx(ctx).Select("id, username, show_all_wishes, display_name").Where("username = ? OR id = (SELECT user_id FROM username_registry WHERE username = ? AND deleted_at IS NULL AND expires_at > now())", username, username).Limit(1).Find(&users).Error
 	if err != nil || len(users) == 0 {
 		return "", "", false, nil, err
 	}

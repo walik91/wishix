@@ -156,7 +156,7 @@ func TestIntegrationSocialPrivacyAndProfile(t *testing.T) {
 	if items := f.listCall(t, "GET", "/api/social/socialnew/people/followers", nil, alice, 200)["people"].([]any); len(items) != 1 {
 		t.Fatal("rename lost follows", items)
 	}
-	if err := f.database.Exec("UPDATE username_registry SET expires_at = ? WHERE username = ?", time.Now().Add(-time.Hour), "socialalice").Error; err != nil {
+	if err := f.database.Exec("UPDATE username_registry SET expires_at = ? WHERE username = ? AND deleted_at IS NULL", time.Now().Add(-time.Hour), "socialalice").Error; err != nil {
 		t.Fatal(err)
 	}
 	f.listCall(t, "GET", "/api/public/profiles/socialalice", nil, nil, 404)
@@ -170,7 +170,7 @@ func TestIntegrationSocialPrivacyAndProfile(t *testing.T) {
 	}
 	pending := f.registration(t, "pending-claim@example.test", "pendingclaim")
 	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "pendingclaim", "redirect": false}, carol, 200)
-	if err := f.database.Exec("UPDATE users SET username_changed_at = ? WHERE username = ?", time.Now().Add(-31*24*time.Hour), "pendingclaim").Error; err != nil {
+	if err := f.database.Exec("UPDATE users SET username_changed_at = ? WHERE username = ? AND deleted_at IS NULL", time.Now().Add(-31*24*time.Hour), "pendingclaim").Error; err != nil {
 		t.Fatal(err)
 	}
 	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "carolfinal", "redirect": true}, carol, 200)
@@ -184,14 +184,14 @@ func TestIntegrationSocialPrivacyAndProfile(t *testing.T) {
 	if p := f.listCall(t, "GET", "/api/public/profiles/socialcarol", nil, nil, 200); p["username"] != "carolfinal" {
 		t.Fatal("legacy redirect=false disabled automatic redirect", p)
 	}
-	if err := f.database.Exec("UPDATE users SET username_changed_at = ? WHERE username = ?", time.Now().Add(-31*24*time.Hour), "carolfinal").Error; err != nil {
+	if err := f.database.Exec("UPDATE users SET username_changed_at = ? WHERE username = ? AND deleted_at IS NULL", time.Now().Add(-31*24*time.Hour), "carolfinal").Error; err != nil {
 		t.Fatal(err)
 	}
 	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "socialcarol"}, carol, 200)
 	if p := f.listCall(t, "GET", "/api/public/profiles/carolfinal", nil, nil, 200); p["username"] != "socialcarol" {
 		t.Fatal("owner could not reclaim an actively reserved username", p)
 	}
-	if err := f.database.Exec("UPDATE users SET username_changed_at = ? WHERE username = ?", time.Now().Add(-31*24*time.Hour), "socialnew").Error; err != nil {
+	if err := f.database.Exec("UPDATE users SET username_changed_at = ? WHERE username = ? AND deleted_at IS NULL", time.Now().Add(-31*24*time.Hour), "socialnew").Error; err != nil {
 		t.Fatal(err)
 	}
 	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "socialalice", "redirect": false}, alice, 200)
@@ -209,7 +209,7 @@ func TestIntegrationExpiredUsernamesCanBeReused(t *testing.T) {
 	if status, _, _ := f.request(t, "register", map[string]string{"username": "releasedsignup", "email": "release-new@example.test", "password": initialPassword}, nil); status != http.StatusConflict {
 		t.Fatalf("active redirect username must be reserved: %d", status)
 	}
-	if err := f.database.Exec("UPDATE username_registry SET expires_at = ? WHERE username = ?", time.Now().Add(-time.Hour), "releasedsignup").Error; err != nil {
+	if err := f.database.Exec("UPDATE username_registry SET expires_at = ? WHERE username = ? AND deleted_at IS NULL", time.Now().Add(-time.Hour), "releasedsignup").Error; err != nil {
 		t.Fatal(err)
 	}
 	f.listCall(t, "GET", "/api/public/profiles/releasedsignup", nil, nil, 404)
@@ -221,21 +221,21 @@ func TestIntegrationExpiredUsernamesCanBeReused(t *testing.T) {
 		UserID    string
 		ExpiresAt *time.Time
 	}
-	if err := f.database.Table("username_registry").Where("username = ?", "releasedsignup").Take(&registry).Error; err != nil || registry.ExpiresAt != nil {
+	if err := f.database.Table("username_registry").Where("username = ? AND deleted_at IS NULL", "releasedsignup").Take(&registry).Error; err != nil || registry.ExpiresAt != nil {
 		t.Fatalf("new account did not claim username: %+v %v", registry, err)
 	}
 	var newUser models.User
 	if err := f.database.Where("username = ?", "releasedsignup").Take(&newUser).Error; err != nil || registry.UserID != newUser.ID {
 		t.Fatalf("registry points to wrong account: %+v %+v %v", registry, newUser, err)
 	}
-	if err := f.database.Exec("UPDATE users SET username_changed_at = ? WHERE username = ?", time.Now().Add(-31*24*time.Hour), "ownernew").Error; err != nil {
+	if err := f.database.Exec("UPDATE users SET username_changed_at = ? WHERE username = ? AND deleted_at IS NULL", time.Now().Add(-31*24*time.Hour), "ownernew").Error; err != nil {
 		t.Fatal(err)
 	}
 	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "releasedsignup"}, owner, 409)
 
 	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "releasedrename"}, owner, 200)
 	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "ownernew"}, other, 409)
-	if err := f.database.Exec("UPDATE username_registry SET expires_at = ? WHERE username = ?", time.Now().Add(-time.Hour), "ownernew").Error; err != nil {
+	if err := f.database.Exec("UPDATE username_registry SET expires_at = ? WHERE username = ? AND deleted_at IS NULL", time.Now().Add(-time.Hour), "ownernew").Error; err != nil {
 		t.Fatal(err)
 	}
 	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "ownernew"}, other, 200)
@@ -249,7 +249,7 @@ func TestIntegrationExpiredUsernameConcurrentSignupAndRename(t *testing.T) {
 	owner := f.account(t, "release-race-owner@example.test", "releaserace")
 	f.account(t, "release-race-other@example.test", "raceclaimant")
 	f.listCall(t, "PUT", "/api/profile/username", map[string]any{"username": "raceownernew"}, owner, 200)
-	if err := f.database.Exec("UPDATE username_registry SET expires_at = ? WHERE username = ?", time.Now().Add(-time.Hour), "releaserace").Error; err != nil {
+	if err := f.database.Exec("UPDATE username_registry SET expires_at = ? WHERE username = ? AND deleted_at IS NULL", time.Now().Add(-time.Hour), "releaserace").Error; err != nil {
 		t.Fatal(err)
 	}
 	pending := f.registration(t, "release-race-signup@example.test", "releaserace")

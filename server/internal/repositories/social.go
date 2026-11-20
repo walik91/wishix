@@ -53,13 +53,11 @@ func (r *Social) Rename(ctx context.Context, owner, username string, now time.Ti
 	if user.UsernameChangedAt != nil && now.Before(user.UsernameChangedAt.Add(30*24*time.Hour)) {
 		return services.ErrUsernameCooldown
 	}
-	claim := r.Ctx(ctx).Exec(`INSERT INTO username_registry (username, user_id, expires_at) VALUES (?, ?, NULL)
-		ON CONFLICT (username) DO UPDATE SET user_id = excluded.user_id, expires_at = NULL
-		WHERE username_registry.expires_at IS NOT NULL AND (username_registry.user_id = ? OR username_registry.expires_at <= now())`, username, owner, owner)
-	if claim.Error != nil {
-		return claim.Error
+	claimed, err := claimUsername(r.Ctx(ctx), username, owner, true)
+	if err != nil {
+		return err
 	}
-	if claim.RowsAffected != 1 {
+	if !claimed {
 		return services.ErrUsernameTaken
 	}
 	result := r.Ctx(ctx).Model(&models.User{}).Where("id = ?", owner).Updates(map[string]any{"username": username, "username_changed_at": now})
@@ -71,7 +69,7 @@ func (r *Social) Rename(ctx context.Context, owner, username string, now time.Ti
 		return result.Error
 	}
 	expires := now.Add(60 * 24 * time.Hour)
-	return r.Ctx(ctx).Exec(`INSERT INTO username_registry (username, user_id, expires_at) VALUES (?, ?, ?) ON CONFLICT (username) DO UPDATE SET user_id = excluded.user_id, expires_at = excluded.expires_at`, user.Username, owner, expires).Error
+	return r.Ctx(ctx).Exec(`INSERT INTO username_registry (username, user_id, expires_at, deleted_at) VALUES (?, ?, ?, NULL) ON CONFLICT (username, user_id) DO UPDATE SET expires_at = excluded.expires_at, deleted_at = NULL`, user.Username, owner, expires).Error
 }
 func (r *Social) TargetID(ctx context.Context, username string) (string, error) {
 	var ids []string

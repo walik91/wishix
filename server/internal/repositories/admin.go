@@ -54,6 +54,11 @@ func (a *Admin) SoftDeleteUser(ctx context.Context, id string) (bool, error) {
 	if err := tx.Exec(`DELETE FROM reservations AS r WHERE `+predicate, id, id).Error; err != nil {
 		return false, err
 	}
+	for _, record := range []any{&models.AuthGoogleIdentity{}, &models.AuthFacebookIdentity{}, &models.UsernameClaim{}} {
+		if err := tx.Where("user_id = ?", id).Delete(record).Error; err != nil {
+			return false, err
+		}
+	}
 	if err := tx.Where("owner_id = ?", id).Delete(&models.Wish{}).Error; err != nil {
 		return false, err
 	}

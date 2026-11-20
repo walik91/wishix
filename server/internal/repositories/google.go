@@ -34,7 +34,7 @@ func (r *Google) ConsumeFlow(ctx context.Context, hash string, now time.Time) (*
 
 func (r *Google) UserBySubject(ctx context.Context, subject string) (*models.User, error) {
 	var user models.User
-	err := r.Ctx(ctx).Model(&models.User{}).Select("users.*").Joins("JOIN auth_google_identities ON auth_google_identities.user_id = users.id").Where("auth_google_identities.subject = ?", subject).Take(&user).Error
+	err := r.Ctx(ctx).Model(&models.User{}).Select("users.*").Joins("JOIN auth_google_identities ON auth_google_identities.user_id = users.id AND auth_google_identities.deleted_at IS NULL").Where("auth_google_identities.subject = ?", subject).Take(&user).Error
 	return userResult(&user, err)
 }
 
