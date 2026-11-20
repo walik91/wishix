@@ -505,5 +505,21 @@
   "admin.unavailable": "Serviciul nu este disponibil. Încearcă din nou.",
   "admin.loading": "Se încarcă…",
   "admin.language": "Limbă",
-  "admin.home": "Pagina principală Wishix"
+  "admin.home": "Pagina principală Wishix",
+  "admin.userList": "Utilizatori",
+  "admin.userListDescription": "Toate conturile, inclusiv cele șterse.",
+  "admin.usersError": "Nu s-au putut încărca utilizatorii. Încearcă din nou.",
+  "admin.noUsers": "Nu există utilizatori încă.",
+  "admin.noEmail": "Fără email",
+  "admin.joined": "Înregistrat:",
+  "admin.deleted": "Șters",
+  "admin.deleteUser": "Șterge",
+  "admin.pagination": "Paginile utilizatorilor",
+  "admin.previous": "Înapoi",
+  "admin.next": "Înainte",
+  "admin.confirmTitle": "Ștergi utilizatorul?",
+  "admin.confirmBody": "Profilul, dorințele și listele nu vor mai fi disponibile. Rezervările utilizatorului, inclusiv cadourile cumpărate, vor fi anulate. Datele vor fi păstrate ca șterse temporar.",
+  "admin.cancel": "Anulează",
+  "admin.confirmDelete": "Șterge utilizatorul",
+  "admin.deleteError": "Utilizatorul nu a putut fi șters. Încearcă din nou."
 }

@@ -505,5 +505,21 @@
   "admin.unavailable": "The service is unavailable. Please try again.",
   "admin.loading": "Loading?",
   "admin.language": "Language",
-  "admin.home": "Wishix home"
+  "admin.home": "Wishix home",
+  "admin.userList": "Users",
+  "admin.userListDescription": "All accounts, including deleted users.",
+  "admin.usersError": "Could not load users. Try again.",
+  "admin.noUsers": "There are no users yet.",
+  "admin.noEmail": "No email",
+  "admin.joined": "Joined",
+  "admin.deleted": "Deleted",
+  "admin.deleteUser": "Delete user",
+  "admin.pagination": "Users pages",
+  "admin.previous": "Previous",
+  "admin.next": "Next",
+  "admin.confirmTitle": "Delete this user?",
+  "admin.confirmBody": "Their profile, wishes and lists will no longer be available. Their reservations, including purchased gifts, will be removed. Data will be retained as a soft deletion.",
+  "admin.cancel": "Cancel",
+  "admin.confirmDelete": "Delete user",
+  "admin.deleteError": "Could not delete this user. Please try again."
 }

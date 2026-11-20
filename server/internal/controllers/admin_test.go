@@ -107,3 +107,37 @@ func TestAdminAuthenticationAndOverview(t *testing.T) {
 	}
 
 }
+
+func TestAccountDeletionWaitsForInflightRequests(t *testing.T) {
+	admin := &Admin{}
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	deleted := make(chan struct{})
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ordinary", func(w http.ResponseWriter, r *http.Request) { close(entered); <-release })
+	mux.HandleFunc("POST /api/admin/users/{id}/delete", func(w http.ResponseWriter, r *http.Request) {
+		admin.activity.Lock()
+		defer admin.activity.Unlock()
+		close(deleted)
+	})
+	handler := admin.Protect(mux)
+	done := make(chan struct{})
+	go func() {
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/ordinary", nil))
+		close(done)
+	}()
+	<-entered
+	go handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", "/api/admin/users/00000000-0000-4000-8000-000000000000/delete", nil))
+	select {
+	case <-deleted:
+		t.Fatal("deletion did not wait for the active request")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	<-done
+	select {
+	case <-deleted:
+	case <-time.After(time.Second):
+		t.Fatal("deletion did not resume")
+	}
+}

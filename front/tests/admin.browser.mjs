@@ -1,16 +1,20 @@
-﻿import assert from 'node:assert/strict'
+import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 try {
   for (const language of ['en', 'ru', 'ro']) for (const width of [320, 390, 768, 1024, 1440]) {
     const context = await browser.newContext({ locale: language, viewport: { width, height: 900 } })
     const page = await context.newPage()
-    let signedIn = false
+    let signedIn = false, deleted = false
+    const person = { id: '00000000-0000-4000-8000-000000000001', username: 'long_user_name_123', display_name: 'Very long display name '.repeat(4), email: 'a_very_long_email_address_for_the_example@example.test', created_at: '2026-11-01T12:00:00Z' }
     await page.route('**/api/admin/**', async route => {
       const path = new URL(route.request().url()).pathname
       if (path.endsWith('/login')) { signedIn = true; return route.fulfill({ status: 204 }) }
       if (path.endsWith('/logout')) { signedIn = false; return route.fulfill({ status: 204 }) }
-      return signedIn ? route.fulfill({ json: { users: 12, wishes: 34, lists: 5, reservations: 2 } }) : route.fulfill({ status: 401, json: { error: 'unauthorized' } })
+      if (!signedIn) return route.fulfill({ status: 401, json: { error: 'unauthorized' } })
+      if (path.endsWith('/delete')) { deleted = true; return route.fulfill({ status: 204 }) }
+      if (path.endsWith('/users')) return route.fulfill({ json: { users: [{ ...person, deleted_at: deleted ? '2026-11-02T12:00:00Z' : null }], has_more: false } })
+      return route.fulfill({ json: { users: deleted ? 0 : 1, wishes: 34, lists: 5, reservations: 2 } })
     })
     await page.goto('http://localhost:5173/cp')
     await page.locator('#admin-password').fill('long-enough-password')
@@ -26,15 +30,22 @@ try {
       assert.deepEqual(dimensions.small, [], `${language}/${width}/${state} small targets`)
     }
     await check('login')
-    if (language === 'en' && (width === 390 || width === 1440)) await page.screenshot({ path: `../.cache/admin-login-${width}.png`, fullPage: true })
     await page.locator('form button').click()
-    await page.locator('.stat').first().waitFor()
+    await page.locator('.user-row').waitFor()
     assert.equal(await page.locator('.stat').count(), 4)
     await check('overview')
-    if (language === 'en' && (width === 390 || width === 1440)) await page.screenshot({ path: `../.cache/admin-overview-${width}.png`, fullPage: true })
+    if (language === 'en' && (width === 390 || width === 1440)) await page.screenshot({ path: `../.cache/admin-users-${width}.png`, fullPage: true })
+    await page.locator('.user-row button').click()
+    await page.locator('dialog[open]').waitFor()
+    assert.equal(deleted, false, 'confirmation must precede deletion')
+    await page.locator('dialog .dialog-actions .destructive').click()
+    await page.locator('.deleted-label').waitFor()
+    assert.equal(deleted, true)
+    assert.equal(await page.locator('.user-row button').count(), 0)
+    await check('deleted')
     await page.locator('.header-actions button').click()
     await page.locator('#admin-password').waitFor()
     await context.close()
   }
-  console.log('Admin login, overview, logout: EN/RU/RO at five viewport widths passed.')
+  console.log('Admin users, confirmation and deletion: EN/RU/RO at five viewport widths passed.')
 } finally { await browser.close() }

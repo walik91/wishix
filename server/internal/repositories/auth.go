@@ -27,7 +27,8 @@ func userResult(user *models.User, err error) (*models.User, error) {
 
 func (r *Auth) UserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
-	err := r.Ctx(ctx).Where("email = ?", email).Take(&user).Error
+	// A deleted account still occupies its verified email.
+	err := r.Ctx(ctx).Unscoped().Where("email = ?", email).Take(&user).Error
 	return userResult(&user, err)
 }
 

@@ -31,10 +31,10 @@ func NewMux(health *controllers.Health, auth *controllers.Auth, admin *controlle
 
 type Schema interface{ Apply(context.Context) error }
 
-func NewHTTPServer(lifecycle fx.Lifecycle, mux *http.ServeMux, logger *slog.Logger, shutdowner fx.Shutdowner, schema Schema) *http.Server {
+func NewHTTPServer(lifecycle fx.Lifecycle, mux *http.ServeMux, admin *controllers.Admin, logger *slog.Logger, shutdowner fx.Shutdowner, schema Schema) *http.Server {
 	server := &http.Server{
 		Addr:              ":8080",
-		Handler:           mux,
+		Handler:           admin.Protect(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      25 * time.Second,

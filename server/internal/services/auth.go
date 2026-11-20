@@ -390,11 +390,11 @@ func (a *Auth) Login(ctx context.Context, email, password string) (Authenticated
 		return Authenticated{}, err
 	}
 	encoded := a.dummyPassword
-	if user != nil && user.PasswordHash != "" {
+	if user != nil && !user.DeletedAt.Valid && user.PasswordHash != "" {
 		encoded = user.PasswordHash
 	}
 	valid := security.CheckPassword(password, encoded)
-	if !valid || user == nil || user.PasswordHash == "" {
+	if !valid || user == nil || user.DeletedAt.Valid || user.PasswordHash == "" {
 		return Authenticated{}, ErrCredentials
 	}
 	var result Authenticated
@@ -449,7 +449,7 @@ func (a *Auth) ForgotPassword(ctx context.Context, email, locale string) (string
 		return "", err
 	}
 	var userID *string
-	if user != nil && user.PasswordHash != "" {
+	if user != nil && !user.DeletedAt.Valid && user.PasswordHash != "" {
 		userID = &user.ID
 	}
 	challenge, token, code := a.newChallenge("reset", email, "", "", locale, userID)

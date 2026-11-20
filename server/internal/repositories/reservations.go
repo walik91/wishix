@@ -22,7 +22,7 @@ func (r *Reservations) Context(ctx context.Context, listID, token, username, wis
 	var wish models.Wish
 	if listID != "" {
 		var list models.Wishlist
-		q := r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND (visibility = 'public' OR (visibility = 'link' AND share_token = ? AND ? <> ''))", listID, token, token).Limit(1).Find(&list)
+		q := r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND (visibility = 'public' OR (visibility = 'link' AND share_token = ? AND ? <> '')) AND EXISTS (SELECT 1 FROM users owner WHERE owner.id = wishlists.owner_id AND owner.deleted_at IS NULL)", listID, token, token).Limit(1).Find(&list)
 		if q.Error != nil || q.RowsAffected == 0 {
 			return nil, q.Error
 		}
@@ -86,7 +86,7 @@ func (r *Reservations) ByWish(ctx context.Context, wishID string) (*models.Reser
 }
 func (r *Reservations) ByToken(ctx context.Context, hash string) (*models.Reservation, error) {
 	var rows []models.Reservation
-	err := r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_hash = ?", hash).Limit(1).Find(&rows).Error
+	err := r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_hash = ? AND EXISTS (SELECT 1 FROM wishes w JOIN users owner ON owner.id = w.owner_id WHERE w.id = reservations.wish_id AND owner.deleted_at IS NULL)", hash).Limit(1).Find(&rows).Error
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func (r *Lists) ReservationDateChanged(ctx context.Context, list *models.Wishlis
 // committed notification is lost and no mail is sent from a retried transaction.
 func (r *Reservations) ClaimMail(ctx context.Context, now time.Time) (*models.ReservationMailOutbox, error) {
 	var rows []models.ReservationMailOutbox
-	err := r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("sent_at IS NULL AND available_at <= ? AND (lease_until IS NULL OR lease_until <= ?)", now, now).Order("created_at, id").Limit(1).Find(&rows).Error
+	err := r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("suppressed_at IS NULL AND sent_at IS NULL AND available_at <= ? AND (lease_until IS NULL OR lease_until <= ?)", now, now).Order("created_at, id").Limit(1).Find(&rows).Error
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}

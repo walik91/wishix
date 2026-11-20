@@ -1,9 +1,13 @@
 package models
 
-import "time"
+import (
+	"gorm.io/gorm"
+	"time"
+)
 
 // Table models are private persistence data, never HTTP response DTOs.
 type User struct {
+	DeletedAt       gorm.DeletedAt `gorm:"index"`
 	ID              string
 	Username        string
 	Email           string

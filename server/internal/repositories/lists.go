@@ -203,7 +203,7 @@ func (r *Lists) Shared(ctx context.Context, token string) (*models.Wishlist, str
 		models.Wishlist
 		Username string
 	}
-	err := r.Ctx(ctx).Model(&models.Wishlist{}).Select(listColumns+", users.username").Joins("JOIN users ON users.id = wishlists.owner_id").Where("share_token = ? AND visibility IN ('link', 'public')", token).Limit(1).Find(&rows).Error
+	err := r.Ctx(ctx).Model(&models.Wishlist{}).Select(listColumns+", users.username").Joins("JOIN users ON users.id = wishlists.owner_id AND users.deleted_at IS NULL").Where("share_token = ? AND visibility IN ('link', 'public')", token).Limit(1).Find(&rows).Error
 	if err != nil || len(rows) == 0 {
 		return nil, "", err
 	}
@@ -211,12 +211,12 @@ func (r *Lists) Shared(ctx context.Context, token string) (*models.Wishlist, str
 }
 func (r *Lists) SharedWishes(ctx context.Context, token string) ([]models.Wish, error) {
 	wishes := make([]models.Wish, 0)
-	err := r.Ctx(ctx).Select(publicWishColumns+", m.received AS received").Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where("l.share_token = ? AND l.visibility IN ('link', 'public')", token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	err := r.Ctx(ctx).Select(publicWishColumns+", m.received AS received").Joins("JOIN wishlist_wishes m ON m.wish_id = wishes.id AND m.owner_id = wishes.owner_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where("l.share_token = ? AND l.visibility IN ('link', 'public') AND EXISTS (SELECT 1 FROM users owner WHERE owner.id = l.owner_id AND owner.deleted_at IS NULL)", token).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
 	return wishes, err
 }
 func (r *Lists) SharedImage(ctx context.Context, token, wishID string) (*models.WishImage, error) {
 	var images []models.WishImage
-	err := r.Ctx(ctx).Model(&models.WishImage{}).Select("wish_images.*").Joins("JOIN wishlist_wishes m ON m.wish_id = wish_images.wish_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where("l.share_token = ? AND l.visibility IN ('link', 'public') AND m.wish_id = ?", token, wishID).Limit(1).Find(&images).Error
+	err := r.Ctx(ctx).Model(&models.WishImage{}).Select("wish_images.*").Joins("JOIN wishlist_wishes m ON m.wish_id = wish_images.wish_id").Joins("JOIN wishlists l ON l.id = m.list_id AND l.owner_id = m.owner_id").Where("l.share_token = ? AND l.visibility IN ('link', 'public') AND EXISTS (SELECT 1 FROM users owner WHERE owner.id = l.owner_id AND owner.deleted_at IS NULL) AND m.wish_id = ?", token, wishID).Limit(1).Find(&images).Error
 	if err != nil || len(images) == 0 {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func (r *Lists) SharedImage(ctx context.Context, token, wishID string) (*models.
 }
 
 // Every query repeats the access condition, including image and membership reads.
-const guestCondition = "l.id = ? AND (l.visibility = 'public' OR (l.visibility = 'link' AND l.share_token = ? AND ? <> ''))"
+const guestCondition = "l.id = ? AND (l.visibility = 'public' OR (l.visibility = 'link' AND l.share_token = ? AND ? <> '')) AND EXISTS (SELECT 1 FROM users owner WHERE owner.id = l.owner_id AND owner.deleted_at IS NULL)"
 
 func (r *Lists) GuestList(ctx context.Context, id, token string) (*models.Wishlist, string, error) {
 	var rows []struct {
@@ -264,7 +264,7 @@ func (r *Lists) PublicProfile(ctx context.Context, username string) (string, str
 func (r *Lists) SearchPeople(ctx context.Context, query, cursor string, limit int) ([]services.PublicPerson, error) {
 	people := make([]services.PublicPerson, 0)
 	err := r.Ctx(ctx).Table("users").Select("username, display_name, EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id) AS has_avatar").
-		Where("username > ? AND (strpos(lower(username), lower(?)) > 0 OR strpos(lower(display_name), lower(?)) > 0)", cursor, query, query).
+		Where("users.deleted_at IS NULL AND username > ? AND (strpos(lower(username), lower(?)) > 0 OR strpos(lower(display_name), lower(?)) > 0)", cursor, query, query).
 		Order("username ASC").Limit(limit).Scan(&people).Error
 	return people, err
 }
@@ -291,12 +291,12 @@ func (r *Lists) PublicCollection(ctx context.Context, username string) (bool, []
 		return false, nil, err
 	}
 	wishes := make([]models.Wish, 0)
-	err := r.Ctx(ctx).Select(wishColumns).Joins("JOIN users ON users.id = wishes.owner_id").Where("users.username = ? AND users.show_all_wishes = true", username).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
+	err := r.Ctx(ctx).Select(wishColumns).Joins("JOIN users ON users.id = wishes.owner_id").Where("users.username = ? AND users.show_all_wishes = true AND users.deleted_at IS NULL", username).Order("wishes.created_at DESC, wishes.id DESC").Preload("ShopLinks", func(q *gorm.DB) *gorm.DB { return q.Order("position ASC") }).Find(&wishes).Error
 	return true, wishes, err
 }
 func (r *Lists) PublicCollectionImage(ctx context.Context, username, wishID string) (*models.WishImage, error) {
 	var images []models.WishImage
-	err := r.Ctx(ctx).Model(&models.WishImage{}).Select("wish_images.*").Joins("JOIN wishes ON wishes.id = wish_images.wish_id").Joins("JOIN users ON users.id = wishes.owner_id").Where("users.username = ? AND users.show_all_wishes = true AND wishes.id = ?", username, wishID).Limit(1).Find(&images).Error
+	err := r.Ctx(ctx).Model(&models.WishImage{}).Select("wish_images.*").Joins("JOIN wishes ON wishes.id = wish_images.wish_id").Joins("JOIN users ON users.id = wishes.owner_id").Where("users.username = ? AND users.show_all_wishes = true AND users.deleted_at IS NULL AND wishes.id = ?", username, wishID).Limit(1).Find(&images).Error
 	if err != nil || len(images) == 0 {
 		return nil, err
 	}

@@ -505,5 +505,21 @@
   "admin.unavailable": "Сервис недоступен. Попробуйте ещё раз.",
   "admin.loading": "Загрузка…",
   "admin.language": "Язык",
-  "admin.home": "На главную Wishix"
+  "admin.home": "На главную Wishix",
+  "admin.userList": "Пользователи",
+  "admin.userListDescription": "Все аккаунты, включая удалённые.",
+  "admin.usersError": "Не удалось загрузить пользователей. Попробуйте ещё раз.",
+  "admin.noUsers": "Пользователей пока нет.",
+  "admin.noEmail": "Email не указан",
+  "admin.joined": "Дата регистрации:",
+  "admin.deleted": "Удалён",
+  "admin.deleteUser": "Удалить",
+  "admin.pagination": "Страницы пользователей",
+  "admin.previous": "Назад",
+  "admin.next": "Далее",
+  "admin.confirmTitle": "Удалить пользователя?",
+  "admin.confirmBody": "Профиль, желания и списки станут недоступны. Бронирования пользователя, включая купленные подарки, будут отменены. Данные сохранятся как мягко удалённые.",
+  "admin.cancel": "Отмена",
+  "admin.confirmDelete": "Удалить пользователя",
+  "admin.deleteError": "Не удалось удалить пользователя. Попробуйте ещё раз."
 }

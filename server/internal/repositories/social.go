@@ -18,7 +18,7 @@ func NewSocial(executor *db.Executor) *Social { return &Social{Base: NewBase(exe
 
 func (r *Social) Settings(ctx context.Context, owner string) (*services.ProfileSettings, error) {
 	var settings []services.ProfileSettings
-	err := r.Ctx(ctx).Table("users").Select("username, biography, birth_date::STRING AS birth_date, show_age, show_followers, show_following, username_changed_at, EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id) AS has_avatar").Where("id = ?", owner).Limit(1).Scan(&settings).Error
+	err := r.Ctx(ctx).Table("users").Select("username, biography, birth_date::STRING AS birth_date, show_age, show_followers, show_following, username_changed_at, EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id) AS has_avatar").Where("id = ? AND deleted_at IS NULL", owner).Limit(1).Scan(&settings).Error
 	if err != nil || len(settings) == 0 {
 		return nil, err
 	}
@@ -26,7 +26,7 @@ func (r *Social) Settings(ctx context.Context, owner string) (*services.ProfileS
 }
 func (r *Social) PublicInfo(ctx context.Context, username string) (*services.PublicSocialProfile, error) {
 	var rows []services.PublicSocialProfile
-	err := r.Ctx(ctx).Table("users").Select("username, biography, CASE WHEN show_age THEN birth_date ELSE NULL END AS birth_date, show_followers, show_following, EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id) AS has_avatar").Where("username = ?", username).Limit(1).Scan(&rows).Error
+	err := r.Ctx(ctx).Table("users").Select("username, biography, CASE WHEN show_age THEN birth_date ELSE NULL END AS birth_date, show_followers, show_following, EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id) AS has_avatar").Where("username = ? AND deleted_at IS NULL", username).Limit(1).Scan(&rows).Error
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (r *Social) Rename(ctx context.Context, owner, username string, now time.Ti
 		Username          string
 		UsernameChangedAt *time.Time
 	}
-	query := r.Ctx(ctx).Raw("SELECT username, username_changed_at FROM users WHERE id = ? FOR UPDATE", owner).Scan(&user)
+	query := r.Ctx(ctx).Raw("SELECT username, username_changed_at FROM users WHERE id = ? AND deleted_at IS NULL FOR UPDATE", owner).Scan(&user)
 	if query.Error != nil {
 		return query.Error
 	}
@@ -83,7 +83,14 @@ func (r *Social) TargetID(ctx context.Context, username string) (string, error) 
 }
 func (r *Social) LockPair(ctx context.Context, first, second string) error {
 	var rows []struct{ ID string }
-	return r.Ctx(ctx).Raw("SELECT id FROM users WHERE id IN (?, ?) ORDER BY id FOR UPDATE", first, second).Scan(&rows).Error
+	err := r.Ctx(ctx).Raw("SELECT id FROM users WHERE id IN (?, ?) AND deleted_at IS NULL ORDER BY id FOR UPDATE", first, second).Scan(&rows).Error
+	if err != nil {
+		return err
+	}
+	if len(rows) != 2 {
+		return services.ErrListNotFound
+	}
+	return nil
 }
 func (r *Social) BlockedEither(ctx context.Context, first, second string) (bool, error) {
 	var count int64
@@ -135,7 +142,7 @@ func (r *Social) People(ctx context.Context, viewer, username, kind, cursor stri
 		ShowFollowers bool
 		ShowFollowing bool
 	}
-	err := r.Ctx(ctx).Table("users").Select("id, show_followers, show_following").Where("username = ?", username).Limit(1).Scan(&users).Error
+	err := r.Ctx(ctx).Table("users").Select("id, show_followers, show_following").Where("username = ? AND deleted_at IS NULL", username).Limit(1).Scan(&users).Error
 	if err != nil || len(users) == 0 {
 		return nil, false, err
 	}
@@ -144,13 +151,13 @@ func (r *Social) People(ctx context.Context, viewer, username, kind, cursor stri
 		return nil, false, nil
 	}
 	people := make([]services.SocialPerson, 0)
-	query := r.Ctx(ctx).Table("users").Select("users.username, users.display_name, EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id) AS has_avatar").Where("users.username > ?", cursor)
+	query := r.Ctx(ctx).Table("users").Select("users.username, users.display_name, EXISTS (SELECT 1 FROM profile_avatars a WHERE a.user_id = users.id) AS has_avatar").Where("users.deleted_at IS NULL AND users.username > ?", cursor)
 	// Recheck visibility in the same statement that reads memberships, so a
 	// concurrent privacy change cannot disclose a previously public list.
 	if viewer != owner.ID && kind == "followers" {
-		query = query.Where("EXISTS (SELECT 1 FROM users privacy WHERE privacy.id = ? AND privacy.show_followers = true)", owner.ID)
+		query = query.Where("EXISTS (SELECT 1 FROM users privacy WHERE privacy.id = ? AND privacy.deleted_at IS NULL AND privacy.show_followers = true)", owner.ID)
 	} else if viewer != owner.ID && kind == "following" {
-		query = query.Where("EXISTS (SELECT 1 FROM users privacy WHERE privacy.id = ? AND privacy.show_following = true)", owner.ID)
+		query = query.Where("EXISTS (SELECT 1 FROM users privacy WHERE privacy.id = ? AND privacy.deleted_at IS NULL AND privacy.show_following = true)", owner.ID)
 	}
 	switch kind {
 	case "followers":
@@ -165,7 +172,7 @@ func (r *Social) People(ctx context.Context, viewer, username, kind, cursor stri
 }
 func (r *Social) Avatar(ctx context.Context, owner string, public bool) ([]byte, error) {
 	var rows []struct{ Data []byte }
-	query := r.Ctx(ctx).Table("profile_avatars a").Select("a.data").Joins("JOIN users ON users.id = a.user_id")
+	query := r.Ctx(ctx).Table("profile_avatars a").Select("a.data").Joins("JOIN users ON users.id = a.user_id AND users.deleted_at IS NULL")
 	if public {
 		query = query.Where("users.username = ?", owner)
 	} else {
