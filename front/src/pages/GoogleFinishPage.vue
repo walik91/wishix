@@ -46,7 +46,7 @@ watchEffect(() => { document.title = `${t('google.finishTitle')} · ${t('appName
       <p class="profile-url">{{ t('register.profileUrl') }} <bdi>/u/{{ username.trim().toLowerCase() || t('register.usernamePlaceholder') }}</bdi></p>
       <div v-if="suggestions.length" class="suggestions">
         <p>{{ t('register.suggestions') }}</p>
-        <div class="suggestion-list"><button v-for="suggestion in suggestions" :key="suggestion" type="button" :aria-pressed="username === suggestion" @click="chooseUsername(suggestion)">{{ suggestion }}</button></div>
+        <div class="suggestion-list"><button v-for="suggestion in suggestions" :key="suggestion" type="button" :aria-pressed="username === suggestion" @click="chooseUsername(suggestion)"><span>{{ suggestion }}</span></button></div>
       </div>
       <UiButton type="submit" :loading="busy">{{ t('google.finishButton') }}</UiButton>
     </form>
@@ -59,8 +59,11 @@ watchEffect(() => { document.title = `${t('google.finishTitle')} · ${t('appName
 .finish-form { display: grid; gap: var(--wx-space-5); min-width: 0; }
 .profile-url, .suggestions p { margin: 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.5; overflow-wrap: anywhere; }
 .profile-url { margin-top: calc(-1 * var(--wx-space-3)); }
+.suggestions p { margin-bottom: var(--wx-space-1); }
 .suggestion-list { display: flex; flex-wrap: wrap; gap: var(--wx-space-2); }
-.suggestion-list button { min-width: 44px; min-height: 44px; max-width: 100%; padding: var(--wx-space-2) var(--wx-space-3); overflow-wrap: anywhere; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); background: var(--wx-surface); color: var(--wx-primary); font: inherit; cursor: pointer; }
-.suggestion-list button:hover, .suggestion-list button[aria-pressed="true"] { border-color: var(--wx-primary); }
-.suggestion-list button:focus-visible { outline: none; box-shadow: var(--wx-focus-ring); }
+.suggestion-list button { display: grid; align-items: center; min-width: 44px; min-height: 44px; max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--wx-primary); font: inherit; font-size: var(--wx-text-sm); cursor: pointer; }
+.suggestion-list button span { display: block; min-width: 0; padding: var(--wx-space-1) var(--wx-space-2); overflow-wrap: anywhere; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); background: var(--wx-surface); line-height: 1.5; }
+.suggestion-list button:hover span, .suggestion-list button[aria-pressed="true"] span { border-color: var(--wx-primary); }
+.suggestion-list button:focus-visible { outline: none; }
+.suggestion-list button:focus-visible span { box-shadow: var(--wx-focus-ring); }
 </style>

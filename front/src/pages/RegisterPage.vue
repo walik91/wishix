@@ -98,7 +98,7 @@ watchEffect(() => { document.title = `${t(challenge.value ? 'auth.verifyTitle' :
         <p class="profile-url">{{ t('register.profileUrl') }} <bdi>/u/{{ username.trim().toLowerCase() || t('register.usernamePlaceholder') }}</bdi></p>
         <div v-if="suggestions.length" class="suggestions">
           <p>{{ t('register.suggestions') }}</p>
-          <div class="suggestion-list"><button v-for="suggestion in suggestions" :key="suggestion" type="button" :aria-pressed="username === suggestion" @click="chooseUsername(suggestion)">{{ suggestion }}</button></div>
+          <div class="suggestion-list"><button v-for="suggestion in suggestions" :key="suggestion" type="button" :aria-pressed="username === suggestion" @click="chooseUsername(suggestion)"><span>{{ suggestion }}</span></button></div>
         </div>
       </div>
       <PasswordField ref="passwordField" v-model="password" autocomplete="new-password" :placeholder="t('register.passwordPlaceholder')" :hint="t('auth.passwordHint')" :error="passwordError" />
@@ -117,10 +117,13 @@ watchEffect(() => { document.title = `${t(challenge.value ? 'auth.verifyTitle' :
 .register-form { display: grid; gap: var(--wx-space-5); }
 .username-section { display: grid; gap: var(--wx-space-2); min-width: 0; }
 .profile-url, .suggestions p { margin: 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.5; overflow-wrap: anywhere; }
+.suggestions p { margin-bottom: var(--wx-space-1); }
 .suggestion-list { display: flex; flex-wrap: wrap; gap: var(--wx-space-2); }
-.suggestion-list button { min-width: 44px; min-height: 44px; max-width: 100%; padding: var(--wx-space-2) var(--wx-space-3); overflow-wrap: anywhere; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); background: var(--wx-surface); color: var(--wx-primary); font: inherit; cursor: pointer; }
-.suggestion-list button:hover, .suggestion-list button[aria-pressed="true"] { border-color: var(--wx-primary); }
-.suggestion-list button:focus-visible { outline: none; box-shadow: var(--wx-focus-ring); }
+.suggestion-list button { display: grid; align-items: center; min-width: 44px; min-height: 44px; max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--wx-primary); font: inherit; font-size: var(--wx-text-sm); cursor: pointer; }
+.suggestion-list button span { display: block; min-width: 0; padding: var(--wx-space-1) var(--wx-space-2); overflow-wrap: anywhere; border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); background: var(--wx-surface); line-height: 1.5; }
+.suggestion-list button:hover span, .suggestion-list button[aria-pressed="true"] span { border-color: var(--wx-primary); }
+.suggestion-list button:focus-visible { outline: none; }
+.suggestion-list button:focus-visible span { box-shadow: var(--wx-focus-ring); }
 .verification-note { display: flex; align-items: flex-start; gap: var(--wx-space-3); margin: 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.6; }
 .verification-note .icon { color: var(--wx-primary); }
 </style>
