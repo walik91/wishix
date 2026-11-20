@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ type GoogleRepository interface {
 	IdentityByUser(context.Context, string) (*models.AuthGoogleIdentity, error)
 	CreateIdentity(context.Context, *models.AuthGoogleIdentity) error
 	CreatePending(context.Context, *models.AuthGooglePending) error
+	Pending(context.Context, string, time.Time) (*models.AuthGooglePending, error)
 	PendingForUpdate(context.Context, string, time.Time) (*models.AuthGooglePending, error)
 	DeletePending(context.Context, string) error
 	Cleanup(context.Context, time.Time) error
@@ -46,6 +48,31 @@ type GoogleResult struct {
 func (g *Google) Enabled() bool { return g.provider.Enabled() }
 
 func (g *Google) Cleanup(ctx context.Context) error { return g.repo.Cleanup(ctx, g.auth.now()) }
+
+var usernameBaseInvalid = regexp.MustCompile(`[^a-z0-9_]+`)
+
+// The pending cookie authorizes suggestions without exposing the Google email.
+func (g *Google) UsernameSuggestions(ctx context.Context, token string) ([]string, error) {
+	if len(token) != 43 {
+		return nil, ErrInvalidInput
+	}
+	pending, err := g.repo.Pending(ctx, security.Digest(token), g.auth.now())
+	if err != nil {
+		return nil, err
+	}
+	if pending == nil {
+		return nil, ErrInvalidInput
+	}
+	base := strings.SplitN(strings.ToLower(pending.Email), "@", 2)[0]
+	base = strings.Trim(usernameBaseInvalid.ReplaceAllString(base, "_"), "_")
+	if len(base) > 30 {
+		base = base[:30]
+	}
+	if len(base) < 3 {
+		base += "user"
+	}
+	return g.auth.UsernameSuggestions(ctx, base)
+}
 
 func (g *Google) Linked(ctx context.Context, session string) (bool, error) {
 	user, err := g.auth.Current(ctx, session)

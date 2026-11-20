@@ -1,4 +1,4 @@
-﻿import { chromium } from 'playwright'
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 const origin = process.env.WISHIX_TEST_ORIGIN || 'http://localhost:5175'
@@ -41,10 +41,32 @@ try {
   await page.locator('#username').fill('validname2')
   assert.equal(await page.locator('.auth-error').count(),0)
   await page.goto(origin + '/google/finish')
-  await page.locator('.finish-form button').click()
+  await page.route('**/api/auth/google/username-suggestions', r => r.fulfill({json:{suggestions:['google_user','google_user1','google_user2','google_user3']}}))
+  await page.reload()
+  await page.getByRole('button',{name:'google_user1',exact:true}).waitFor()
+  assert.equal(await page.locator('#username').inputValue(),'google_user')
+  await page.getByRole('button',{name:'google_user1',exact:true}).click()
+  assert.equal(await page.locator('#username').inputValue(),'google_user1')
+  assert.ok((await page.locator('.profile-url').innerText()).includes('/u/google_user1'))
+  for (const width of [320,390,768,1024,1440]) {
+   await page.setViewportSize({width,height:900})
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Google ${lang} ${width}`)
+   for (const button of await page.locator('.suggestion-list button').all()) { const rect=await button.boundingBox(); assert.ok(rect.width>=44&&rect.height>=44) }
+  }
+  await page.locator('#username').fill('')
+  await page.locator('.finish-form button[type=submit]').click()
   assert.equal(await page.locator('#username').getAttribute('aria-invalid'),'true')
   await page.locator('#username').fill('validname')
   assert.equal(await page.locator('#username').getAttribute('aria-invalid'),null)
+  await page.unroute('**/api/auth/google/username-suggestions')
+  let release
+  const responseReady = new Promise(resolve => { release = resolve })
+  await page.route('**/api/auth/google/username-suggestions', async r => { await responseReady; await r.fulfill({json:{suggestions:['late_user']}}) })
+  await page.reload()
+  await page.locator('#username').fill('my_manual_name')
+  release()
+  await page.getByRole('button',{name:'late_user',exact:true}).waitFor()
+  assert.equal(await page.locator('#username').inputValue(),'my_manual_name')
   await context.close()
  }
  console.log('Registration and Google finish: suggestions, error recovery, 3 languages and 5 widths passed')

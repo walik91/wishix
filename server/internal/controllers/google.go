@@ -25,7 +25,16 @@ func (c *Google) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/auth/google/status", c.status)
 	mux.HandleFunc("POST /api/auth/google/start", c.auth.mutation("google-start", c.start))
 	mux.HandleFunc("POST /api/auth/google/complete", c.auth.mutation("google-complete", c.complete))
+	mux.HandleFunc("POST /api/auth/google/username-suggestions", c.auth.mutation("google-username-suggestions", c.usernameSuggestions))
 	mux.HandleFunc("GET /api/auth/google/callback", c.callback)
+}
+func (c *Google) usernameSuggestions(w http.ResponseWriter, r *http.Request, _ authRequest) error {
+	suggestions, err := c.service.UsernameSuggestions(r.Context(), c.read(r, googlePendingCookie))
+	if err != nil {
+		return err
+	}
+	c.auth.write(w, http.StatusOK, map[string]any{"suggestions": suggestions})
+	return nil
 }
 
 func (c *Google) cookie(w http.ResponseWriter, name, value string, age int) {

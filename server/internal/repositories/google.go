@@ -60,6 +60,15 @@ func (r *Google) CreatePending(ctx context.Context, pending *models.AuthGooglePe
 	return r.Ctx(ctx).Create(pending).Error
 }
 
+func (r *Google) Pending(ctx context.Context, hash string, now time.Time) (*models.AuthGooglePending, error) {
+	var pending models.AuthGooglePending
+	err := r.Ctx(ctx).Where("token_hash = ? AND expires_at > ?", hash, now).Take(&pending).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &pending, err
+}
+
 func (r *Google) PendingForUpdate(ctx context.Context, hash string, now time.Time) (*models.AuthGooglePending, error) {
 	var pending models.AuthGooglePending
 	err := r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_hash = ? AND expires_at > ?", hash, now).Take(&pending).Error

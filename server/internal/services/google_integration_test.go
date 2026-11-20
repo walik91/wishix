@@ -75,9 +75,22 @@ func TestIntegrationGoogleHTTPRegistration(t *testing.T) {
 	if pending == nil || !pending.HttpOnly || !pending.Secure {
 		t.Fatal("missing secure registration cookie")
 	}
+	if missing := post("/api/auth/google/username-suggestions", `{}`, nil); missing.Code != http.StatusBadRequest {
+		t.Fatalf("missing pending cookie accepted: %d", missing.Code)
+	}
+	suggestions := post("/api/auth/google/username-suggestions", `{}`, pending)
+	var suggestionBody struct {
+		Suggestions []string `json:"suggestions"`
+	}
+	if suggestions.Code != http.StatusOK || suggestions.Header().Get("Cache-Control") != "no-store" || json.Unmarshal(suggestions.Body.Bytes(), &suggestionBody) != nil || len(suggestionBody.Suggestions) != 4 || suggestionBody.Suggestions[0] != "http_google" || strings.Contains(suggestions.Body.String(), "@") {
+		t.Fatalf("invalid suggestions response: %d %s", suggestions.Code, suggestions.Body.String())
+	}
 	finish := post("/api/auth/google/complete", `{"username":"http_google"}`, pending)
 	if finish.Code != http.StatusOK {
 		t.Fatalf("Google signup failed: %d %s", finish.Code, finish.Body.String())
+	}
+	if reused := post("/api/auth/google/username-suggestions", `{}`, pending); reused.Code != http.StatusBadRequest {
+		t.Fatalf("consumed pending cookie accepted: %d", reused.Code)
 	}
 	var session *http.Cookie
 	for _, cookie := range finish.Result().Cookies() {
