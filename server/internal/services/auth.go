@@ -32,6 +32,7 @@ const (
 
 type AuthRepository interface {
 	UserByEmail(context.Context, string) (*models.User, error)
+	EmailTaken(context.Context, string) (bool, error)
 	UserByID(context.Context, string, bool) (*models.User, error)
 	UsernameExists(context.Context, string) (bool, error)
 	CreateUser(context.Context, *models.User) error
@@ -197,7 +198,7 @@ func (a *Auth) Register(ctx context.Context, email, username, password, locale s
 	if err := a.limit(ctx, "send-email", email, 5, time.Hour); err != nil {
 		return "", err
 	}
-	user, err := a.repo.UserByEmail(ctx, email)
+	occupied, err := a.repo.EmailTaken(ctx, email)
 	if err != nil {
 		return "", err
 	}
@@ -205,7 +206,7 @@ func (a *Auth) Register(ctx context.Context, email, username, password, locale s
 	if err != nil {
 		return "", err
 	}
-	if user != nil || exists {
+	if occupied || exists {
 		return "", ErrRegistrationUnavailable
 	}
 	challenge, token, code := a.newChallenge("register", email, username, security.HashPassword(password), locale, nil)
@@ -300,9 +301,9 @@ func (a *Auth) StartAddEmail(ctx context.Context, session, email, locale string)
 	if err = a.limit(ctx, "send-email", email, 5, time.Hour); err != nil {
 		return "", err
 	}
-	if existing, err := a.repo.UserByEmail(ctx, email); err != nil {
+	if occupied, err := a.repo.EmailTaken(ctx, email); err != nil {
 		return "", err
-	} else if existing != nil {
+	} else if occupied {
 		return "", ErrRegistrationUnavailable
 	}
 	challenge, token, code := a.newChallenge("register", email, "", "", locale, &user.ID)

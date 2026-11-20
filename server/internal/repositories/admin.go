@@ -15,17 +15,16 @@ type Admin struct{ executor *db.Executor }
 func NewAdmin(executor *db.Executor) *Admin { return &Admin{executor: executor} }
 
 type AdminUser struct {
-	ID          string     `json:"id"`
-	Username    string     `json:"username"`
-	DisplayName string     `json:"display_name"`
-	Email       *string    `json:"email"`
-	CreatedAt   time.Time  `json:"created_at"`
-	DeletedAt   *time.Time `json:"deleted_at"`
+	ID          string    `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	Email       *string   `json:"email"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (a *Admin) Users(ctx context.Context, offset, limit int) ([]AdminUser, error) {
 	users := make([]AdminUser, 0)
-	err := a.executor.DB(ctx).Table("users").Select("id, username, display_name, email, created_at, deleted_at").Order("created_at DESC, id DESC").Offset(offset).Limit(limit).Scan(&users).Error
+	err := a.executor.DB(ctx).Model(&models.User{}).Select("users.id, users.username, users.display_name, users.email, users.created_at").Order("users.created_at DESC, users.id DESC").Offset(offset).Limit(limit).Find(&users).Error
 	return users, err
 }
 
@@ -55,6 +54,12 @@ func (a *Admin) SoftDeleteUser(ctx context.Context, id string) (bool, error) {
 	if err := tx.Exec(`DELETE FROM reservations AS r WHERE `+predicate, id, id).Error; err != nil {
 		return false, err
 	}
-	result := tx.Model(&models.User{}).Where("id = ?", id).Update("deleted_at", time.Now().UTC())
+	if err := tx.Where("owner_id = ?", id).Delete(&models.Wish{}).Error; err != nil {
+		return false, err
+	}
+	if err := tx.Where("owner_id = ?", id).Delete(&models.Wishlist{}).Error; err != nil {
+		return false, err
+	}
+	result := tx.Delete(&user)
 	return result.RowsAffected == 1, result.Error
 }

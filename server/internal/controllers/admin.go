@@ -161,7 +161,7 @@ func (a *Admin) overview(w http.ResponseWriter, r *http.Request) {
 		Lists        int64 `json:"lists"`
 		Reservations int64 `json:"reservations"`
 	}
-	err := a.db.WithContext(r.Context()).Raw(`SELECT (SELECT count(*) FROM users WHERE deleted_at IS NULL) AS users, (SELECT count(*) FROM wishes w JOIN users u ON u.id = w.owner_id WHERE u.deleted_at IS NULL) AS wishes, (SELECT count(*) FROM wishlists l JOIN users u ON u.id = l.owner_id WHERE u.deleted_at IS NULL) AS lists, (SELECT count(*) FROM reservations WHERE status = 'purchased' OR (status = 'reserved' AND expires_at > now())) AS reservations`).Scan(&counts).Error
+	err := a.db.WithContext(r.Context()).Raw(`SELECT (SELECT count(*) FROM users WHERE deleted_at IS NULL) AS users, (SELECT count(*) FROM wishes w JOIN users u ON u.id = w.owner_id WHERE u.deleted_at IS NULL AND w.deleted_at IS NULL) AS wishes, (SELECT count(*) FROM wishlists l JOIN users u ON u.id = l.owner_id WHERE u.deleted_at IS NULL AND l.deleted_at IS NULL) AS lists, (SELECT count(*) FROM reservations WHERE status = 'purchased' OR (status = 'reserved' AND expires_at > now())) AS reservations`).Scan(&counts).Error
 	if err != nil {
 		http.Error(w, `{"error":"unavailable"}`, 503)
 		return

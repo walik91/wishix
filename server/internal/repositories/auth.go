@@ -27,9 +27,15 @@ func userResult(user *models.User, err error) (*models.User, error) {
 
 func (r *Auth) UserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
-	// A deleted account still occupies its verified email.
-	err := r.Ctx(ctx).Unscoped().Where("email = ?", email).Take(&user).Error
+	err := r.Ctx(ctx).Where("email = ?", email).Take(&user).Error
 	return userResult(&user, err)
+}
+
+// EmailTaken enforces the database uniqueness constraint without exposing a deleted account.
+func (r *Auth) EmailTaken(ctx context.Context, email string) (bool, error) {
+	var count int64
+	err := r.Ctx(ctx).Unscoped().Model(&models.User{}).Where("email = ?", email).Count(&count).Error
+	return count > 0, err
 }
 
 func (r *Auth) UserByID(ctx context.Context, id string, lock bool) (*models.User, error) {

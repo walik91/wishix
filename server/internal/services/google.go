@@ -131,11 +131,11 @@ func (g *Google) Callback(ctx context.Context, state, session, code string) (Goo
 		})
 		return GoogleResult{Mode: "login", Authenticated: result}, err
 	}
-	existing, err := g.auth.repo.UserByEmail(ctx, email)
+	occupied, err := g.auth.repo.EmailTaken(ctx, email)
 	if err != nil {
 		return GoogleResult{}, err
 	}
-	if existing != nil {
+	if occupied {
 		return GoogleResult{}, ErrRegistrationUnavailable
 	}
 	token := security.Token()

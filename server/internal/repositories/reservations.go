@@ -86,7 +86,7 @@ func (r *Reservations) ByWish(ctx context.Context, wishID string) (*models.Reser
 }
 func (r *Reservations) ByToken(ctx context.Context, hash string) (*models.Reservation, error) {
 	var rows []models.Reservation
-	err := r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_hash = ? AND EXISTS (SELECT 1 FROM wishes w JOIN users owner ON owner.id = w.owner_id WHERE w.id = reservations.wish_id AND owner.deleted_at IS NULL)", hash).Limit(1).Find(&rows).Error
+	err := r.Ctx(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("token_hash = ? AND EXISTS (SELECT 1 FROM wishes w JOIN users owner ON owner.id = w.owner_id WHERE w.id = reservations.wish_id AND w.deleted_at IS NULL AND owner.deleted_at IS NULL)", hash).Limit(1).Find(&rows).Error
 	if err != nil || len(rows) == 0 {
 		return nil, err
 	}

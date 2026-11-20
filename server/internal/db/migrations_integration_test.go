@@ -57,7 +57,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("version: got %d, want %d; %v", version, want, err)
 		}
 	}
-	assertVersion(14)
+	assertVersion(15)
 	if _, err := pool.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, email_verified_at, created_at) VALUES ('00000000-0000-4000-8000-000000000001', 'migration_test', 'migration@example.test', 'test-hash', now(), now())`); err != nil {
 		t.Fatal(err)
 	}
@@ -66,6 +66,26 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 	}
 	if _, err := pool.ExecContext(ctx, `INSERT INTO wish_shop_links (wish_id, position, url) VALUES ('00000000-0000-4000-8000-000000000002', 0, 'https://example.test/item')`); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := pool.ExecContext(ctx, "UPDATE users SET deleted_at = now() WHERE username = 'migration_test'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.ExecContext(ctx, `INSERT INTO wishlists (id, owner_id, title, share_token, created_at, updated_at) VALUES ('00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000001', 'Kept list', repeat('a', 43), now(), now())`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("prepare old version:", err)
+	}
+	assertVersion(14)
+	if err := migrator.Apply(ctx); err != nil {
+		t.Fatal("backfill up:", err)
+	}
+	var hiddenWishes, hiddenLists int
+	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM wishes WHERE deleted_at IS NOT NULL").Scan(&hiddenWishes); err != nil || hiddenWishes != 1 {
+		t.Fatal("wish backfill", err)
+	}
+	if err := pool.QueryRowContext(ctx, "SELECT count(*) FROM wishlists WHERE deleted_at IS NOT NULL").Scan(&hiddenLists); err != nil || hiddenLists != 1 {
+		t.Fatal("list backfill", err)
 	}
 	if err := migrator.Apply(ctx); err != nil {
 		t.Fatal("repeated up:", err)
@@ -78,7 +98,7 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 		t.Fatal("repeated up lost wishes or shop links")
 	}
 	statuses, err := migrator.Status(ctx)
-	if err != nil || len(statuses) != 14 {
+	if err != nil || len(statuses) != 15 {
 		t.Fatal("incorrect Goose status:", err)
 	}
 	for _, status := range statuses {
@@ -86,6 +106,10 @@ func TestIntegrationGooseUpDownUp(t *testing.T) {
 			t.Fatalf("migration not applied: %v", status)
 		}
 	}
+	if _, err := migrator.Down(ctx); err != nil {
+		t.Fatal("owned content soft delete down:", err)
+	}
+	assertVersion(14)
 	if _, err := migrator.Down(ctx); err != nil {
 		t.Fatal("admin soft delete down:", err)
 	}
@@ -244,7 +268,7 @@ func TestIntegrationGooseAdoptsExistingSchemaWithoutDeletingData(t *testing.T) {
 		t.Fatal("legacy history was changed")
 	}
 	version, err := fresh.GetDBVersion(ctx)
-	if err != nil || version != 14 {
+	if err != nil || version != 15 {
 		t.Fatal("Goose did not record the adopted version")
 	}
 }

@@ -1,8 +1,12 @@
 package models
 
-import "time"
+import (
+	"gorm.io/gorm"
+	"time"
+)
 
 type Wishlist struct {
+	DeletedAt     gorm.DeletedAt
 	ID            string
 	OwnerID       string
 	Title         string

@@ -136,11 +136,11 @@ func (g *Facebook) Callback(ctx context.Context, state, session, code string) (F
 		if err != nil {
 			return FacebookResult{}, ErrInvalidInput
 		}
-		existing, err := g.auth.repo.UserByEmail(ctx, email)
+		occupied, err := g.auth.repo.EmailTaken(ctx, email)
 		if err != nil {
 			return FacebookResult{}, err
 		}
-		if existing != nil {
+		if occupied {
 			return FacebookResult{}, ErrRegistrationUnavailable
 		}
 	}

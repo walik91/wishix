@@ -136,6 +136,31 @@ func TestIntegrationAdminSoftDelete(t *testing.T) {
 	if w := call("POST", "/api/admin/users/"+deleted.ID+"/delete", "{}", cookie, config.Origin); w.Code != 204 {
 		t.Fatal("delete", w.Code, w.Body.String())
 	}
+	listedAfter := call("GET", "/api/admin/users", "", cookie, config.Origin)
+	var activeAfter struct {
+		Users []map[string]any `json:"users"`
+	}
+	if err := json.Unmarshal(listedAfter.Body.Bytes(), &activeAfter); err != nil || len(activeAfter.Users) != 1 || activeAfter.Users[0]["username"] != "otherowner" {
+		t.Fatal("deleted user still visible to admin", listedAfter.Code, err)
+	}
+	if user, err := f.repo.UserByEmail(context.Background(), deleted.Email); err != nil || user != nil {
+		t.Fatal("deleted user still visible to GORM", err)
+	}
+	var activeWishes, activeLists int64
+	if err := f.database.Model(&models.Wish{}).Where("id = ?", wishID).Count(&activeWishes).Error; err != nil || activeWishes != 0 {
+		t.Fatal("deleted wish still visible to GORM", err)
+	}
+	if err := f.database.Model(&models.Wishlist{}).Where("id = ?", listID).Count(&activeLists).Error; err != nil || activeLists != 0 {
+		t.Fatal("deleted list still visible to GORM", err)
+	}
+	var deletedWish models.Wish
+	var deletedList models.Wishlist
+	if err := f.database.Unscoped().Where("id = ?", wishID).Take(&deletedWish).Error; err != nil || !deletedWish.DeletedAt.Valid {
+		t.Fatal("wish not soft deleted", err)
+	}
+	if err := f.database.Unscoped().Where("id = ?", listID).Take(&deletedList).Error; err != nil || !deletedList.DeletedAt.Valid {
+		t.Fatal("list not soft deleted", err)
+	}
 	if w := call("POST", "/api/admin/users/"+deleted.ID+"/delete", "{}", cookie, config.Origin); w.Code != 404 {
 		t.Fatal("repeat delete", w.Code)
 	}
@@ -191,13 +216,13 @@ func TestIntegrationAdminSoftDelete(t *testing.T) {
 	if u, err := repositories.NewFacebook(executor).UserBySubject(context.Background(), "removed-facebook-id"); err != nil || u != nil {
 		t.Fatal("deleted Facebook identity resolved", err)
 	}
-	// The reservation slot of an unrelated owner can be used again.
+	// A deleted account is no longer treated as an active account when booking as a guest.
 	msgs := &reservationMessages{}
 	svc := services.NewReservations(repositories.NewReservations(executor), db.NewTransactionManager(executor), f.auth, f.mail, msgs, config)
 	if err := svc.ProcessNotifications(context.Background()); err != nil || len(msgs.bodies) != 0 {
 		t.Fatal("suppressed mail was delivered", err)
 	}
-	input := services.ReservationInput{WishID: otherWishID, ListID: otherListID, Email: "another-guest@example.test", Locale: "en"}
+	input := services.ReservationInput{WishID: otherWishID, ListID: otherListID, Email: deleted.Email, Locale: "en"}
 	challenge, err := svc.Start(context.Background(), input, nil)
 	if err != nil {
 		t.Fatal("start new booking", err)

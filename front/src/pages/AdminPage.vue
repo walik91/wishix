@@ -17,7 +17,9 @@ async function loadUsers(nextOffset = offset.value) {
   usersLoading.value = true; usersError.value = ''
   try {
     const result = await request(`users?offset=${nextOffset}`)
-    users.value = result.users; hasMore.value = result.has_more; offset.value = nextOffset
+    const activeUsers = result.users.filter(person => !person.deleted_at)
+    if (!activeUsers.length && nextOffset > 0 && !result.has_more) { await loadUsers(Math.max(0, nextOffset - 50)); return }
+    users.value = activeUsers; hasMore.value = result.has_more; offset.value = nextOffset
   } catch (e) {
     if (e.status === 401) stats.value = null
     else usersError.value = t('admin.usersError')
@@ -89,8 +91,7 @@ onMounted(load)
           <p v-if="!users.length" class="panel">{{ t('admin.noUsers') }}</p>
           <article v-for="person in users" :key="person.id" class="user-row panel">
             <div class="user-info"><strong>{{ person.display_name || person.username }}</strong><span>@{{ person.username }}</span><span>{{ person.email || t('admin.noEmail') }}</span><span>{{ t('admin.joined') }} {{ date(person.created_at) }}</span></div>
-            <span v-if="person.deleted_at" class="deleted-label">{{ t('admin.deleted') }}</span>
-            <UiButton v-else variant="destructive" :aria-label="`${t('admin.deleteUser')}: ${person.username}`" @click="selectedUser = person">{{ t('admin.deleteUser') }}</UiButton>
+            <UiButton variant="destructive" :aria-label="`${t('admin.deleteUser')}: ${person.username}`" @click="selectedUser = person">{{ t('admin.deleteUser') }}</UiButton>
           </article>
           <nav v-if="offset || hasMore" class="pagination" :aria-label="t('admin.pagination')"><UiButton variant="secondary" :disabled="offset === 0" @click="loadUsers(Math.max(0, offset - 50))">{{ t('admin.previous') }}</UiButton><UiButton variant="secondary" :disabled="!hasMore" @click="loadUsers(offset + 50)">{{ t('admin.next') }}</UiButton></nav>
         </div>
@@ -140,7 +141,6 @@ form { display: grid; gap: 20px; }
 .user-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .user-info { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
 .user-info span { color: var(--wx-text-muted); font-size: var(--wx-text-sm); }
-.deleted-label { padding: 8px 12px; border-radius: var(--wx-radius-pill); color: var(--wx-text-muted); background: var(--wx-lavender); font-size: var(--wx-text-sm); }
 .pagination, .dialog-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 @media (max-width: 390px) { .admin-header img { width: 100px; } .admin-header { padding-inline: 12px; } .header-actions { gap: 4px; } select { max-width: 85px; } }
 </style>

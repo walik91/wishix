@@ -85,7 +85,7 @@ func (r *Wishes) ValidLists(ctx context.Context, owner string, ids []string) (bo
 
 func (r *Wishes) Image(ctx context.Context, ownerID, id string) (*models.WishImage, error) {
 	var images []models.WishImage
-	err := r.Ctx(ctx).Model(&models.WishImage{}).Select("wish_images.*").Joins("JOIN wishes ON wishes.id = wish_images.wish_id").Where("wishes.owner_id = ? AND wishes.id = ?", ownerID, id).Limit(1).Find(&images).Error
+	err := r.Ctx(ctx).Model(&models.WishImage{}).Select("wish_images.*").Joins("JOIN wishes ON wishes.id = wish_images.wish_id AND wishes.deleted_at IS NULL").Where("wishes.owner_id = ? AND wishes.id = ?", ownerID, id).Limit(1).Find(&images).Error
 	if err != nil || len(images) == 0 {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (r *Wishes) Image(ctx context.Context, ownerID, id string) (*models.WishIma
 
 func (r *Wishes) SaveImage(ctx context.Context, ownerID string, image *models.WishImage) (bool, error) {
 	result := r.Ctx(ctx).Exec(`INSERT INTO wish_images (wish_id, version, data)
-		SELECT id, ?::UUID, ?::BYTES FROM wishes WHERE id = ? AND owner_id = ?
+		SELECT id, ?::UUID, ?::BYTES FROM wishes WHERE id = ? AND owner_id = ? AND deleted_at IS NULL
 		ON CONFLICT (wish_id) DO UPDATE SET version = excluded.version, data = excluded.data`, image.Version, image.Data, image.WishID, ownerID)
 	return result.RowsAffected == 1, result.Error
 }
@@ -121,6 +121,6 @@ func (r *Wishes) Delete(ctx context.Context, ownerID, id string) (bool, error) {
 	if err := r.Ctx(ctx).Model(&models.Wishlist{}).Where("owner_id = ? AND id IN (SELECT list_id FROM wishlist_wishes WHERE wish_id = ? AND owner_id = ?)", ownerID, id, ownerID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": time.Now().UTC()}).Error; err != nil {
 		return false, err
 	}
-	result := r.Ctx(ctx).Where("id = ? AND owner_id = ?", id, ownerID).Delete(&models.Wish{})
+	result := r.Ctx(ctx).Unscoped().Where("id = ? AND owner_id = ?", id, ownerID).Delete(&models.Wish{})
 	return result.RowsAffected == 1, result.Error
 }

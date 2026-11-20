@@ -1,9 +1,13 @@
 package models
 
-import "time"
+import (
+	"gorm.io/gorm"
+	"time"
+)
 
 // A wish belongs to the account's collection; list memberships share its identity.
 type Wish struct {
+	DeletedAt        gorm.DeletedAt
 	ID               string
 	OwnerID          string
 	Title            string

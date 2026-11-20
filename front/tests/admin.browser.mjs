@@ -13,7 +13,7 @@ try {
       if (path.endsWith('/logout')) { signedIn = false; return route.fulfill({ status: 204 }) }
       if (!signedIn) return route.fulfill({ status: 401, json: { error: 'unauthorized' } })
       if (path.endsWith('/delete')) { deleted = true; return route.fulfill({ status: 204 }) }
-      if (path.endsWith('/users')) return route.fulfill({ json: { users: [{ ...person, deleted_at: deleted ? '2026-11-02T12:00:00Z' : null }], has_more: false } })
+      if (path.endsWith('/users')) return route.fulfill({ json: { users: deleted ? [] : [person], has_more: false } })
       return route.fulfill({ json: { users: deleted ? 0 : 1, wishes: 34, lists: 5, reservations: 2 } })
     })
     await page.goto('http://localhost:5173/cp')
@@ -39,7 +39,7 @@ try {
     await page.locator('dialog[open]').waitFor()
     assert.equal(deleted, false, 'confirmation must precede deletion')
     await page.locator('dialog .dialog-actions .destructive').click()
-    await page.locator('.deleted-label').waitFor()
+    await page.locator('.user-row').waitFor({ state: 'detached' })
     assert.equal(deleted, true)
     assert.equal(await page.locator('.user-row button').count(), 0)
     await check('deleted')
