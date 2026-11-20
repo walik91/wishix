@@ -6,4 +6,6 @@ dist/
 *.log
 server/api
 server/api.exe
+backups/
+__pycache__/
 
