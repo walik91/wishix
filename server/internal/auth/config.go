@@ -10,6 +10,8 @@ import (
 )
 
 type Config struct {
+	AdminUsername      string
+	AdminPasswordHash  string
 	Origin             string
 	SecureCookie       bool
 	Secret             string
@@ -28,6 +30,7 @@ type Config struct {
 
 func LoadConfig() (*Config, error) {
 	c := &Config{Origin: os.Getenv("APP_ORIGIN"), Secret: os.Getenv("AUTH_SECRET"), SMTPHost: os.Getenv("SMTP_HOST"), SMTPPort: os.Getenv("SMTP_PORT"), SMTPFrom: os.Getenv("SMTP_FROM"), SMTPUsername: os.Getenv("SMTP_USERNAME"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), SMTPSecurity: os.Getenv("SMTP_SECURITY")}
+	c.AdminUsername, c.AdminPasswordHash = os.Getenv("ADMIN_USERNAME"), os.Getenv("ADMIN_PASSWORD_HASH")
 	c.GoogleClientID, c.GoogleClientSecret = os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET")
 	c.FacebookAppID, c.FacebookAppSecret = os.Getenv("FACEBOOK_APP_ID"), os.Getenv("FACEBOOK_APP_SECRET")
 	if (c.GoogleClientID == "") != (c.GoogleClientSecret == "") {

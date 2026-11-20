@@ -153,6 +153,14 @@ func (a *Auth) LimitIP(ctx context.Context, action, ip string) error {
 	return a.limit(ctx, "ip:"+action, ip, maximum, 15*time.Minute)
 }
 
+// LimitAdminLogin applies a shared account limit as well as an IP limit.
+func (a *Auth) LimitAdminLogin(ctx context.Context, ip string) error {
+	if err := a.limit(ctx, "admin-ip", ip, 10, 15*time.Minute); err != nil {
+		return err
+	}
+	return a.limit(ctx, "admin-account", "admin", 30, 15*time.Minute)
+}
+
 // LimitProductImport shares the persistent, atomic limiter, keyed by private account ID.
 func (a *Auth) LimitProductImport(ctx context.Context, userID string) error {
 	return a.limit(ctx, "product-import", userID, 20, 10*time.Minute)

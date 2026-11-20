@@ -13,11 +13,12 @@ import (
 	"wishix/server/internal/controllers"
 )
 
-func NewMux(health *controllers.Health, auth *controllers.Auth, google *controllers.Google, facebook *controllers.Facebook, wishes *controllers.Wishes, productImport *controllers.ProductImport, lists *controllers.Lists, reservations *controllers.Reservations, social *controllers.Social) *http.ServeMux {
+func NewMux(health *controllers.Health, auth *controllers.Auth, admin *controllers.Admin, google *controllers.Google, facebook *controllers.Facebook, wishes *controllers.Wishes, productImport *controllers.ProductImport, lists *controllers.Lists, reservations *controllers.Reservations, social *controllers.Social) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", health.Get)
 	mux.HandleFunc("GET /api/ready", health.Ready)
 	auth.RegisterRoutes(mux)
+	admin.RegisterRoutes(mux)
 	google.RegisterRoutes(mux)
 	facebook.RegisterRoutes(mux)
 	wishes.RegisterRoutes(mux)

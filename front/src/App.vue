@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import LoginPage from './pages/LoginPage.vue'
+import AdminPage from './pages/AdminPage.vue'
 import GoogleFinishPage from './pages/GoogleFinishPage.vue'
 import RegisterPage from './pages/RegisterPage.vue'
 import GuestHomePage from './pages/GuestHomePage.vue'
@@ -46,6 +47,7 @@ if (aliases[path]) {
 const { user, unavailable, initialize } = useSession()
 const cookieConsent = ref(null)
 onMounted(async () => {
+  if (page === '/cp') return
   startAnalytics()
   await initialize()
   if (user.value && page === '/login') window.location.replace(consumeReservationReturn())
@@ -55,7 +57,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <component :is="privatePage ? AppShell : PublicLayout" @cookie-settings="cookieConsent?.showSettings()">
+  <AdminPage v-if="page === '/cp'" />
+  <component v-else :is="privatePage ? AppShell : PublicLayout" @cookie-settings="cookieConsent?.showSettings()">
     <GuestHomePage v-if="page === '/'" />
     <LoginPage v-else-if="page === '/login'" />
     <GoogleFinishPage v-else-if="page === '/google/finish' || page === '/facebook/finish'" />
@@ -82,7 +85,7 @@ onMounted(async () => {
       <UiButton href="/">{{ t('notFound.home') }}</UiButton>
     </section>
   </component>
-  <CookieConsent ref="cookieConsent" />
+  <CookieConsent v-if="page !== '/cp'" ref="cookieConsent" />
 </template>
 
 <style scoped>

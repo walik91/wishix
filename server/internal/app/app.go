@@ -32,6 +32,7 @@ func New(options ...fx.Option) *fx.App {
 			fx.Annotate(repositories.NewAuth, fx.As(new(services.AuthRepository))),
 			services.NewAuth,
 			controllers.NewAuth,
+			controllers.NewAdmin,
 			auth.NewGoogleClient,
 			func(provider *auth.GoogleClient) services.GoogleProvider { return provider },
 			fx.Annotate(repositories.NewGoogle, fx.As(new(services.GoogleRepository))),

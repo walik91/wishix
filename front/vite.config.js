@@ -8,7 +8,7 @@ function sharedListRouting() {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url, 'http://localhost')
-        if (/^\/reservation\/?$/.test(url.pathname)) {
+        if (/^\/(reservation|cp)\/?$/.test(url.pathname)) {
           const writeHead = res.writeHead
           res.writeHead = function (...args) {
             this.setHeader('Cache-Control', 'no-store')
