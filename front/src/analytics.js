@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-// This is public configuration, not a credential. Load Google only after consent.
+// This is public configuration, not a credential. A saved denial disables Google.
 export const measurementId = (import.meta.env.VITE_GA_MEASUREMENT_ID || '').trim()
 export const analyticsConfigured = /^G-[A-Z0-9]+$/.test(measurementId)
 const preferenceKey = 'wishix_analytics_consent_v1'
@@ -39,7 +39,7 @@ function context() {
 }
 export function startAnalytics() {
   // Reservation management links contain secret tokens; no vendor script on that page.
-  if (!analyticsConfigured || analyticsConsent.value !== 'granted' || started || /^\/reservation\/?$/.test(window.location.pathname)) return
+  if (!analyticsConfigured || analyticsConsent.value === 'denied' || started || /^\/reservation\/?$/.test(window.location.pathname)) return
   started = true
   window.dataLayer = window.dataLayer || []
   window.gtag = function () { window.dataLayer.push(arguments) }
@@ -54,7 +54,7 @@ export function startAnalytics() {
 }
 const allowedEvents = new Set(['sign_up_started', 'sign_up_completed', 'wish_created', 'list_created', 'share_link_copied', 'reservation_started', 'reservation_completed', 'shop_link_opened', 'people_search_completed'])
 export function trackEvent(name) {
-  if (!started || analyticsConsent.value !== 'granted' || !allowedEvents.has(name)) return
+  if (!started || analyticsConsent.value === 'denied' || !allowedEvents.has(name)) return
   window.gtag('event', name, context())
 }
 function clearAnalyticsCookies() {
@@ -68,8 +68,8 @@ function clearAnalyticsCookies() {
 }
 window.addEventListener('storage', event => {
   if (event.key !== preferenceKey) return
-  analyticsConsent.value = event.newValue === 'granted' ? 'granted' : 'denied'
-  if (analyticsConsent.value === 'granted') startAnalytics()
+  analyticsConsent.value = ['granted', 'denied'].includes(event.newValue) ? event.newValue : null
+  if (analyticsConsent.value !== 'denied') startAnalytics()
   else if (started) {
     window['ga-disable-' + measurementId] = true
     clearAnalyticsCookies()
@@ -78,13 +78,16 @@ window.addEventListener('storage', event => {
 })
 export function setAnalyticsConsent(value) {
   const next = value ? 'granted' : 'denied'
-  try { localStorage.setItem(preferenceKey, next) } catch { /* Preference lasts for this page only. */ }
+  let persisted = false
+  try { localStorage.setItem(preferenceKey, next); persisted = true } catch { /* Preference lasts for this page only. */ }
   const wasStarted = started
   analyticsConsent.value = next
-  if (value) startAnalytics()
-  else if (wasStarted) {
+  if (value) {
+    window['ga-disable-' + measurementId] = false
+    startAnalytics()
+  } else if (wasStarted) {
     window['ga-disable-' + measurementId] = true
     clearAnalyticsCookies()
-    window.location.reload()
+    if (persisted) window.location.reload()
   }
 }

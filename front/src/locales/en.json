@@ -475,7 +475,7 @@
   "social.empty.followers": "No followers yet",
   "social.empty.blocked": "No blocked users",
   "cookies.title": "Cookies and analytics",
-  "cookies.description": "We use essential cookies to make Wishix work. With your permission, Google Analytics helps us understand visits and improve the service. You can change your choice at any time.",
+  "cookies.description": "We use essential cookies to make Wishix work and Google Analytics to understand visits and improve the service. Analytics is on by default. You can turn it off or change your choice at any time in cookie settings.",
   "cookies.accept": "Accept all",
   "cookies.reject": "Reject analytics",
   "cookies.settings": "Cookie settings",
