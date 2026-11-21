@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { analyticsLocation } from './analytics-url.js'
 
 // This is public configuration, not a credential. A saved denial disables Google.
 export const measurementId = (import.meta.env.VITE_GA_MEASUREMENT_ID || '').trim()
@@ -13,7 +14,7 @@ function readPreference() {
 export const analyticsConsent = ref(readPreference())
 let started = false
 
-// Do not use raw routes, user-controlled page titles, query strings or tokens.
+// Titles remain categories so user-controlled page titles cannot enter GA.
 export function pageCategory(path) {
   if (path === '/') return 'home'
   if (/^\/u\/[^/]+\/wishlist\//.test(path)) return 'shared_list'
@@ -35,7 +36,7 @@ function safeReferrer() {
 }
 function context() {
   const category = pageCategory(window.location.pathname)
-  return { page_location: window.location.origin + '/analytics/' + category, page_title: category, page_referrer: safeReferrer() }
+  return { page_location: analyticsLocation(window.location), page_title: category, page_referrer: safeReferrer() }
 }
 export function startAnalytics() {
   // Reservation management links contain secret tokens; no vendor script on that page.
@@ -49,6 +50,7 @@ export function startAnalytics() {
   window.gtag('event', 'page_view', context())
   const script = document.createElement('script')
   script.async = true
+  script.referrerPolicy = 'no-referrer'
   script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(measurementId)
   document.head.appendChild(script)
 }

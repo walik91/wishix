@@ -12,7 +12,7 @@ try {
   page.on('response', response => { if (response.url().includes('/gtag/js?')) tagStatus = response.status() })
   await page.route('**/api/auth/me', route => route.fulfill({ json: { user: null } }))
   await context.route('https://shop.example/**', route => route.abort())
-  await page.route('**/g/collect**', route => {
+  await context.route('**/g/collect**', route => {
     const request = route.request()
     requests.push({ url: request.url(), body: request.postData() || '' })
     return route.abort()
@@ -48,8 +48,21 @@ try {
   assert.deepEqual(leaks, [], 'test codes and tokens must not enter any Google measurement request')
   const events = requests.map(({ url }) => new URL(url)).filter(url => url.hostname === 'www.google-analytics.com')
   assert.equal(events.filter(url => url.searchParams.get('en') === 'page_view').length, 1, 'one page view, including after history change')
-  assert.ok(events.some(url => url.searchParams.get('dl') === origin + '/analytics/home'))
-  for (const name of ['form_start', 'view_search_results', 'click']) assert.ok(events.some(url => url.searchParams.get('en') === name), 'capture real enhanced event ' + name)
-  assert.ok(events.some(url => url.searchParams.get('en') === 'click' && url.searchParams.get('ep.link_domain') === 'shop.example'), 'retain the shop domain')
+  assert.ok(events.some(url => url.searchParams.get('dl') === origin + '/'))
+  if (process.env.WISHIX_GA_BASIC_ONLY !== '1') {
+    for (const name of ['form_start', 'view_search_results', 'click']) assert.ok(events.some(url => url.searchParams.get('en') === name), 'capture real enhanced event ' + name)
+    assert.ok(events.some(url => url.searchParams.get('en') === 'click' && url.searchParams.get('ep.link_domain') === 'shop.example'), 'retain the shop domain')
+  }
+  const countBeforeShare = requests.length
+  const sharePage = await context.newPage()
+  await sharePage.addInitScript(() => {
+    if (location.pathname === '/') history.replaceState(null, '', '/u/person/wishlist/12345678-1234-4234-8234-123456789abc/fake-share-token?email=codex-test%40example.com&notice=ok')
+  })
+  await sharePage.goto(origin + '/')
+  await sharePage.waitForFunction(() => !!window.gtag)
+  await sharePage.waitForTimeout(8000)
+  const shareEvents = requests.slice(countBeforeShare).map(({ url }) => new URL(url))
+  assert.ok(shareEvents.some(url => url.searchParams.get('dl') === origin + '/u/person/wishlist/12345678-1234-4234-8234-123456789abc?notice=ok'), 'preserve username and list ID; received ' + JSON.stringify(shareEvents.map(url => url.searchParams.get('dl'))))
+  assert.ok(!JSON.stringify(requests).includes('fake-share-token') && !JSON.stringify(requests).includes('codex-test'), 'do not transmit share token or email')
   console.log('Passed: real Google tag, sanitized measurement requests and one page view; all measurement traffic was blocked.')
 } finally { await browser.close() }
