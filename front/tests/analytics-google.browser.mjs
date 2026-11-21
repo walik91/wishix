@@ -48,7 +48,7 @@ try {
   assert.deepEqual(leaks, [], 'test codes and tokens must not enter any Google measurement request')
   const events = requests.map(({ url }) => new URL(url)).filter(url => url.hostname === 'www.google-analytics.com')
   assert.equal(events.filter(url => url.searchParams.get('en') === 'page_view').length, 1, 'one page view, including after history change')
-  assert.ok(events.some(url => url.searchParams.get('dl') === origin + '/'))
+  assert.ok(events.some(url => url.searchParams.get('dl') === origin + '/?q=test-code-'))
   if (process.env.WISHIX_GA_BASIC_ONLY !== '1') {
     for (const name of ['form_start', 'view_search_results', 'click']) assert.ok(events.some(url => url.searchParams.get('en') === name), 'capture real enhanced event ' + name)
     assert.ok(events.some(url => url.searchParams.get('en') === 'click' && url.searchParams.get('ep.link_domain') === 'shop.example'), 'retain the shop domain')

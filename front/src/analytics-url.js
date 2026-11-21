@@ -1,13 +1,8 @@
-// Report actual application routes, but never pass unknown route segments as data.
 const uuid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
-const username = '[A-Za-z0-9_]{3,30}'
-const sharedList = new RegExp(`^(/u/${username}/wishlist/${uuid})(?:/[^/]+)?/?$`)
-const dynamicRoutes = [
-  new RegExp(`^/u/${username}(?:/(?:wishes|followers|following))?/?$`),
-  new RegExp(`^/my/lists/${uuid}/?$`),
-  new RegExp(`^/my/wishes/${uuid}/edit/?$`),
-]
-const staticRoutes = new Set(['/', '/login', '/register', '/forgot-password', '/google/finish', '/facebook/finish', '/my', '/my/profile', '/my/following', '/my/search', '/my/wishes', '/my/wishes/new', '/my/lists', '/my/lists/new', '/status'])
+const sharedList = new RegExp(`^(/u/[A-Za-z0-9_]{3,30}/wishlist/${uuid})/[^/]+(?=/|$)`)
+const secretName = /^(?:email|e-?mail|token|access_?token|refresh_?token|share_?token|code|verification_?code|auth(?:orization)?_?code|otp|password|passwd|secret|client_?secret|authorization|session(?:_?id)?|state|credential|api_?key)$/i
+const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
+const tokenPattern = /(^|[^A-Za-z0-9_-])([A-Za-z0-9_-]{43})(?=$|[^A-Za-z0-9_-])/g
 
 function decoded(value) {
   let result = value.replace(/\+/g, ' ')
@@ -21,27 +16,56 @@ function decoded(value) {
   return result
 }
 
-function safeQuery(search) {
-  const sensitiveName = /(?:email|e-mail|mail|token|code|pass(?:word)?|secret|authorization|auth|session|state|otp|credential|api.?key)/i
-  const email = /[^\s@]+@[^\s@]+\.[^\s@]+/i
-  const safe = search.replace(/^\?/, '').split('&').filter(part => {
-    if (!part) return false
-    const [rawName, ...rawValue] = part.split('=')
-    const name = decoded(rawName), value = decoded(rawValue.join('='))
-    if (!name || value === null || sensitiveName.test(name) || email.test(name) || email.test(value)) return false
-    // Nested URLs and free-text values can conceal sensitive parameters.
-    if (sensitiveName.test(value)) return false
-    if (/(?:^|[^A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?:$|[^A-Za-z0-9_-])/.test(value)) return false
-    return true
+function redact(value) {
+  return value
+    .replace(emailPattern, '')
+    .replace(tokenPattern, '$1')
+    // Also handle labelled secrets embedded in text or a nested URL.
+    .replace(/\b((?:access[_-]?token|refresh[_-]?token|share[_-]?token|verification[_-]?code|authorization[_-]?code|code|otp|token|password|secret|state)[=:])[^&#\s]+/gi, '$1')
+    .replace(/\b((?:verification[_-]?)?(?:code|otp)[ _-]+)\d{4,12}\b/gi, '$1')
+}
+
+function cleanPart(raw) {
+  const value = decoded(raw)
+  if (value === null) return ''
+  const clean = redact(value)
+  return clean === value ? raw : encodeURIComponent(clean)
+}
+
+function cleanPath(path) {
+  // The final segment of this route is the share token, regardless of its format.
+  path = path.replace(sharedList, '$1')
+  const parts = path.split('/')
+  for (let i = 0; i < parts.length; i++) {
+    const name = decoded(parts[i])
+    if (name && secretName.test(name) && i + 1 < parts.length) {
+      parts.splice(i + 1, 1)
+    } else {
+      parts[i] = cleanPart(parts[i])
+    }
+  }
+  return parts.join('/') || '/'
+}
+
+function cleanQuery(search) {
+  if (!search) return ''
+  const parts = search.slice(1).split('&').flatMap(part => {
+    const at = part.indexOf('=')
+    const rawName = at < 0 ? part : part.slice(0, at)
+    const name = decoded(rawName)
+    if (!name || secretName.test(name)) return []
+    const cleanName = cleanPart(rawName)
+    if (!cleanName) return []
+    if (at < 0) return [cleanName]
+    const rawValue = part.slice(at + 1)
+    const cleanValue = cleanPart(rawValue)
+    if (rawValue && !cleanValue) return []
+    return [cleanName + '=' + cleanValue]
   })
-  return safe.length ? '?' + safe.join('&') : ''
+  return parts.length ? '?' + parts.join('&') : ''
 }
 
 export function analyticsLocation(location) {
-  const path = location.pathname
-  const match = sharedList.exec(path)
-  const cleanPath = match ? match[1] : staticRoutes.has(path.replace(/\/$/, '') || '/') || dynamicRoutes.some(route => route.test(path)) ? path : '/other'
-  // Only the known non-secret wish anchor is accepted; arbitrary fragments may be tokens.
-  const hash = new RegExp(`^#reserve-${uuid}$`).test(location.hash) ? location.hash : ''
-  return location.origin + cleanPath + safeQuery(location.search) + hash
+  const hash = location.hash ? cleanPart(location.hash.slice(1)) : ''
+  return location.origin + cleanPath(location.pathname) + cleanQuery(location.search) + (hash ? '#' + hash : '')
 }
