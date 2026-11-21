@@ -475,7 +475,7 @@
   "social.empty.followers": "Nu ai urmăritori încă",
   "social.empty.blocked": "Nu ai utilizatori blocați",
   "cookies.title": "Cookie-uri și analiză",
-  "cookies.description": "Folosim cookie-uri necesare pentru funcționarea Wishix și Google Analytics pentru a înțelege vizitele și a îmbunătăți serviciul. Analiza este activă implicit. O poți dezactiva sau îți poți schimba alegerea oricând în setările cookie.",
+  "cookies.description": "Folosim cookie-uri necesare pentru funcționarea Wishix și Google Analytics pentru a înțelege vizitele și a îmbunătăți serviciul. Îți poți schimba alegerea oricând în setările cookie.",
   "cookies.accept": "Acceptă toate",
   "cookies.reject": "Refuză analiza",
   "cookies.settings": "Setări cookie",

@@ -475,7 +475,7 @@
   "social.empty.followers": "Подписчиков пока нет",
   "social.empty.blocked": "Нет заблокированных пользователей",
   "cookies.title": "Файлы cookie и аналитика",
-  "cookies.description": "Мы используем необходимые cookie для работы Wishix и Google Analytics, чтобы понимать посещаемость и улучшать сервис. По умолчанию аналитика включена. Её можно отключить или изменить выбор в любое время в настройках cookie.",
+  "cookies.description": "Мы используем необходимые cookie для работы Wishix и Google Analytics, чтобы понимать посещаемость и улучшать сервис. Вы можете изменить выбор в любое время в настройках cookie.",
   "cookies.accept": "Принять все",
   "cookies.reject": "Отклонить аналитику",
   "cookies.settings": "Настройки cookie",
