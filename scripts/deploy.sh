@@ -111,13 +111,24 @@ else
   [[ -z $server_id ]] || old_server=$(docker inspect --format '{{.Image}}' "$server_id")
   [[ -z $front_id ]] || old_front=$(docker inspect --format '{{.Image}}' "$front_id")
 fi
-# Retain the last known-good images, even when rebuilding moves the usual tags.
-if [[ -n $old_server ]]; then
-  docker image tag "$old_server" "${project}-rollback-server:latest" || die 'Could not retain the previous server image.'
-fi
-if [[ -n $old_front ]]; then
-  docker image tag "$old_front" "${project}-rollback-front:latest" || die 'Could not retain the previous frontend image.'
-fi
+# Retain known-good images when available, even when rebuilding moves usual tags.
+# Docker can keep a running container after its image becomes unavailable.
+retain_image() {
+  local service=$1 image=$2 inspect_error
+  [[ -n $image ]] || return 0
+  [[ $image =~ ^sha256:[a-f0-9]{64}$ ]] || die "Invalid previous $service image ID in deployment state."
+  if inspect_error=$(docker image inspect "$image" 2>&1 >/dev/null); then
+    docker image tag "$image" "${project}-rollback-${service}:latest" || die "Could not retain the previous $service image."
+  elif [[ $inspect_error == *'No such image'* || $inspect_error == *'no such image'* ]]; then
+    docker info >/dev/null || die 'Docker is unavailable while checking the previous image.'
+    printf 'Warning: previous %s image %s is unavailable. The existing rollback tag is unchanged and may be older or absent.\n' "$service" "$image" >&2
+  else
+    printf '%s\n' "$inspect_error" >&2
+    die "Could not inspect the previous $service image."
+  fi
+}
+retain_image server "$old_server"
+retain_image front "$old_front"
 
 phase=build
 "${compose[@]}" build server front
@@ -149,4 +160,4 @@ mv -f -- "$record" "$state/current"
 rm -f -- "$state/incomplete"
 phase=complete
 printf 'Deployment succeeded. Commit: %s; database migration: %s\n' "$target_commit" "$version"
-printf 'Previous application images, when available: %s-rollback-server:latest and %s-rollback-front:latest\n' "$project" "$project"
+printf 'Rollback tags (if available; see warnings): %s-rollback-server:latest and %s-rollback-front:latest\n' "$project" "$project"
