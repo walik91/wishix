@@ -41,6 +41,7 @@ const { busy: emailBusy, error: emailError, remaining: emailRemaining, cooldown:
 const signingOut = ref(false)
 const error = ref('')
 const collectionEnabled = ref(false), savedCollection = ref(null), collectionLoading = ref(false), collectionError = ref('')
+const confirmCollectionOpen = ref(false), collectionInput = ref(null)
 const collectionReady = computed(() => savedCollection.value !== null)
 const collectionChanged = computed(() => collectionReady.value && collectionEnabled.value !== savedCollection.value)
 const profileSaving = computed(() => (collectionReady.value && collectionLoading.value) || !!profilePage.value?.busy)
@@ -126,8 +127,20 @@ function sendEmailCode() { return emailRun(async () => { const result = await ad
 function resendEmailCode() { return emailRun(async () => { const result = await resendCode(emailChallenge.value); emailCooldown(result.resend_after) }) }
 function verifyAddedEmail(code) { return emailRun(async () => { await confirmAddedEmail(emailChallenge.value, code); emailChallenge.value = ''; await refresh() }) }
 function changeCollection(event) {
-  collectionEnabled.value = event.target.checked
+  const checked = event.target.checked
+  if (checked && !savedCollection.value) {
+    event.target.checked = collectionEnabled.value
+    confirmCollectionOpen.value = true
+    return
+  }
+  collectionEnabled.value = checked
   saveCollection()
+}
+async function publishCollection() {
+  confirmCollectionOpen.value = false
+  collectionEnabled.value = true
+  await nextTick()
+  await saveCollection()
 }
 async function saveCollection() {
   if (collectionLoading.value) return
@@ -136,7 +149,11 @@ async function saveCollection() {
     const data = await setCollectionSetting(collectionEnabled.value)
     collectionEnabled.value = savedCollection.value = data.show_all_wishes
   } catch { collectionError.value = t('profile.settingsError') }
-  finally { collectionLoading.value = false }
+  finally {
+    collectionLoading.value = false
+    await nextTick()
+    if (document.activeElement === document.body) collectionInput.value?.focus({ preventScroll: true })
+  }
 }
 async function logout() {
   if (signingOut.value) return
@@ -231,8 +248,8 @@ async function logout() {
         <ProfilePage v-if="profileOpen && profileVisited" v-show="profileSection === 'profile'" ref="profilePage">
           <template #collection>
             <div class="collection-setting">
-              <label><input type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
-              <p>{{ t('profile.showAllWarning') }}</p>
+              <label><input ref="collectionInput" type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" aria-describedby="profile-collection-warning" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
+              <p id="profile-collection-warning">{{ t('profile.showAllWarning') }}</p>
               <p v-if="collectionError" class="auth-error" role="alert">{{ collectionError }}</p>
               <UiButton v-if="collectionError && collectionChanged" variant="secondary" @click="saveCollection">{{ t('checkAgain') }}</UiButton>
             </div>
@@ -243,6 +260,13 @@ async function logout() {
           </template>
         </ProfilePage>
       </template>
+    </UiDialog>
+    <UiDialog v-model:open="confirmCollectionOpen" :title="t('profile.publishCollection')" aria-describedby="publish-collection-warning">
+      <p id="publish-collection-warning" class="collection-warning">{{ t('profile.showAllWarning') }}</p>
+      <div class="collection-confirm-actions">
+        <UiButton variant="secondary" autofocus @click="confirmCollectionOpen = false">{{ t('wishes.cancel') }}</UiButton>
+        <UiButton @click="publishCollection">{{ t('profile.publishCollection') }}</UiButton>
+      </div>
     </UiDialog>
     <DiscardChangesDialog v-model:open="discardProfileOpen" :description="t('profile.discardDescription')" @discard="discardProfileChanges" />
   </div>
@@ -296,12 +320,16 @@ async function logout() {
 .account-details dd { margin: 0; line-height: 1.5; }
 .provider-setting, .email-setting { padding-block: var(--wx-space-4); border-bottom: 1px solid var(--wx-border); }
 .email-setting form { display: grid; gap: var(--wx-space-3); }
-.collection-setting { display: grid; gap: var(--wx-space-2); padding-bottom: var(--wx-space-4); border-bottom: 1px solid var(--wx-border); }
+.collection-setting { display: grid; margin-top: var(--wx-space-2); padding: var(--wx-space-1) var(--wx-space-3) var(--wx-space-3); border-radius: var(--wx-radius-sm); background: var(--wx-cream); }
 .collection-setting .button { justify-self: start; }
 .collection-setting label { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; font-size: var(--wx-text-sm); }
-.collection-setting input { flex: 0 0 auto; width: 20px; height: 20px; accent-color: var(--wx-primary); }
-.collection-setting p { margin: 0; font-size: var(--wx-text-sm); line-height: 1.5; }
-.collection-setting p:not(.auth-error), .provider-row p { color: var(--wx-text-muted); }
+.collection-setting input { flex: 0 0 auto; width: 20px; height: 20px; margin: 0; accent-color: var(--wx-primary); }
+.collection-setting label:has(input:disabled) { color: var(--wx-text-muted); cursor: default; }
+.collection-setting p, .collection-warning { margin: 0; font-size: var(--wx-text-sm); line-height: 1.5; }
+.collection-setting p:not(.auth-error), .collection-warning, .provider-row p { color: var(--wx-text-muted); }
+.collection-setting .auth-error, .collection-setting .button { margin-top: var(--wx-space-2); }
+.collection-confirm-actions { display: flex; flex-wrap: wrap; gap: var(--wx-space-3); margin-top: var(--wx-space-6); }
+.collection-confirm-actions > * { flex: 1 1 auto; }
 .provider-setting { display: grid; gap: var(--wx-space-2); font-size: var(--wx-text-sm); }
 .provider-setting p { margin: 0; line-height: 1.5; }
 .provider-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--wx-space-3); }

@@ -10,19 +10,28 @@ try {
   await mkdir(new URL('../../.cache/profile-screens/', import.meta.url), { recursive: true })
   for (const lang of ['en', 'ru', 'ro']) for (const width of [320, 390, 768, 1024, 1440]) {
     const context = await browser.newContext({ locale: lang, viewport: { width, height: 900 } })
+    await context.addInitScript(() => localStorage.setItem('wishix_analytics_consent_v1', 'denied'))
     const page = await context.newPage()
     page.on('pageerror', e => errors.push(e.message))
     page.on('console', m => { if (m.text().includes('[Vue warn]')) errors.push(m.text()) })
     let enabled = false
+    const collectionWrites = []
     await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { username: 'example', email: 'private@example.test' } } }))
     await page.route('**/u/example', route => route.fulfill({ contentType: 'text/html', body: indexHTML }))
     await page.route('**/api/auth/google/status', route => route.fulfill({ json: { enabled: false } }))
     await page.route('**/api/auth/facebook/status', route => route.fulfill({ json: { enabled: false } }))
     await page.route('**/api/profile/name', route => route.fulfill({ json: { display_name: 'Example Name' } }))
+    await page.route('**/api/profile/details', route => route.fulfill({ json: {
+      username: 'example', biography: '', birth_date: null, has_avatar: false, show_age: false,
+      show_followers: false, show_following: false,
+    } }))
     await page.route('**/api/wishes', route => route.fulfill({ json: { wishes: [] } }))
     await page.route('**/api/lists', route => route.fulfill({ json: { lists: [] } }))
     await page.route('**/api/profile/collection', route => {
-      if (route.request().method() === 'PUT') enabled = route.request().postDataJSON().show_all_wishes
+      if (route.request().method() === 'PUT') {
+        enabled = route.request().postDataJSON().show_all_wishes
+        collectionWrites.push(enabled)
+      }
       return route.fulfill({ json: { show_all_wishes: enabled } })
     })
     await page.route('**/api/public/profiles/example', route => route.fulfill({ json: { username: 'example', display_name: 'Example Name', show_all_wishes: enabled, lists: [{ id: '00000000-0000-4000-8000-000000000001', title: 'Public list', visibility: 'public', wish_count: 1, share_path: '/00000000-0000-4000-8000-000000000001' }] } }))
@@ -35,10 +44,49 @@ try {
     assert.equal(await page.getByRole('link', { name: texts[lang]['profile.allWishes'] }).count(), 0)
     await page.goto(`${origin}/my`)
     await page.locator('.app-navigation:visible').getByRole('button', { name: texts[lang]['my.profile'], exact: true }).click()
-    const checkbox = page.getByRole('checkbox', { name: texts[lang]['profile.showAll'] })
+    const visibility = page.getByRole('region', { name: texts[lang]['profile.visibility'] })
+    for (const key of ['profile.showAge', 'profile.showFollowers', 'profile.showFollowing', 'profile.showAll']) {
+      await visibility.getByRole('checkbox', { name: texts[lang][key] }).waitFor()
+    }
+    const age = visibility.getByRole('checkbox', { name: texts[lang]['profile.showAge'] })
+    assert.equal(await age.isDisabled(), true)
+    await visibility.getByText(texts[lang]['profile.ageHint'], { exact: true }).waitFor()
+    await page.getByText(texts[lang]['profile.birthDateHint'], { exact: true }).waitFor()
+    const checkbox = visibility.getByRole('checkbox', { name: texts[lang]['profile.showAll'] })
+    assert.equal(await checkbox.isChecked(), false)
+    await checkbox.click()
+    const publish = page.getByRole('dialog', { name: texts[lang]['profile.publishCollection'] })
+    await publish.getByText(texts[lang]['profile.showAllWarning'], { exact: true }).waitFor()
+    assert.deepEqual(collectionWrites, [])
+    const cancel = publish.getByRole('button', { name: texts[lang]['wishes.cancel'], exact: true })
+    assert.equal(await cancel.evaluate(button => button === document.activeElement), true)
+    await cancel.click()
+    await publish.waitFor({ state: 'hidden' })
+    assert.equal(await checkbox.isChecked(), false)
+    assert.equal(await checkbox.evaluate(input => input === document.activeElement), true)
+    assert.deepEqual(collectionWrites, [])
+    const settings = page.locator('dialog.profile-dialog')
+    assert.equal(await settings.locator('.profile-scroll').evaluate(scroll => scroll.scrollWidth > scroll.clientWidth), false, `${lang}/${width}/settings`)
+    if (lang === 'ru' && [390, 1440].includes(width)) {
+      await visibility.evaluate(section => section.scrollIntoView({ block: 'center' }))
+      await page.screenshot({ path: new URL(`../../.cache/profile-screens/visibility-${width}.png`, import.meta.url).pathname.replace(/^\/(\w:)/, '$1') })
+    }
+    await checkbox.focus()
+    await page.keyboard.press('Space')
+    await publish.waitFor()
+    await page.keyboard.press('Escape')
+    await publish.waitFor({ state: 'hidden' })
+    assert.equal(await checkbox.isChecked(), false)
+    assert.deepEqual(collectionWrites, [])
+    await checkbox.click()
+    if (lang === 'ru' && [390, 1440].includes(width)) {
+      await publish.waitFor()
+      await page.screenshot({ path: new URL(`../../.cache/profile-screens/publish-${width}.png`, import.meta.url).pathname.replace(/^\/(\w:)/, '$1') })
+    }
     let saving = page.waitForResponse(response => response.url().endsWith('/api/profile/collection') && response.request().method() === 'PUT')
-    await checkbox.check()
+    await publish.getByRole('button', { name: texts[lang]['profile.publishCollection'], exact: true }).click()
     await saving
+    assert.deepEqual(collectionWrites, [true])
     await page.goto(`${origin}/u/example`)
     await page.getByRole('link', { name: texts[lang]['profile.allWishes'] }).waitFor()
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `${lang}/${width}/profile`)
@@ -52,8 +100,10 @@ try {
     await page.locator('.app-navigation:visible').getByRole('button', { name: texts[lang]['my.profile'], exact: true }).click()
     await page.waitForFunction(() => [...document.querySelectorAll('.collection-setting input')].some(input => input.checked && !input.disabled))
     saving = page.waitForResponse(response => response.url().endsWith('/api/profile/collection') && response.request().method() === 'PUT')
-    await page.getByRole('checkbox', { name: texts[lang]['profile.showAll'] }).uncheck()
+    await checkbox.uncheck()
     await saving
+    assert.deepEqual(collectionWrites, [true, false])
+    assert.equal(await publish.isVisible(), false)
     await page.goto(`${origin}/u/example/wishes`)
     await page.getByRole('heading', { name: texts[lang]['lists.sharedUnavailable'] }).waitFor()
     await context.close()

@@ -218,7 +218,9 @@ try {
     assert.equal(await name.inputValue(), 'New name')
 
     failures.add('/api/profile/collection')
-    await collectionBox.check()
+    await collectionBox.click()
+    await page.getByRole('dialog', { name: messages['profile.publishCollection'] })
+      .getByRole('button', { name: messages['profile.publishCollection'] }).click()
     await settings.getByRole('alert').getByText(messages['profile.settingsError']).waitFor()
     await close.click()
     await keep.click()

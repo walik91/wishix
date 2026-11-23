@@ -23,6 +23,7 @@ try {
     await page.route('**/u/bob', route => route.fulfill({ contentType: 'text/html', body: indexHTML }))
     await page.route('**/api/profile/name', route => { if (route.request().method() === 'PUT') name = route.request().postDataJSON(); return route.fulfill({ json: name }) })
     await page.route('**/api/profile/details', route => { if (route.request().method() === 'PUT') details = { ...details, ...route.request().postDataJSON() }; return route.fulfill({ json: details }) })
+    await page.route('**/api/profile/collection', route => route.fulfill({ json: { show_all_wishes: false } }))
     await page.route('**/api/profile/username', route => { assert.deepEqual(Object.keys(route.request().postDataJSON()), ['username']); username = route.request().postDataJSON().username; details.username = username; return route.fulfill({ json: details }) })
     await page.route('**/api/profile/avatar*', route => {
       if (route.request().method() === 'PUT') { details.has_avatar = true; return route.fulfill({ json: { status: 'ok' } }) }
@@ -63,7 +64,8 @@ try {
     await profileDialog.locator('.profile-section').first().click()
     await profileDialog.locator('.profile-section').nth(1).click()
     assert.equal(await page.getByLabel(texts[lang]['profile.biography'], { exact: true }).inputValue(), 'About me')
-    assert.equal(await profileDialog.locator('#profile-biography').locator('xpath=ancestor::form').locator('input[type=checkbox]').count(), 3)
+    const visibility = profileDialog.getByRole('region', { name: texts[lang]['profile.visibility'] })
+    assert.equal(await visibility.getByRole('checkbox').count(), 4)
     await page.getByRole('checkbox', { name: texts[lang]['profile.showFollowers'] }).check()
     await page.getByRole('checkbox', { name: texts[lang]['profile.showFollowing'] }).check()
     await save.click()

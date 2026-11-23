@@ -188,14 +188,21 @@ async function removeAvatar() {
         <template v-if="settings">
           <TextField id="profile-biography" ref="biographyField" v-model="settings.biography" multiline rows="3" maxlength="4000" :label="t('profile.biography')" :hint="t('profile.biographyHint')" :disabled="busy" />
           <TextField id="profile-birth-date" v-model="settings.birth_date" type="date" :label="t('profile.birthDate')" :hint="t('profile.birthDateHint')" :disabled="busy" />
-          <div class="profile-privacy">
-            <label class="privacy"><input v-model="settings.show_age" type="checkbox" :disabled="busy || !settings.birth_date" />{{ t('profile.showAge') }}</label>
-            <label class="privacy"><input v-model="settings.show_followers" type="checkbox" :disabled="busy" />{{ t('profile.showFollowers') }}</label>
-            <label class="privacy"><input v-model="settings.show_following" type="checkbox" :disabled="busy" />{{ t('profile.showFollowing') }}</label>
-          </div>
         </template>
+        <section class="profile-visibility" aria-labelledby="profile-visibility-title">
+          <h3 id="profile-visibility-title">{{ t('profile.visibility') }}</h3>
+          <template v-if="settings">
+            <label class="visibility-row">
+              <input v-model="settings.show_age" type="checkbox" :disabled="busy || !settings.birth_date" :aria-describedby="settings.birth_date ? 'profile-birth-date-hint' : 'profile-age-hint profile-birth-date-hint'" />
+              {{ t('profile.showAge') }}
+            </label>
+            <p v-if="!settings.birth_date" id="profile-age-hint" class="profile-hint">{{ t('profile.ageHint') }}</p>
+            <label class="visibility-row"><input v-model="settings.show_followers" type="checkbox" :disabled="busy" />{{ t('profile.showFollowers') }}</label>
+            <label class="visibility-row"><input v-model="settings.show_following" type="checkbox" :disabled="busy" />{{ t('profile.showFollowing') }}</label>
+          </template>
+          <slot name="collection" />
+        </section>
       </form>
-      <slot name="collection" />
       <form v-if="settings" class="profile-address" @submit.prevent="openRename">
         <TextField id="profile-username" v-model="username" :label="t('profile.address')" maxlength="30" :hint="t('profile.addressHint')" :disabled="busy" @update:model-value="addressError = ''; addressNotice = false" />
         <p class="profile-hint">{{ t('profile.usernameHint') }} {{ t('profile.redirectHint') }}</p>
@@ -242,8 +249,11 @@ async function removeAvatar() {
 .profile-panel :deep(textarea) { min-height: 0; }
 .profile-hint, .profile-error, .profile-success { margin: 0; font-size: var(--wx-text-sm); line-height: 1.5; }
 .profile-hint { color: var(--wx-text-muted); }
-.privacy { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; font-size: var(--wx-text-sm); cursor: pointer; }
-.privacy input { flex: 0 0 auto; width: 20px; height: 20px; accent-color: var(--wx-primary); }
+.profile-visibility h3 { margin: 0 0 var(--wx-space-1); font-size: var(--wx-text-md); }
+.visibility-row { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; font-size: var(--wx-text-sm); cursor: pointer; }
+.visibility-row input { flex: 0 0 auto; width: 20px; height: 20px; margin: 0; accent-color: var(--wx-primary); }
+.visibility-row:has(input:disabled) { color: var(--wx-text-muted); cursor: default; }
+.profile-visibility > .profile-hint { margin: 0 0 var(--wx-space-2) var(--wx-space-8); }
 .avatar-row, .profile-actions, .profile-links { display: flex; align-items: center; gap: var(--wx-space-2); flex-wrap: wrap; }
 .profile-footer {
   flex: none;
