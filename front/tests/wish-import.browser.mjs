@@ -9,7 +9,7 @@ const enterAirPods = 'https://enter.online/ru/audiotehnika/naushniki/apple-airpo
 const errors = []
 const texts = {}
 for (const lang of ['en', 'ru', 'ro']) texts[lang] = JSON.parse(await readFile(new URL(`../src/locales/${lang}.json`, import.meta.url)))
-const viewportHeights = { 320: 640, 390: 844, 768: 1024, 1024: 768, 1440: 900 }
+const viewportHeights = { 320: 640, 390: 844, 768: 1024, 1024: 768, 1363: 900, 1440: 900 }
 let checks = 0
 async function setup(lang = 'en', width = 390, { listId = '', lists = [] } = {}) {
   const context = await browser.newContext({ locale: lang, viewport: { width, height: viewportHeights[width] } })
@@ -359,7 +359,7 @@ try {
   // Inspect the imported state, loading/error messages, touch targets and overflow in all layouts/languages.
   await mkdir(new URL('../../.cache/import-screens/', import.meta.url), { recursive: true })
   for (const lang of ['en', 'ru', 'ro']) {
-    for (const width of [320, 390, 768, 1024, 1440]) {
+    for (const width of [320, 390, 768, 1024, 1363, 1440]) {
       const { page, context, result } = await setup(lang, width)
       await page.evaluate(() => document.fonts.ready)
       const requiredControls = [page.locator('#wish-link-1'), page.locator('#wish-title'), saveButton(page, lang)]
@@ -373,7 +373,18 @@ try {
       assert.equal(await page.locator('#wish-details').isVisible(), false)
       assert.equal(await page.locator('#wish-link-1').getAttribute('aria-describedby'), 'wish-link-1-hint')
       assert.equal(await page.locator('#wish-link-1-hint').innerText(), texts[lang]['wishes.import.hint'])
-      if (lang === 'ru' && [390, 1440].includes(width)) await page.screenshot({ path: new URL(`../../.cache/import-screens/manual-${lang}-${width}.png`, import.meta.url).pathname.replace(/^\/(\w:)/, '$1') })
+      if (lang === 'ru' && [390, 1363, 1440].includes(width)) await page.screenshot({ path: new URL(`../../.cache/import-screens/manual-${lang}-${width}.png`, import.meta.url).pathname.replace(/^\/(\w:)/, '$1') })
+      if ([390, 1363].includes(width)) {
+        await saveButton(page, lang).focus()
+        await page.keyboard.press('Enter')
+        const title = page.locator('#wish-title')
+        const error = page.locator('#wish-title-error')
+        await error.waitFor()
+        await waitForFocus(title)
+        assert.equal(await title.getAttribute('aria-invalid'), 'true')
+        assert.equal(await error.innerText(), texts[lang]['wishes.error.wish_title_invalid'])
+        assert.equal(await title.evaluate(input => getComputedStyle(input.parentElement).outlineStyle), 'solid')
+      }
       await page.route('**/api/wishes/import-preview', route => route.fulfill({ json: { ...result, title: `${result.title} ${'Long name '.repeat(14)}` } }))
       await page.locator('#wish-link-1').fill('https://shop.example.com/product')
       assert.equal(await importButton(page, 1, lang).innerText(), texts[lang]['wishes.import.action'])
@@ -402,5 +413,5 @@ try {
     }
   }
   assert.deepEqual(errors, [])
-  console.log(`Passed ${checks} browser scenarios for wish creation and import; EN/RU/RO × 320/390/768/1024/1440; no overflow, undersized controls, or Vue errors.`)
+  console.log(`Passed ${checks} browser scenarios for wish creation and import; EN/RU/RO × 320/390/768/1024/1363/1440; no overflow, undersized controls, or Vue errors.`)
 } finally { await browser.close() }

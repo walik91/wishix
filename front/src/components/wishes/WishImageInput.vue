@@ -4,7 +4,7 @@ import { t } from '../../i18n.js'
 import UiButton from '../ui/UiButton.vue'
 import AppIcon from '../ui/AppIcon.vue'
 
-const props = defineProps({ id: { type: String, required: true }, existingSrc: { type: String, default: '' }, error: { type: String, default: '' }, disabled: Boolean })
+const props = defineProps({ id: { type: String, required: true }, existingSrc: { type: String, default: '' }, error: { type: String, default: '' }, disabled: Boolean, compact: Boolean })
 const file = defineModel({ default: null })
 const emit = defineEmits(['validation', 'manual-change'])
 const picker = ref(null)
@@ -42,15 +42,15 @@ async function clear() {
 <template>
   <section class="image-field" :aria-labelledby="`${id}-label`">
     <h2 :id="`${id}-label`">{{ t('wishes.imageLabel') }}</h2>
-    <div class="image-picker">
-      <div class="image-preview">
+    <div class="image-picker" :class="{ compact }">
+      <div v-if="previewURL || !compact" class="image-preview">
         <img v-if="previewURL" :src="previewURL" :alt="t('wishes.imagePreview')" @error="file && setError('wish_image_invalid')" />
         <AppIcon v-else name="image" />
       </div>
       <div class="image-actions">
         <input :id="id" ref="picker" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" tabindex="-1" :disabled="disabled" :aria-label="t('wishes.chooseImage')" @change="select" />
-        <UiButton :id="`${id}-choose`" ref="choose" variant="secondary" :disabled="disabled" :aria-invalid="errorCode ? 'true' : undefined" :aria-describedby="[`${id}-hint`, errorCode && `${id}-error`].filter(Boolean).join(' ')" @click="picker.click()"><AppIcon name="image" />{{ t(previewURL ? 'wishes.replaceImage' : 'wishes.chooseImage') }}</UiButton>
-        <UiButton v-if="file || localError" variant="secondary" :disabled="disabled" @click="clear">{{ t('wishes.clearImage') }}</UiButton>
+        <UiButton :id="`${id}-choose`" ref="choose" :variant="compact ? 'ghost' : 'secondary'" :disabled="disabled" :aria-invalid="errorCode ? 'true' : undefined" :aria-describedby="[`${id}-hint`, errorCode && `${id}-error`].filter(Boolean).join(' ')" @click="picker.click()"><AppIcon name="image" />{{ t(previewURL ? 'wishes.replaceImage' : 'wishes.chooseImage') }}</UiButton>
+        <UiButton v-if="file || localError" :variant="compact ? 'ghost' : 'secondary'" :disabled="disabled" @click="clear">{{ t('wishes.clearImage') }}</UiButton>
         <p :id="`${id}-hint`" class="image-hint">{{ t('wishes.imageHint') }}</p>
         <p v-if="file" class="file-name">{{ file.name }}</p>
       </div>
@@ -70,12 +70,16 @@ h2 { margin: 0; font-size: var(--wx-text-sm); font-weight: 600; line-height: 1.5
 .image-actions { display: flex; flex-wrap: wrap; gap: var(--wx-space-2); min-width: 0; max-width: 100%; }
 .file-name { flex-basis: 100%; min-width: 0; margin: 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.6; overflow-wrap: anywhere; }
 .image-error { margin: var(--wx-space-3) 0 0; color: var(--wx-error); font-size: var(--wx-text-sm); line-height: 1.6; }
+.compact { align-items: flex-start; margin-top: 0; }
+.compact .image-preview { width: 64px; height: 64px; margin-top: var(--wx-space-2); }
+.compact .image-actions { gap: 0 var(--wx-space-2); }
+.compact .button { min-height: 44px; padding: var(--wx-space-2); }
 
 @media (max-width: 30rem) {
-  .image-picker { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--wx-space-2) var(--wx-space-3); }
-  .image-preview { width: 64px; height: 64px; }
-  .image-actions { display: contents; }
-  .image-hint { grid-column: 2; grid-row: 1; }
-  .image-actions > .button, .file-name { grid-column: 1 / -1; }
+  .image-picker:not(.compact) { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--wx-space-2) var(--wx-space-3); }
+  .image-picker:not(.compact) .image-preview { width: 64px; height: 64px; }
+  .image-picker:not(.compact) .image-actions { display: contents; }
+  .image-picker:not(.compact) .image-hint { grid-column: 2; grid-row: 1; }
+  .image-picker:not(.compact) :is(.image-actions > .button, .file-name) { grid-column: 1 / -1; }
 }
 </style>

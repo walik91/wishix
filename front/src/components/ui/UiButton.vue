@@ -39,6 +39,9 @@ defineProps({
 .secondary { color: var(--wx-text); background: var(--wx-surface); border-color: var(--wx-border); }
 .secondary:hover:not(:disabled, [aria-disabled='true']) { background: var(--wx-background); border-color: var(--wx-secondary); }
 .secondary:active:not(:disabled, [aria-disabled='true']) { background: var(--wx-lavender); }
+.ghost { color: var(--wx-primary-pressed); background: transparent; }
+.ghost:hover:not(:disabled, [aria-disabled='true']) { background: var(--wx-background); }
+.ghost:active:not(:disabled, [aria-disabled='true']) { background: var(--wx-lavender); }
 .destructive { color: var(--wx-surface); background: var(--wx-error); }
 .destructive:hover:not(:disabled, [aria-disabled='true']) { background: color-mix(in srgb, var(--wx-error) 88%, var(--wx-text)); }
 .destructive:active:not(:disabled, [aria-disabled='true']) { background: color-mix(in srgb, var(--wx-error) 75%, var(--wx-text)); }

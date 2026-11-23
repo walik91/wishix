@@ -158,7 +158,7 @@ async function submit() {
     <UiCard v-else-if="unavailable" class="connection-error"><EmptyState icon="globe" :title="t('my.connectionTitle')" :description="t('auth.error.unavailable')"><UiButton @click="retry">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
     <template v-else-if="user">
       <div class="wish-heading">
-        <UiButton class="back-link" variant="secondary" :href="cancelURL" :disabled="saving || saved"><AppIcon name="arrow" /><span>{{ t(contextList && !contextMissing ? 'lists.backToList' : 'wishes.back') }}</span></UiButton>
+        <UiButton class="back-link quiet-action" variant="ghost" :href="cancelURL" :disabled="saving || saved"><AppIcon name="arrow" /><span>{{ t(contextList && !contextMissing ? 'lists.backToList' : 'wishes.back') }}</span></UiButton>
         <h1>{{ t('my.addWish') }}</h1>
       </div>
       <UiCard class="form-card">
@@ -170,7 +170,7 @@ async function submit() {
                 <TextField :id="`wish-link-${link.id}`" v-model="link.value" :label="index === 0 ? t('wishes.productLink') : `${t('wishes.shopLink')} ${index + 1}`" :hint="index === 0 ? t('wishes.import.hint') : ''" :error="errors[`link-${link.id}`] ? t('wishes.error.wish_links_invalid') : ''" type="url" placeholder="https://" maxlength="2048" autocomplete="off" @blur="index === 0 && firstLinkBlur()">
                   <button v-if="links.length > 1" class="remove-link" type="button" :aria-label="`${t('wishes.removeLink')} ${index + 1}`" @click="removeLink(link.id)"><AppIcon name="close" /></button>
                 </TextField>
-                <UiButton v-if="link.value.trim()" class="import-link" variant="secondary" :aria-label="`${t('wishes.import.action')} ${index + 1}`" :disabled="!validImportLink(link.value.trim())" :loading="importingId === link.id" @click="importLink(link.id)">{{ t('wishes.import.action') }}</UiButton>
+                <UiButton v-if="link.value.trim()" class="import-link quiet-action" variant="ghost" :aria-label="`${t('wishes.import.action')} ${index + 1}`" :disabled="!validImportLink(link.value.trim())" :loading="importingId === link.id" @click="importLink(link.id)">{{ t('wishes.import.action') }}</UiButton>
               </div>
               <p v-if="importingId !== null" class="sr-only" role="status">{{ t('wishes.import.loading') }}</p>
             </div>
@@ -188,19 +188,19 @@ async function submit() {
               </div>
               <div class="form-actions">
                 <UiButton type="submit" :loading="saving || saved" :disabled="waitingForList" aria-describedby="wish-destination">{{ t('wishes.save') }}</UiButton>
-                <UiButton :href="cancelURL" variant="secondary" :disabled="saving || saved">{{ t('wishes.cancel') }}</UiButton>
+                <UiButton :href="cancelURL" class="quiet-action" variant="ghost" :disabled="saving || saved">{{ t('wishes.cancel') }}</UiButton>
               </div>
             </div>
             <div class="optional-fields">
               <div>
-                <UiButton variant="secondary" :disabled="links.length >= 10" @click="addLink"><AppIcon name="plus" />{{ t('wishes.addLink') }}</UiButton>
+                <UiButton class="quiet-action" variant="ghost" :disabled="links.length >= 10" @click="addLink"><AppIcon name="plus" />{{ t('wishes.addLink') }}</UiButton>
               </div>
               <div>
-                <UiButton variant="secondary" :aria-expanded="detailsOpen" aria-controls="wish-details" @click="detailsOpen = !detailsOpen">
+                <UiButton class="quiet-action" variant="ghost" :aria-expanded="detailsOpen" aria-controls="wish-details" @click="detailsOpen = !detailsOpen">
                   <AppIcon name="chevron" />{{ t('wishes.addDetails') }}
                 </UiButton>
                 <div v-show="detailsOpen" id="wish-details" class="details-fields">
-                  <WishImageInput id="wish-image" v-model="image" :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" @manual-change="markDirty('image')" />
+                  <WishImageInput id="wish-image" v-model="image" compact :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" @manual-change="markDirty('image')" />
                   <TextField id="wish-description" v-model="description" multiline rows="3" class="description-field" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" @input="limitDescription" />
                   <WishPriceFields v-model:price="price" v-model:currency="currency" :errors="errors"
                     @price-input="delete errors.price; markDirty('price')"
@@ -214,7 +214,7 @@ async function submit() {
                 </div>
               </div>
               <div>
-                <UiButton variant="secondary" :aria-expanded="listPickerOpen" aria-controls="wish-lists" @click="listPickerOpen = !listPickerOpen">
+                <UiButton class="quiet-action" variant="ghost" :aria-expanded="listPickerOpen" aria-controls="wish-lists" @click="listPickerOpen = !listPickerOpen">
                   <AppIcon name="chevron" />{{ t('lists.wishLists') }}
                 </UiButton>
                 <div v-show="listPickerOpen" id="wish-lists">
@@ -241,17 +241,34 @@ async function submit() {
 
 <style scoped>
 .new-wish-page { max-width: 760px; margin-inline: auto; min-width: 0; overflow-wrap: anywhere; }
-.back-link { margin-bottom: var(--wx-space-4); }.back-link .icon { transform: rotate(180deg); }
-h1 { margin: 0 0 var(--wx-space-4); font-size: 26px; line-height: 1.3; font-weight: 750; letter-spacing: -.03em; }
-.form-card { padding: var(--wx-space-5) var(--wx-space-4); }
-fieldset { display: grid; gap: var(--wx-space-5); min-width: 0; margin: 0; padding: 0; border: 0; }fieldset:disabled { opacity: .7; }
+.wish-heading { margin-bottom: var(--wx-space-4); }
+.quiet-action { min-height: 44px; gap: var(--wx-space-2); padding: var(--wx-space-2); }
+.back-link { margin-bottom: var(--wx-space-2); }
+.back-link .icon { transform: rotate(180deg); }
+h1 { margin: 0; font-size: var(--wx-text-xl); line-height: 1.2; font-weight: 750; letter-spacing: -.03em; }
+.form-card {
+  --wish-field-border: color-mix(in srgb, var(--wx-text-muted) 65%, var(--wx-border));
+  padding: var(--wx-space-4);
+}
+fieldset { display: grid; gap: var(--wx-space-4); min-width: 0; margin: 0; padding: 0; border: 0; }
+fieldset:disabled { opacity: .7; }
+.links-section :deep(.field) { gap: var(--wx-space-1); }
+.links-section :deep(label) { color: var(--wx-text-muted); }
+:deep(label[for="wish-title"]) { font-size: var(--wx-text-md); font-weight: 700; }
+:deep(.control:not(.invalid)), :deep(select:not([aria-invalid="true"])) { border-color: var(--wish-field-border); }
+:deep(.control:not(.invalid):hover), :deep(select:not([aria-invalid="true"]):hover) { border-color: var(--wx-text-muted); }
+:deep(.control:has(> :is(input, textarea):focus-visible)), :deep(select:focus-visible) {
+  outline: 2px solid var(--wx-focus);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+:deep(.control.invalid), select[aria-invalid="true"] { border-color: var(--wx-error); }
 :deep(textarea.description-field) { min-height: 88px; }
 .select-field { display: grid; gap: var(--wx-space-2); }
 label { font-size: var(--wx-text-sm); font-weight: 600; line-height: 1.5; }
 select { width: 100%; min-width: 0; min-height: 48px; padding: var(--wx-space-3); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-text); background: var(--wx-surface); font-size: var(--wx-text-md); }
-select:hover { border-color: var(--wx-secondary); }
 .links-section, .save-section, .optional-fields, .details-fields { display: grid; gap: var(--wx-space-3); min-width: 0; }
-.optional-fields { padding-top: var(--wx-space-4); border-top: 1px solid var(--wx-border); }
+.optional-fields { gap: 0; padding-top: var(--wx-space-2); border-top: 1px solid var(--wx-border); }
 .details-fields { gap: var(--wx-space-5); margin-top: var(--wx-space-4); }
 .optional-fields [aria-expanded="true"] .icon { transform: rotate(180deg); }
 .link-row { display: grid; gap: var(--wx-space-2); min-width: 0; }
@@ -264,17 +281,22 @@ select:hover { border-color: var(--wx-secondary); }
 .destination span { color: var(--wx-text-muted); }
 .operation-error, .field-error { margin: 0; color: var(--wx-error); font-size: var(--wx-text-sm); line-height: 1.6; }
 .page-loading { display: grid; gap: var(--wx-space-6); }.loading-title { height: 32px; width: 70%; }.loading-form { height: 600px; border-radius: var(--wx-radius-card); }.connection-error { padding: var(--wx-space-10) var(--wx-space-5); }
-@media (max-width: 47.99rem) { .form-actions .primary { flex: 1; } }
-@media (max-width: 24rem) {
+@media (max-width: 47.99rem) {
+  .form-actions .primary { flex: 1; }
   .wish-heading { display: flex; align-items: center; gap: var(--wx-space-2); margin-bottom: var(--wx-space-3); }
-  .back-link { min-width: 44px; min-height: 44px; margin: 0; padding: var(--wx-space-2); }
+  .back-link { min-width: 44px; margin: 0; }
   .back-link span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  h1 { min-width: 0; margin: 0; font-size: var(--wx-text-xl); }
+}
+@media (max-width: 24rem) {
   .form-card { padding: var(--wx-space-2) var(--wx-space-3); }
   fieldset { gap: var(--wx-space-2); }
   .save-section { gap: var(--wx-space-1); }
   .form-actions { gap: var(--wx-space-2); }
   .form-actions .button { padding-inline: var(--wx-space-2); }
 }
-@media (min-width: 48rem) { h1 { font-size: var(--wx-text-2xl); }.form-card { padding: var(--wx-space-8); } }
+@media (min-width: 48rem) {
+  h1 { font-size: var(--wx-text-2xl); }
+  .form-card { padding: var(--wx-space-6); }
+  fieldset { gap: var(--wx-space-5); }
+}
 </style>
