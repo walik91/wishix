@@ -20,6 +20,7 @@ try {
     let reports = [], failDetails = false, failState = false
     let renameError = '', renameRequests = 0
     let guest = false, showFollowers = true, showFollowing = true
+    let publicPeople = []
     const publicName = width === 340 ? 'Bob Example ' + 'a'.repeat(88) : 'Bob Example'
     await page.route('**/api/auth/me', route => guest
       ? route.fulfill({ status: 401, json: { error: 'invalid_session' } })
@@ -44,6 +45,10 @@ try {
       return route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aXcAAAAASUVORK5CYII=', 'base64') })
     })
     await page.route('**/api/public/profiles/bob', route => route.fulfill({ json: { username: 'bob', display_name: publicName, show_all_wishes: width === 340, lists: [] } }))
+    await page.route('**/api/public/profiles/bob/avatar*', route => route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="purple"/></svg>',
+    }))
     await page.route('**/api/public/profiles/bob/details', route => { if (failDetails) { failDetails = false; return route.fulfill({ status: 503, json: { error: 'unavailable' } }) }; return route.fulfill({ json: { username: 'bob', biography: 'A public description', age: 25, has_avatar: false, show_followers: showFollowers, show_following: showFollowing } }) })
     await page.route('**/api/social/bob/state', route => { if (failState) { failState = false; return route.fulfill({ status: 503, json: { error: 'unavailable' } }) }; return route.fulfill({ json: state }) })
     await page.route('**/api/social/bob/follow', route => { state = { ...state, following: route.request().postDataJSON().follow }; return route.fulfill({ json: state }) })
@@ -53,7 +58,7 @@ try {
     await page.route(/\/api\/social\/bob\/people\/(followers|following)\?/, route => {
       const visible = new URL(route.request().url()).pathname.endsWith('/followers') ? showFollowers : showFollowing
       return visible
-        ? route.fulfill({ json: { people: [], next_cursor: '' } })
+        ? route.fulfill({ json: { people: publicPeople, next_cursor: '' } })
         : route.fulfill({ status: 404, json: { error: 'list_not_found' } })
     })
     await page.goto(`${origin}/my/profile`)
@@ -328,6 +333,32 @@ try {
       assert.equal(await nav.getByRole('link').count(), 1)
       assert.equal(await active.count(), 0)
       assert.equal(await backLink.getAttribute('href'), '/u/bob')
+    }
+    showFollowers = showFollowing = true
+    const longPerson = { username: 'a'.repeat(30), display_name: 'ДлинноеИмя'.repeat(10), has_avatar: false }
+    publicPeople = [{ username: 'bob', has_avatar: true }, longPerson]
+    for (const section of ['followers', 'following']) {
+      await page.goto(`${origin}/u/bob/${section}`)
+      const people = page.getByRole('main').getByRole('list').filter({ hasText: longPerson.display_name })
+      const shortRow = people.getByRole('link', { name: 'bob @bob', exact: true })
+      const longRow = people.getByRole('link', { name: `${longPerson.display_name} @${longPerson.username}`, exact: true })
+      await shortRow.waitFor()
+      await page.waitForFunction(() => document.querySelector('.person-row img')?.naturalWidth > 0)
+      assert.equal(await longRow.locator('.avatar').textContent(), 'Д')
+      assert.equal(await longRow.getAttribute('href'), `/u/${longPerson.username}`)
+      assert.equal(await people.getByRole('link').evaluateAll(links => links.every(link => link.offsetWidth >= 44 && link.offsetHeight >= 44 && link.scrollWidth <= link.clientWidth)), true)
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `${lang}/${width}/${section} rows`)
+      if (section === 'followers') {
+        const box = await shortRow.boundingBox()
+        await shortRow.click({ position: { x: box.width - 5, y: box.height / 2 } })
+      } else {
+        if (lang === 'ru' && [390, 1440].includes(width)) {
+          await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/people-${width}.png`, import.meta.url)) })
+        }
+        await shortRow.press('Enter')
+      }
+      await page.waitForURL(`${origin}/u/bob`)
+      await profileHeading.waitFor()
     }
     await context.close()
   }

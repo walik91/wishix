@@ -134,7 +134,9 @@ onMounted(load)
         :show-following="details?.show_following"
       />
       <h2 class="public-lists-title">{{ t('lists.publicLists') }}</h2>
-      <div v-if="lists.length" class="list-grid"><ListCard v-for="(list, index) in lists" :key="index" :list="list" :href="sharedListPath(username, list.share_path)" :manage="false" /></div>
+      <div v-if="lists.length" class="list-grid">
+        <ListCard v-for="list in lists" :key="list.id" :list="list" :public-href="sharedListPath(username, list.share_path)" />
+      </div>
       <UiCard v-else class="list-empty"><EmptyState icon="list" :title="t('lists.noPublicLists')" /></UiCard>
       <UiDialog :open="dialog === 'block'" :busy="busy" :title="t('social.block')" @update:open="!$event && (dialog = '')"><p>{{ t('social.blockConfirm') }}</p><p v-if="actionError" class="profile-error" role="alert">{{ actionError }}</p><div class="profile-actions"><UiButton variant="destructive" :loading="busy" @click="block">{{ t('social.block') }}</UiButton><UiButton variant="secondary" :disabled="busy" @click="dialog = ''">{{ t('wishes.cancel') }}</UiButton></div></UiDialog>
       <UiDialog :open="dialog === 'report'" :busy="busy" :title="t('social.report')" @update:open="!$event && (dialog = '')"><form class="report-form" @submit.prevent="submitReport"><TextField id="social-report" v-model="report" multiline rows="4" maxlength="2000" required :label="t('social.reportReason')" :hint="t('social.reportHint')" /><p v-if="actionError" class="profile-error" role="alert">{{ actionError }}</p><UiButton type="submit" :loading="busy">{{ t('social.report') }}</UiButton></form></UiDialog>

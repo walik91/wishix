@@ -49,13 +49,42 @@ watch([name, kind], ([current]) => { if (current) { people.value = []; cursor.va
     <div v-if="own" class="people-tabs" role="group" :aria-label="t('social.title')"><UiButton v-for="tab in ['following', 'followers', 'blocked']" :key="tab" :variant="kind === tab ? 'primary' : 'secondary'" :aria-pressed="kind === tab" @click="kind = tab">{{ t(`social.${tab}`) }}</UiButton></div>
     <UiSkeleton v-if="(loading && !people.length) || (own && checking)" class="people-skeleton" />
     <UiCard v-else-if="error || (own && unavailable)" class="people-empty"><EmptyState icon="user" :title="t(`social.${error || 'loadError'}`)"><UiButton v-if="error !== 'unavailableList'" @click="load()">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
-    <ul v-else-if="people.length" class="people-list"><li v-for="person in people" :key="person.username"><a :href="`/u/${encodeURIComponent(person.username)}`"><UserAvatar :username="person.display_name || person.username" :src="person.has_avatar ? publicAvatarURL(person.username) : ''" /><span><strong>{{ person.display_name || person.username }}</strong><small v-if="person.display_name">@{{ person.username }}</small></span><AppIcon name="arrow" /></a></li></ul>
+    <ul v-else-if="people.length" class="people-list">
+      <li v-for="person in people" :key="person.username">
+        <a class="person-row" :href="`/u/${encodeURIComponent(person.username)}`">
+          <UserAvatar :username="person.display_name || person.username" :src="person.has_avatar ? publicAvatarURL(person.username) : ''" />
+          <span class="person-details">
+            <strong>{{ person.display_name || person.username }}</strong>
+            <span class="person-address">@{{ person.username }}</span>
+          </span>
+          <AppIcon name="arrow" />
+        </a>
+      </li>
+    </ul>
     <UiCard v-else class="people-empty"><EmptyState icon="users" :title="t(`social.empty.${kind}`)" /></UiCard>
     <UiButton v-if="cursor" class="people-more" variant="secondary" :loading="loading" @click="load(true)">{{ t('search.more') }}</UiButton>
   </div>
 </template>
 <style scoped>
-.people-page { max-width: 760px; min-width: 0; }.public-people { padding-block: var(--wx-space-8); }.people-page h1 { margin: 0 0 var(--wx-space-5); font-size: var(--wx-text-2xl); }.people-tabs { display: flex; flex-wrap: wrap; gap: var(--wx-space-2); margin-bottom: var(--wx-space-5); }.people-list { display: grid; gap: var(--wx-space-3); margin: 0; padding: 0; list-style: none; }.people-list a { display: flex; align-items: center; min-height: 72px; gap: var(--wx-space-3); padding: var(--wx-space-4); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-card); background: var(--wx-surface); color: var(--wx-text); text-decoration: none; overflow-wrap: anywhere; }.people-list a:hover { border-color: var(--wx-secondary); }.people-list a > span:not(.avatar) { display: grid; flex: 1; gap: var(--wx-space-1); min-width: 0; }.people-list small { color: var(--wx-text-muted); }.people-list .icon { color: var(--wx-primary); }.people-empty { padding: var(--wx-space-6); }.people-skeleton { height: 90px; }.people-more { margin-top: var(--wx-space-4); }
+.people-page { max-width: 760px; min-width: 0; }.public-people { padding-block: var(--wx-space-8); }.people-page h1 { margin: 0 0 var(--wx-space-5); font-size: var(--wx-text-2xl); }.people-tabs { display: flex; flex-wrap: wrap; gap: var(--wx-space-2); margin-bottom: var(--wx-space-5); }.people-list { display: grid; gap: var(--wx-space-3); margin: 0; padding: 0; list-style: none; }.people-empty { padding: var(--wx-space-6); }.people-skeleton { height: 90px; }.people-more { margin-top: var(--wx-space-4); }
+.person-row {
+  display: flex;
+  align-items: center;
+  gap: var(--wx-space-3);
+  min-height: 64px;
+  padding: var(--wx-space-3);
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-card);
+  background: var(--wx-surface);
+  color: var(--wx-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.person-row:hover { border-color: var(--wx-secondary); background: var(--wx-background); }
+.person-row:active { background: var(--wx-lavender); }
+.person-details { display: grid; flex: 1; min-width: 0; }
+.person-address { color: var(--wx-text-muted); font-size: var(--wx-text-sm); }
+.person-row > .icon { color: var(--wx-primary); }
 .public-people h1 { margin-top: var(--wx-space-4); }
 .public-people .people-back { max-width: 100%; margin-bottom: var(--wx-space-2); padding-inline: var(--wx-space-2); text-align: start; }
 .people-back span { min-width: 0; overflow-wrap: anywhere; }

@@ -4,6 +4,14 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const origin = process.env.WISHIX_TEST_ORIGIN || 'http://localhost:5173'
 const texts = Object.fromEntries(await Promise.all(['en', 'ru', 'ro'].map(async lang => [lang, JSON.parse(await readFile(new URL(`../src/locales/${lang}.json`, import.meta.url)))])))
 const indexHTML = await readFile(new URL('../index.html', import.meta.url), 'utf8')
+const publicList = (number, title, extra = {}) => {
+  const id = `00000000-0000-4000-8000-00000000000${number}`
+  return { id, title, visibility: 'public', wish_count: 1, share_path: `/${id}`, ...extra }
+}
+const publicLists = [
+  publicList(1, 'Public list'),
+  publicList(2, 'ДлинноеНазваниеСписка'.repeat(4), { event_date: '2025-12-31', expired: true, wish_count: 0 }),
+]
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const errors = []
 try {
@@ -34,13 +42,29 @@ try {
       }
       return route.fulfill({ json: { show_all_wishes: enabled } })
     })
-    await page.route('**/api/public/profiles/example', route => route.fulfill({ json: { username: 'example', display_name: 'Example Name', show_all_wishes: enabled, lists: [{ id: '00000000-0000-4000-8000-000000000001', title: 'Public list', visibility: 'public', wish_count: 1, share_path: '/00000000-0000-4000-8000-000000000001' }] } }))
+    await page.route('**/api/public/profiles/example', route => route.fulfill({ json: { username: 'example', display_name: 'Example Name', show_all_wishes: enabled, lists: publicLists } }))
     await page.route('**/api/public/profiles/example/details', route => route.fulfill({ json: { username: 'example', has_avatar: false, show_followers: false, show_following: false } }))
     await page.route('**/api/social/example/state', route => route.fulfill({ json: { self: true, following: false, blocked: false, can_follow: false } }))
     await page.route('**/api/public/profiles/example/wishes', route => enabled ? route.fulfill({ json: { username: 'example', wishes: [{ id: 'wish', title: 'A very long wish '.repeat(8), description: '', price: null, currency: '', priority: 'medium', shop_links: [], has_image: false }] } }) : route.fulfill({ status: 404, json: { error: 'list_not_found' } }))
     await page.goto(`${origin}/u/example`)
     const heading = page.getByRole('heading', { name: 'Example Name @example', exact: true })
     await heading.getByText('@example', { exact: true }).waitFor()
+    for (const list of publicLists) {
+      const card = page.locator('.list-grid').getByRole('link').filter({ hasText: list.title })
+      await card.getByRole('heading', { name: list.title, exact: true, level: 3 }).waitFor()
+      assert.equal(await card.getAttribute('href'), `/u/example/wishlist/${list.id}`)
+      assert.equal(await card.getByText(`${texts[lang]['lists.wishesCount']} ${list.wish_count}`, { exact: true }).isVisible(), true)
+      assert.equal(await card.locator('time').count(), list.event_date ? 1 : 0)
+      if (list.event_date) {
+        const date = new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(list.event_date))
+        assert.equal(await card.locator('time').textContent(), date)
+        assert.equal(await card.locator('time').getAttribute('datetime'), list.event_date)
+      }
+      assert.ok((await card.boundingBox()).height >= 44)
+    }
+    assert.equal(await page.locator('.list-grid .list-card-footer').count(), 0)
+    assert.equal(await page.locator('.list-grid').getByText(texts[lang]['lists.expired'], { exact: true }).count(), 0)
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `${lang}/${width}/public cards`)
     assert.equal(await page.locator('.profile-header').getByText(texts[lang]['profile.age'], { exact: false }).count(), 0)
     assert.equal(await page.getByRole('link', { name: texts[lang]['profile.allWishes'] }).count(), 0)
     await page.goto(`${origin}/my`)

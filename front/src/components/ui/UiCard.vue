@@ -1,5 +1,9 @@
+<script setup>
+defineProps({ href: String })
+</script>
+
 <template>
-  <div class="card"><slot /></div>
+  <component :is="href ? 'a' : 'div'" class="card" :href="href || undefined"><slot /></component>
 </template>
 
 <style scoped>
