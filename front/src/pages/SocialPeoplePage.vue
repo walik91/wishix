@@ -172,6 +172,7 @@ watch([name, kind, canLoad], () => {
 .person-address { color: var(--wx-text-muted); font-size: var(--wx-text-sm); }
 .person-row > .icon { color: var(--wx-primary); }
 .public-people h1 { margin-top: var(--wx-space-4); }
+.public-people h1:focus-visible { outline: none; }
 .public-people .people-back { max-width: 100%; margin-bottom: var(--wx-space-2); padding-inline: var(--wx-space-2); text-align: start; }
 .people-back span { min-width: 0; overflow-wrap: anywhere; }
 .people-back .icon { transform: rotate(180deg); }

@@ -151,6 +151,7 @@ onMounted(load)
 .profile-heading { display: flex; align-items: flex-start; gap: var(--wx-space-3); min-width: 0; }
 .profile-heading > div { min-width: 0; }
 .profile-heading h1 { margin: 0; color: var(--wx-primary-pressed); font-size: var(--wx-text-xl); line-height: 1.3; }
+.profile-heading h1:focus-visible { outline: none; }
 .profile-address { color: var(--wx-text-muted); font-size: var(--wx-text-sm); font-weight: 500; }
 .profile-heading p { margin: var(--wx-space-1) 0 0; }
 .profile-biography { white-space: pre-wrap; line-height: 1.5; }
