@@ -87,6 +87,21 @@ try {
       if (mobile) {
         assert.equal(await page.locator('.bottom-navigation').evaluate(bar => parseFloat(getComputedStyle(bar).paddingBottom)), safeBottom, label)
         await checkMobileNavigation(page, navigation, label)
+      } else {
+        const sidebar = page.locator('.sidebar')
+        assert.equal((await sidebar.boundingBox()).width, 240, label)
+        assert.deepEqual(await navigation.locator('.nav-group').evaluateAll(groups => groups.map(group =>
+          [...group.querySelectorAll('.nav-item')].map(item => item.textContent)
+        )), [expectedKeys.slice(0, 3), expectedKeys.slice(3)].map(group => group.map(key => messages[key])), label)
+        assert.equal(await sidebar.getByRole('button').count(), 1, label)
+        const header = page.locator('.app-header')
+        assert.equal(await header.getByRole('combobox', { name: messages.language }).inputValue(), locale, label)
+        const avatar = header.getByRole('button', { name: messages['my.openAccount'] })
+        await avatar.click()
+        await page.locator('.profile-dialog[open]').waitFor()
+        assert.equal(await avatar.getAttribute('aria-expanded'), 'true', label)
+        await page.keyboard.press('Escape')
+        await navigation.locator('button[aria-expanded="false"]').waitFor()
       }
 
       if (width === 340 || width === 390 || width === 1440) {
@@ -115,23 +130,27 @@ try {
     }
   }
 
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
-  await preparePage(page)
-  const navigation = page.locator('.bottom-navigation')
-  for (const [path, active] of [
-    ['/my/wishes/new', '/my/wishes'],
-    ['/my/wishes/wish-1/edit', '/my/wishes'],
-    ['/my/lists/new', '/my/lists'],
-    ['/my/lists/list-1', '/my/lists'],
-    ['/my/search/', '/my/search'],
-  ]) {
-    await page.goto(origin + path)
-    assert.equal(await navigation.locator('.active[aria-current="page"]').getAttribute('href'), active)
+  for (const width of [390, 1440]) {
+    const mobile = width < 1024
+    const page = await browser.newPage({ viewport: { width, height: 844 }, isMobile: mobile, hasTouch: mobile })
+    await preparePage(page)
+    const navigation = page.locator(mobile ? '.bottom-navigation nav' : '.sidebar nav')
+    for (const [path, active] of [
+      ['/my/wishes/new', '/my/wishes'],
+      ['/my/wishes/wish-1/edit', '/my/wishes'],
+      ['/my/lists/new', '/my/lists'],
+      ['/my/lists/list-1', '/my/lists'],
+      ['/my/search/', '/my/search'],
+    ]) {
+      await page.goto(origin + path)
+      assert.equal(await navigation.locator('.active[aria-current="page"]').getAttribute('href'), active)
+    }
+    await page.goto(origin + '/my/profile')
+    await page.locator('.profile-dialog[open]').waitFor()
+    assert.equal(await navigation.locator('button.active').getAttribute('aria-expanded'), 'true')
+    await page.close()
   }
-  await page.goto(origin + '/my/profile')
-  await page.locator('.profile-dialog[open]').waitFor()
-  assert.equal(await navigation.locator('button.active').getAttribute('aria-expanded'), 'true')
-  console.log('Passed: localized bottom navigation, whole words, safe area, footer and route states.')
+  console.log('Passed: localized navigation, mobile safe area and footer, desktop groups, profile and route states.')
 } finally {
   await browser.close()
 }

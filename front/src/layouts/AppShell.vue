@@ -113,19 +113,6 @@ async function logout() {
         <img :src="logo" :alt="t('appName')" width="147" height="45" />
       </a>
       <AppNavigation :profile-available="!!account" :profile-active="profileOpen" @profile="profileOpen = true" />
-      <div class="sidebar-note">
-        <AppIcon name="heart" />
-        <p>{{ t('my.sidebarNote') }}</p>
-      </div>
-      <div v-if="account" class="sidebar-account">
-        <button class="account-link" type="button" :aria-label="t('my.openAccount')" @click="profileOpen = true">
-          <UserAvatar :username="account.username" />
-          <span class="account-text">
-            <strong>{{ account.username }}</strong>
-            <span>{{ t('my.personalSpace') }}</span>
-          </span>
-        </button>
-      </div>
     </aside>
 
     <div class="workspace">
@@ -133,10 +120,9 @@ async function logout() {
         <a class="brand mobile-brand" href="/my" :aria-label="t('appName')">
           <img :src="logo" :alt="t('appName')" width="118" height="36" />
         </a>
-        <span class="header-title">{{ t('my.personalSpace') }}</span>
         <div class="header-actions">
           <LanguagePicker />
-          <button class="profile-button" type="button" :disabled="!account" :aria-label="t('my.openAccount')" @click="profileOpen = true">
+          <button class="profile-button" type="button" aria-haspopup="dialog" :aria-expanded="profileOpen" :disabled="!account" :aria-label="t('my.openAccount')" @click="profileOpen = true">
             <UserAvatar :username="account?.username" />
             <span v-if="account" class="header-username">{{ account.username }}</span>
             <AppIcon class="profile-chevron" name="chevron" />
@@ -233,11 +219,10 @@ async function logout() {
 .app-header { display: flex; align-items: center; justify-content: space-between; gap: var(--wx-space-2); min-height: 80px; padding: var(--wx-space-4); border-bottom: 1px solid var(--wx-border); background: var(--wx-surface); }
 .brand { display: inline-flex; align-items: center; flex-shrink: 0; min-height: 44px; width: fit-content; border-radius: var(--wx-radius-sm); }
 .brand img { display: block; max-width: 100%; height: auto; }
-.header-title { display: none; color: var(--wx-text-muted); font-size: var(--wx-text-sm); }
 .header-actions { display: flex; align-items: center; gap: var(--wx-space-1); min-width: 0; }
-.profile-button, .account-link { display: flex; align-items: center; gap: var(--wx-space-2); min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: var(--wx-radius-md); color: var(--wx-text); background: transparent; cursor: pointer; }
-.profile-button:hover:not(:disabled), .account-link:hover { background: var(--wx-background); }
-.profile-button:active:not(:disabled), .account-link:active { background: var(--wx-lavender); }
+.profile-button { display: flex; align-items: center; gap: var(--wx-space-2); min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: var(--wx-radius-md); color: var(--wx-text); background: transparent; cursor: pointer; }
+.profile-button:hover:not(:disabled) { background: var(--wx-background); }
+.profile-button:active:not(:disabled) { background: var(--wx-lavender); }
 .profile-button:disabled { opacity: .55; cursor: default; }
 .header-username, .profile-chevron { display: none; }
 .app-content { flex: 1; width: 100%; max-width: var(--wx-content-max); margin-inline: auto; padding: var(--wx-space-6) var(--wx-space-4); }
@@ -295,19 +280,10 @@ async function logout() {
 }
 @media (min-width: 64rem) {
   .app-shell { display: grid; grid-template-columns: var(--wx-sidebar-width) minmax(0, 1fr); width: min(100%, 1600px); margin-inline: auto; border-inline: 1px solid var(--wx-border); }
-  .sidebar { position: sticky; top: 0; display: flex; flex-direction: column; gap: var(--wx-space-8); height: 100svh; padding: var(--wx-space-5) var(--wx-space-4); border-right: 1px solid var(--wx-border); background: var(--wx-surface); }
-  .sidebar > .brand { margin: 0 var(--wx-space-3) var(--wx-space-4); }
-  .sidebar-note { margin-top: auto; padding: var(--wx-space-5); border-radius: var(--wx-radius-card); background: linear-gradient(135deg, var(--wx-background), var(--wx-lavender)); }
-  .sidebar-note .icon { color: var(--wx-primary); }
-  .sidebar-note p { margin: var(--wx-space-2) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.6; }
-  .sidebar-account { padding-top: var(--wx-space-4); border-top: 1px solid var(--wx-border); }
-  .account-link { width: 100%; gap: var(--wx-space-3); padding: var(--wx-space-2); text-align: left; }
-  .account-text { display: grid; gap: var(--wx-space-1); min-width: 0; }
-  .account-text strong { overflow: hidden; text-overflow: ellipsis; font-size: var(--wx-text-sm); }
-  .account-text > span { color: var(--wx-text-muted); font-size: var(--wx-text-xs); }
-  .mobile-brand { display: none; }
-  .header-title { display: block; }
-  .app-header { padding-inline: var(--wx-space-8); }
+  .sidebar { position: sticky; top: 0; display: flex; flex-direction: column; gap: var(--wx-space-6); height: 100svh; padding: var(--wx-space-5) var(--wx-space-4); border-right: 1px solid var(--wx-border); background: var(--wx-surface); }
+  .sidebar > .brand { margin-inline: var(--wx-space-3); }
+  .mobile-brand, .header-username { display: none; }
+  .app-header { justify-content: flex-end; padding-inline: var(--wx-space-8); }
   .app-content { padding: var(--wx-space-8); }
   .bottom-navigation { display: none; }
 }
