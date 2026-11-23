@@ -16,10 +16,16 @@ async function setup(locale = 'en', width = 390) {
   const context = await browser.newContext({ locale, viewport: { width, height: width === 320 ? 640 : 900 } })
   await context.addInitScript(() => localStorage.setItem('wishix_analytics_consent_v1', 'denied'))
   const failures = new Set()
-  let details = { ...originalDetails }, displayName = 'Saved name', collection = false
+  let details = { ...originalDetails }, displayName = 'Saved name', collection = false, googleLinked = false
   await context.route(`${origin}/api/**`, route => {
     const request = route.request()
     const path = new URL(request.url()).pathname
+    if (path === '/api/auth/google/start') {
+      assert.equal(request.method(), 'POST')
+      assert.deepEqual(request.postDataJSON(), { mode: 'link' })
+      googleLinked = true
+      return route.fulfill({ json: { url: `${origin}/my?google=linked` } })
+    }
     if (request.method() === 'PUT') {
       if (failures.delete(path)) return route.fulfill({ status: 503, json: { error: 'unavailable' } })
       const input = request.postDataJSON()
@@ -30,7 +36,7 @@ async function setup(locale = 'en', width = 390) {
     }
     const data = {
       '/api/auth/me': { user: { username: details.username, email: 'tester@example.test' } },
-      '/api/auth/google/status': { enabled: false },
+      '/api/auth/google/status': { enabled: true, linked: googleLinked },
       '/api/auth/facebook/status': { enabled: false },
       '/api/lists': { lists: [] },
       '/api/wishes': { wishes: [] },
@@ -53,15 +59,19 @@ async function setup(locale = 'en', width = 390) {
   const bio = settings.locator('#profile-biography')
   const collectionBox = settings.getByRole('checkbox', { name: messages['profile.showAll'] })
   const close = settings.locator(':scope > header > button')
-  const generalTab = settings.locator('.profile-section').first()
-  const profileTab = settings.locator('.profile-section').last()
+  const accountTab = settings.getByRole('button', { name: messages['profile.account'], exact: true })
+  const profileTab = settings.getByRole('button', { name: messages['my.profile'], exact: true })
   const openSettings = async () => {
     await opener.click()
-    await settings.locator('#profile-display-name:enabled').waitFor()
+    await settings.getByText('tester@example.test', { exact: true }).waitFor()
+    assert.equal(await settings.getAttribute('aria-label'), messages['profile.settings'])
+    assert.equal(await accountTab.getAttribute('aria-pressed'), 'true')
+    assert.equal(await name.isVisible(), false)
   }
   const openProfile = async () => {
     await profileTab.click()
     await bio.waitFor()
+    await settings.locator('#profile-display-name:enabled').waitFor()
   }
   const waitClosed = async () => {
     await page.locator('button.profile-button[aria-expanded=false]').waitFor()
@@ -70,20 +80,36 @@ async function setup(locale = 'en', width = 390) {
   await openSettings()
   return {
     context, page, settings, confirmation, keep, leave, messages, name, bio, collectionBox,
-    close, generalTab, profileTab, openSettings, openProfile, waitClosed, failures,
+    close, accountTab, profileTab, openSettings, openProfile, waitClosed, failures,
   }
 }
 
 try {
   for (const locale of ['en', 'ru', 'ro']) for (const width of [320, 390, 768, 1024, 1440]) {
     const ui = await setup(locale, width)
-    const { page, settings, confirmation, keep, leave, name, bio, close, generalTab, profileTab } = ui
-    await name.fill('Draft name')
+    const { page, settings, confirmation, keep, leave, messages, name, bio, close, accountTab, profileTab } = ui
+    await settings.getByText(messages['google.notLinked'], { exact: true }).waitFor()
+    await settings.getByRole('button', { name: messages['google.connect'] }).waitFor()
+    await settings.getByRole('button', { name: messages['auth.logout'] }).waitFor()
+    assert.equal(await settings.evaluate(el => el.scrollWidth > el.clientWidth), false, `${locale}/${width}: account width`)
+    if (locale === 'ru' && [390, 1440].includes(width)) {
+      await mkdir(screenshots, { recursive: true })
+      await page.screenshot({ path: fileURLToPath(new URL(`settings-account-${width}.png`, screenshots)) })
+    }
     await ui.openProfile()
+    assert.equal(await settings.getByText('tester@example.test', { exact: true }).isVisible(), false)
+    assert.equal(await settings.getByRole('button', { name: messages['auth.logout'] }).isVisible(), false)
+    assert.equal(await settings.getByLabel(messages['profile.address'], { exact: true }).inputValue(), originalDetails.username)
+    assert.equal(await settings.evaluate(el => el.scrollWidth > el.clientWidth), false, `${locale}/${width}: profile width`)
+    if (locale === 'ru' && [390, 1440].includes(width)) {
+      await page.screenshot({ path: fileURLToPath(new URL(`settings-profile-${width}.png`, screenshots)) })
+    }
+    await name.fill('Draft name')
     await bio.fill('Draft bio')
-    await generalTab.click()
-    assert.equal(await name.inputValue(), 'Draft name')
+    await accountTab.click()
+    assert.equal(await name.isVisible(), false)
     await profileTab.click()
+    assert.equal(await name.inputValue(), 'Draft name')
     assert.equal(await bio.inputValue(), 'Draft bio')
 
     await close.click()
@@ -113,8 +139,8 @@ try {
     await ui.waitClosed()
 
     await ui.openSettings()
-    assert.equal(await name.inputValue(), 'Saved name')
     await ui.openProfile()
+    assert.equal(await name.inputValue(), 'Saved name')
     assert.equal(await bio.inputValue(), originalDetails.biography)
     await close.click()
     await ui.waitClosed()
@@ -123,7 +149,12 @@ try {
 
   {
     const ui = await setup()
-    const { page, settings, confirmation, keep, name, bio, close, generalTab, profileTab, messages, failures, collectionBox } = ui
+    const { page, settings, confirmation, keep, name, bio, close, accountTab, profileTab, messages, failures, collectionBox } = ui
+    await settings.getByRole('button', { name: messages['google.connect'] }).click()
+    await page.waitForURL(`${origin}/my?google=linked`)
+    await settings.getByText(messages['google.linked'], { exact: true }).waitFor()
+    assert.equal(await accountTab.getAttribute('aria-pressed'), 'true')
+    assert.equal(await settings.getByRole('button', { name: messages['google.connect'] }).isVisible(), false)
     const username = settings.locator('#profile-username')
     const date = settings.locator('#profile-birth-date')
     const showAge = settings.getByRole('checkbox', { name: messages['profile.showAge'] })
@@ -151,6 +182,7 @@ try {
     await ui.waitClosed()
 
     await ui.openSettings()
+    await ui.openProfile()
     failures.add('/api/profile/name')
     await name.fill('  New name  ')
     await saveName.click()
@@ -171,7 +203,6 @@ try {
     await settings.locator('.collection-setting').getByRole('button', { name: messages.checkAgain }).click()
     await settings.locator('.collection-setting input:enabled').waitFor()
 
-    await ui.openProfile()
     failures.add('/api/profile/details')
     await bio.fill('  New bio  ')
     await saveDetails.click()
@@ -184,7 +215,7 @@ try {
     await settings.getByRole('status').getByText(messages['profile.saved'], { exact: true }).waitFor()
     assert.equal(await bio.inputValue(), 'New bio')
     assert.equal(await username.inputValue(), 'new_address')
-    await generalTab.click()
+    await accountTab.click()
     await close.click()
     await keep.click()
     await profileTab.click()
@@ -214,5 +245,5 @@ try {
     await ui.waitClosed()
     await ui.context.close()
   }
-  console.log('Settings discard passed in 15 locale and viewport combinations, including save failures and independent edits.')
+  console.log('Settings tabs and discard passed in 15 locale and viewport combinations, including Google linking, save failures and independent edits.')
 } finally { await browser.close() }
