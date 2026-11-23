@@ -4,6 +4,8 @@ import { readFile, mkdir } from 'node:fs/promises'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const browser = await chromium.launch({ headless: true, channel: 'chrome' })
 const origin = process.env.WISHIX_TEST_ORIGIN || 'http://localhost:5174'
+const darwinAirPods = 'https://darwin.md/ru/naushniki-apple-airpods-pro-3-belyi-besprovodnye.html'
+const enterAirPods = 'https://enter.online/ru/audiotehnika/naushniki/apple-airpods-pro-3-belyi-besprovodnye'
 const errors = []
 const texts = {}
 for (const lang of ['en', 'ru', 'ro']) texts[lang] = JSON.parse(await readFile(new URL(`../src/locales/${lang}.json`, import.meta.url)))
@@ -22,7 +24,7 @@ async function setup(lang = 'en', width = 390, { listId = '', lists = [] } = {})
   return { context, page, result: { status: 'ok', title: 'Imported product', description: 'Imported details', price: '49.95', currency: 'MDL', shop_name: 'Store', image: { mime: 'image/jpeg', data_base64: jpeg } } }
 }
 async function waitStatus(page, text) { await page.locator('.toast').filter({ hasText: text }).waitFor() }
-function importButton(page, index = 1) { return page.getByRole('button', { name: `${texts.en['wishes.import.action']} ${index}`, exact: true }) }
+function importButton(page, index = 1, lang = 'en') { return page.getByRole('button', { name: `${texts[lang]['wishes.import.action']} ${index}`, exact: true }) }
 function detailsButton(page, lang = 'en') { return page.getByRole('button', { name: texts[lang]['wishes.addDetails'], exact: true }) }
 function saveButton(page, lang = 'en') { return page.getByRole('button', { name: texts[lang]['wishes.save'], exact: true }) }
 async function waitForFocus(locator) { await locator.evaluate(el => { if (el !== document.activeElement) throw new Error(`Expected focus on ${el.id || el.textContent}`) }) }
@@ -242,6 +244,8 @@ try {
   {
     const { page, context, result } = await setup()
     await page.route('**/api/wishes/import-preview', route => route.fulfill({ json: result }))
+    assert.equal(await importButton(page).count(), 0)
+    await page.locator('#wish-link-1').fill('not a URL')
     assert.equal(await importButton(page).isDisabled(), true)
     await page.locator('#wish-link-1').fill('https://shop.example.com/first')
     await waitStatus(page, texts.en['wishes.import.ok'])
@@ -258,7 +262,9 @@ try {
     await page.getByRole('button', { name: texts.en['wishes.addLink'], exact: true }).click()
     await page.locator('#wish-link-2').fill('https://shop.example.com/second')
     await page.locator('#wish-link-2').press('Tab')
-    assert.equal(await importButton(page, 2).evaluate(el => document.activeElement === el), true)
+    await waitForFocus(page.getByRole('button', { name: `${texts.en['wishes.removeLink']} 2`, exact: true }))
+    await page.keyboard.press('Tab')
+    await waitForFocus(importButton(page, 2))
     const response = page.waitForResponse(r => r.url().endsWith('/api/wishes/import-preview'))
     await page.keyboard.press('Enter')
     await response
@@ -292,27 +298,42 @@ try {
     assert.equal(await page.locator('#wish-description').inputValue(), 'Keep my details')
     checks++; await context.close()
   }
-  // Save stays available when import fails, returns a category, or is in progress.
-  for (const mode of ['failed', 'not_product', 'loading']) {
-    const { page, context, result } = await setup()
+  // Save retains the original URL after automatic or manual failure, a category, or a pending import.
+  for (const [mode, url] of [['failed', darwinAirPods], ['empty', enterAirPods], ['not_product', 'https://shop.example.com/category'], ['loading', 'https://shop.example.com/item']]) {
+    const { page, context } = await setup()
+    const requests = []
     let started
     const pending = new Promise(resolve => { started = resolve })
     await page.route('**/api/wishes/import-preview', async route => {
+      requests.push(route.request().postDataJSON().url)
       started()
       if (mode === 'loading') { await new Promise(resolve => page.once('close', resolve)); return }
-      await route.fulfill(mode === 'failed' ? { status: 422, json: { error: 'import_unavailable' } } : { json: { status: 'not_product' } })
+      await route.fulfill(mode === 'failed' ? { status: 422, json: { error: 'import_unavailable' } } : { json: { status: mode } })
     })
     let saved
     await page.route('**/api/wishes', async route => {
       if (route.request().method() === 'POST') { saved = route.request().postDataJSON(); await route.fulfill({ status: 201, json: { wish: { id: 'saved' } } }) }
       else await route.fulfill({ json: { wishes: [] } })
     })
-    await page.locator('#wish-link-1').fill('https://shop.example.com/item'); await pending
-    if (mode !== 'loading') await waitStatus(page, texts.en[`wishes.import.${mode}`])
+    const link = page.locator('#wish-link-1')
+    await link.fill(url)
+    await link.blur()
+    await pending
+    if (mode !== 'loading') await waitStatus(page, texts.en[`wishes.import.${mode === 'not_product' ? mode : 'failed'}`])
+    if (mode === 'empty') {
+      const retry = page.waitForResponse(response => response.url().endsWith('/api/wishes/import-preview'))
+      await importButton(page).click()
+      await retry
+      await waitStatus(page, texts.en['wishes.import.failed'])
+    }
+    assert.deepEqual(requests, mode === 'empty' ? [url, url] : [url])
+    assert.equal(await link.inputValue(), url)
+    assert.equal(await page.locator('#wish-title').inputValue(), '')
     await page.locator('#wish-title').fill('Manual gift')
     await page.locator('.new-wish-page form button[type=submit]').click()
     await page.waitForURL('**/my/wishes?notice=wish-added')
     assert.equal(saved.title, 'Manual gift'); assert.equal(saved.price, null)
+    assert.deepEqual(saved.shop_links, [url])
     checks++; await context.close()
   }
   // Imported description can be edited and is sent with the saved wish.
@@ -350,9 +371,12 @@ try {
       assert.ok(saveBottom <= visibleBottom, `${lang} ${width}: save ends at ${saveBottom}, available screen ends at ${visibleBottom}`)
       assert.equal(await page.locator('#wish-link-2').count(), 0)
       assert.equal(await page.locator('#wish-details').isVisible(), false)
+      assert.equal(await page.locator('#wish-link-1').getAttribute('aria-describedby'), 'wish-link-1-hint')
+      assert.equal(await page.locator('#wish-link-1-hint').innerText(), texts[lang]['wishes.import.hint'])
       if (lang === 'ru' && [390, 1440].includes(width)) await page.screenshot({ path: new URL(`../../.cache/import-screens/manual-${lang}-${width}.png`, import.meta.url).pathname.replace(/^\/(\w:)/, '$1') })
       await page.route('**/api/wishes/import-preview', route => route.fulfill({ json: { ...result, title: `${result.title} ${'Long name '.repeat(14)}` } }))
       await page.locator('#wish-link-1').fill('https://shop.example.com/product')
+      assert.equal(await importButton(page, 1, lang).innerText(), texts[lang]['wishes.import.action'])
       await waitStatus(page, texts[lang]['wishes.import.ok'])
       await page.getByRole('button', { name: texts[lang]['wishes.addLink'], exact: true }).click()
       await waitForFocus(page.locator('#wish-link-2'))

@@ -53,10 +53,10 @@ export function useWishImport(links, fields, onApplied, onResult) {
     try {
       const result = await previewWish(url, locale.value, request.signal)
       if (current !== version || links.value.find(item => item.id === id)?.value.trim() !== url) return
-      if (['not_product', 'empty'].includes(result.status)) { onResult?.(result.status); return }
+      if (result.status === 'not_product') { onResult?.('not_product'); return }
       const image = importedImage(result.image)
       const hasData = result.title || result.description || (result.price && result.currency) || image
-      if (!hasData) { onResult?.('empty'); return }
+      if (!hasData) { onResult?.('failed'); return }
       clearImported()
       const applied = []
       if (!dirty.has('title') && result.title) { fields.title.value = result.title; applied.push('title') }
