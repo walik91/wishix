@@ -5,6 +5,7 @@ import { useSession } from '../composables/useSession.js'
 import { useUnsavedWish } from '../composables/useUnsavedWish.js'
 import { getWish, updateWish } from '../api/wishes.js'
 import { validImportLink } from '../composables/useWishImport.js'
+import { rememberWishCurrency, validateWishPrice } from '../wishPrice.js'
 import UiButton from '../components/ui/UiButton.vue'
 import UiCard from '../components/ui/UiCard.vue'
 import UiSkeleton from '../components/ui/UiSkeleton.vue'
@@ -12,6 +13,7 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import TextField from '../components/ui/TextField.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
 import WishDiscardDialog from '../components/wishes/WishDiscardDialog.vue'
+import WishPriceFields from '../components/wishes/WishPriceFields.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 const { user, checking, unavailable, refresh } = useSession()
@@ -55,7 +57,7 @@ async function loadWish() {
     editVersion.value = wish.edit_version
     title.value = wish.title; description.value = wish.description; price.value = wish.price || ''
     legacyDescription.value = [...wish.description].length > 500
-    currency.value = wish.currency; priority.value = wish.priority
+    currency.value = wish.currency || ''; priority.value = wish.priority
     links.value = (wish.shop_links.length ? wish.shop_links : ['']).map(value => ({ id: nextLinkID++, value }))
     initialFields.value = fields.value
   } catch (error) {
@@ -64,7 +66,6 @@ async function loadWish() {
   } finally { loading.value = false }
 }
 watch([user, checking, unavailable], ([account, pending, failed]) => { if (account && !pending && !failed) loadWish() }, { immediate: true })
-const currencies = ['EUR', 'USD', 'GBP', 'MDL', 'RON', 'UAH', 'RUB', 'CHF', 'CAD', 'AUD', 'JPY']
 watchEffect(() => { document.title = `${t('wishes.edit')} · ${t('appName')}` })
 
 async function retry() {
@@ -89,12 +90,9 @@ function validLink(raw) {
 }
 async function submit() {
   if (saving.value || saved.value) return
-  const invalid = {}
-  const normalizedPrice = price.value.trim().replace(',', '.')
+  const { price: normalizedPrice, currency: normalizedCurrency, errors: invalid } = validateWishPrice(price.value, currency.value)
   if (!title.value.trim() || [...title.value.trim()].length > 200) invalid.title = 'wish_title_invalid'
   if ([...description.value.trim()].length > 500) invalid.description = 'wish_description_invalid'
-  if (normalizedPrice && !/^(0|[1-9][0-9]{0,9})(\.[0-9]{1,2})?$/.test(normalizedPrice)) invalid.price = 'wish_price_invalid'
-  if (normalizedPrice && !/^[A-Z]{3}$/.test(currency.value.trim().toUpperCase())) invalid.currency = 'wish_currency_invalid'
   for (const link of links.value) {
     if (link.value.trim() && !validLink(link.value.trim())) invalid[`link-${link.id}`] = 'wish_links_invalid'
   }
@@ -109,7 +107,7 @@ async function submit() {
   try {
     await updateWish(props.id, {
       title: title.value.trim(), description: description.value.trim(),
-      price: normalizedPrice || null, currency: normalizedPrice ? currency.value.trim().toUpperCase() : '',
+      price: normalizedPrice, currency: normalizedCurrency,
       priority: priority.value, shop_links: links.value.map(link => link.value.trim()).filter(Boolean),
       edit_version: editVersion.value,
     })
@@ -150,11 +148,9 @@ async function submit() {
             </section>
             <TextField id="wish-title" v-model="title" :label="t('wishes.titleLabel')" :placeholder="t('wishes.titlePlaceholder')" :hint="t('wishes.titleHint')" :error="errors.title ? t(`wishes.error.${errors.title}`) : ''" required maxlength="400" autocomplete="off" />
             <TextField id="wish-description" v-model="description" multiline rows="3" class="description-field" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" @input="limitDescription" />
-            <div class="price-fields">
-              <TextField id="wish-price" v-model="price" :label="t('wishes.priceLabel')" :hint="t('wishes.priceHint')" :error="errors.price ? t(`wishes.error.${errors.price}`) : ''" inputmode="decimal" placeholder="0.00" maxlength="13" />
-              <TextField id="wish-currency" v-model="currency" :label="t('wishes.currencyLabel')" :hint="t('wishes.currencyHint')" :error="errors.currency ? t(`wishes.error.${errors.currency}`) : ''" list="wish-currencies" maxlength="3" placeholder="USD" autocomplete="off" />
-              <datalist id="wish-currencies"><option v-for="code in currencies" :key="code" :value="code" /></datalist>
-            </div>
+            <WishPriceFields v-model:price="price" v-model:currency="currency" :errors="errors"
+              @price-input="delete errors.price" @currency-input="delete errors.currency"
+              @currency-selected="rememberWishCurrency(user.id, $event)" />
             <div class="select-field">
               <label for="wish-priority">{{ t('wishes.priorityLabel') }}</label>
               <select id="wish-priority" v-model="priority" :aria-invalid="errors.priority ? 'true' : undefined" :aria-describedby="errors.priority ? 'priority-error' : undefined"><option v-for="value in ['low', 'medium', 'high']" :key="value" :value="value">{{ t(`wishes.priority.${value}`) }}</option></select>
@@ -181,7 +177,7 @@ async function submit() {
 .form-card { padding: var(--wx-space-5) var(--wx-space-4); }
 fieldset { display: grid; gap: var(--wx-space-5); min-width: 0; margin: 0; padding: 0; border: 0; }fieldset:disabled { opacity: .7; }
 :deep(textarea.description-field) { min-height: 88px; }
-.price-fields { display: grid; gap: var(--wx-space-4); min-width: 0; }.select-field { display: grid; gap: var(--wx-space-2); }
+.select-field { display: grid; gap: var(--wx-space-2); }
 label, h2 { margin: 0; font-size: var(--wx-text-sm); font-weight: 600; line-height: 1.5; }
 select { width: 100%; min-width: 0; min-height: 48px; padding: var(--wx-space-3); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-text); background: var(--wx-surface); font-size: var(--wx-text-md); }
 select:hover { border-color: var(--wx-secondary); }
@@ -195,5 +191,5 @@ select:hover { border-color: var(--wx-secondary); }
 .privacy-note { display: flex; align-items: flex-start; justify-content: center; gap: var(--wx-space-2); margin: var(--wx-space-6) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-xs); line-height: 1.65; }.privacy-note .icon { width: 16px; height: 18px; }
 .operation-error, .field-error { color: var(--wx-error); font-size: var(--wx-text-sm); line-height: 1.6; }
 .page-loading { display: grid; gap: var(--wx-space-6); }.loading-title { height: 32px; width: 70%; }.loading-form { height: 600px; border-radius: var(--wx-radius-card); }.connection-error { padding: var(--wx-space-10) var(--wx-space-5); }
-@media (min-width: 48rem) { h1 { font-size: var(--wx-text-2xl); }.form-card { padding: var(--wx-space-8); }.price-fields { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }.form-actions { flex-direction: row; } }
+@media (min-width: 48rem) { h1 { font-size: var(--wx-text-2xl); }.form-card { padding: var(--wx-space-8); }.form-actions { flex-direction: row; } }
 </style>

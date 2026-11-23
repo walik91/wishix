@@ -129,7 +129,7 @@ try {
     await page.locator('#wish-link-1').fill('https://shop.example.com/product')
     await pending
     await page.locator('#wish-price').fill('12.50')
-    await page.locator('#wish-currency').fill('EUR')
+    await page.locator('#wish-currency').selectOption('EUR')
     await page.locator('#wish-image').setInputFiles({ name: 'mine.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(result.image.data_base64, 'base64') })
     release()
     await waitStatus(page, texts.en['wishes.import.kept'])

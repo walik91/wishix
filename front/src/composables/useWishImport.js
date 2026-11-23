@@ -12,7 +12,7 @@ export function validImportLink(raw) {
 export function useWishImport(links, fields, onApplied, onResult) {
   const activeId = ref(null)
   const dirty = new Set()
-  const imported = new Set()
+  const previousValues = new Map()
   let sourceId = null
   let attempted = false
   let timer, request, activeURL
@@ -28,11 +28,15 @@ export function useWishImport(links, fields, onApplied, onResult) {
     activeURL = ''
   }
   function clearImported() {
-    for (const field of imported) {
-      if (!dirty.has(field)) fields[field].value = field === 'image' ? null : ''
+    for (const [field, value] of previousValues) {
+      if (!dirty.has(field)) fields[field].value = value
     }
-    imported.clear()
+    previousValues.clear()
     sourceId = null
+  }
+  function apply(field, value) {
+    previousValues.set(field, fields[field].value)
+    fields[field].value = value
   }
   function importedImage(value) {
     if (!value || value.mime !== 'image/jpeg' || value.data_base64.length > 700000) return null
@@ -58,15 +62,14 @@ export function useWishImport(links, fields, onApplied, onResult) {
       const hasData = result.title || result.description || (result.price && result.currency) || image
       if (!hasData) { onResult?.('failed'); return }
       clearImported()
-      const applied = []
-      if (!dirty.has('title') && result.title) { fields.title.value = result.title; applied.push('title') }
-      if (!dirty.has('description') && result.description) { fields.description.value = result.description; applied.push('description') }
+      if (!dirty.has('title') && result.title) apply('title', result.title)
+      if (!dirty.has('description') && result.description) apply('description', result.description)
       if (!dirty.has('price') && !dirty.has('currency') && result.price && result.currency) {
-        fields.price.value = result.price; fields.currency.value = result.currency
-        applied.push('price', 'currency')
+        apply('price', result.price)
+        apply('currency', result.currency)
       }
-      if (!dirty.has('image') && image) { fields.image.value = image; applied.push('image') }
-      for (const field of applied) imported.add(field)
+      if (!dirty.has('image') && image) apply('image', image)
+      const applied = [...previousValues.keys()]
       sourceId = applied.length ? id : null
       onApplied?.(applied)
       onResult?.(applied.length ? result.status : 'kept')

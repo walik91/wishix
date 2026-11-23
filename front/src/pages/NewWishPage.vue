@@ -6,6 +6,7 @@ import { useSession } from '../composables/useSession.js'
 import { useUnsavedWish } from '../composables/useUnsavedWish.js'
 import { createWish } from '../api/wishes.js'
 import { useWishImport, validImportLink } from '../composables/useWishImport.js'
+import { readWishCurrency, rememberWishCurrency, validateWishPrice } from '../wishPrice.js'
 import UiButton from '../components/ui/UiButton.vue'
 import UiCard from '../components/ui/UiCard.vue'
 import UiSkeleton from '../components/ui/UiSkeleton.vue'
@@ -15,6 +16,7 @@ import TextField from '../components/ui/TextField.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
 import WishImageInput from '../components/wishes/WishImageInput.vue'
 import WishDiscardDialog from '../components/wishes/WishDiscardDialog.vue'
+import WishPriceFields from '../components/wishes/WishPriceFields.vue'
 import ListCheckboxes from '../components/lists/ListCheckboxes.vue'
 import { listLists } from '../api/lists.js'
 
@@ -28,7 +30,9 @@ function limitDescription(event) {
   markDirty('description')
 }
 const price = ref('')
-const currency = ref('')
+const initialCurrency = computed(() => readWishCurrency(user.value?.id))
+const currency = ref(initialCurrency.value)
+watch(initialCurrency, code => { currency.value = code })
 const priority = ref('medium')
 const image = ref(null)
 const imageInvalid = ref('')
@@ -70,7 +74,7 @@ const hasChanges = computed(() => {
   if (!user.value) return false
   const defaultList = availableLists.value.some(list => list.id === initialList.value) ? initialList.value : ''
   const listsChanged = defaultList ? selectedLists.value.length !== 1 || selectedLists.value[0] !== defaultList : selectedLists.value.length > 0
-  return Boolean(title.value || description.value || price.value || currency.value || priority.value !== 'medium'
+  return Boolean(title.value || description.value || price.value || currency.value !== initialCurrency.value || priority.value !== 'medium'
     || image.value || links.value.some(link => link.value) || listsChanged)
 })
 const { leaveDestination, leave } = useUnsavedWish(hasChanges)
@@ -81,7 +85,6 @@ const { activeId: importingId, markDirty, cancel: cancelImport, run: importLink,
   importNotice.value = result
   importNoticeSequence.value++
 })
-const currencies = ['EUR', 'USD', 'GBP', 'MDL', 'RON', 'UAH', 'RUB', 'CHF', 'CAD', 'AUD', 'JPY']
 watchEffect(() => { document.title = `${t('my.addWish')} · ${t('appName')}` })
 
 async function retry() {
@@ -111,12 +114,9 @@ async function focusValidationError() {
 }
 async function submit() {
   if (saving.value || saved.value || waitingForList.value) return
-  const invalid = {}
-  const normalizedPrice = price.value.trim().replace(',', '.')
+  const { price: normalizedPrice, currency: normalizedCurrency, errors: invalid } = validateWishPrice(price.value, currency.value)
   if (!title.value.trim() || [...title.value.trim()].length > 200) invalid.title = 'wish_title_invalid'
   if ([...description.value.trim()].length > 500) invalid.description = 'wish_description_invalid'
-  if (normalizedPrice && !/^(0|[1-9][0-9]{0,9})(\.[0-9]{1,2})?$/.test(normalizedPrice)) invalid.price = 'wish_price_invalid'
-  if (normalizedPrice && !/^[A-Z]{3}$/.test(currency.value.trim().toUpperCase())) invalid.currency = 'wish_currency_invalid'
   for (const link of links.value) {
     if (link.value.trim() && !validImportLink(link.value.trim())) invalid[`link-${link.id}`] = 'wish_links_invalid'
   }
@@ -132,7 +132,7 @@ async function submit() {
   try {
     await createWish({
       title: title.value.trim(), description: description.value.trim(),
-      price: normalizedPrice || null, currency: normalizedPrice ? currency.value.trim().toUpperCase() : '',
+      price: normalizedPrice, currency: normalizedCurrency,
       priority: priority.value, shop_links: links.value.map(link => link.value.trim()).filter(Boolean),
       list_ids: selectedLists.value,
     }, image.value)
@@ -202,11 +202,10 @@ async function submit() {
                 <div v-show="detailsOpen" id="wish-details" class="details-fields">
                   <WishImageInput id="wish-image" v-model="image" :error="errors.image || ''" :disabled="saving || saved" @validation="imageInvalid = $event; delete errors.image" @manual-change="markDirty('image')" />
                   <TextField id="wish-description" v-model="description" multiline rows="3" class="description-field" :label="t('wishes.descriptionLabel')" :hint="t('wishes.descriptionHint')" :error="errors.description ? t(`wishes.error.${errors.description}`) : ''" @input="limitDescription" />
-                  <div class="price-fields">
-                    <TextField id="wish-price" v-model="price" :label="t('wishes.priceLabel')" :hint="t('wishes.priceHint')" :error="errors.price ? t(`wishes.error.${errors.price}`) : ''" inputmode="decimal" placeholder="0.00" maxlength="13" @input="markDirty('price')" />
-                    <TextField id="wish-currency" v-model="currency" :label="t('wishes.currencyLabel')" :hint="t('wishes.currencyHint')" :error="errors.currency ? t(`wishes.error.${errors.currency}`) : ''" list="wish-currencies" maxlength="3" placeholder="USD" autocomplete="off" @input="markDirty('currency')" />
-                    <datalist id="wish-currencies"><option v-for="code in currencies" :key="code" :value="code" /></datalist>
-                  </div>
+                  <WishPriceFields v-model:price="price" v-model:currency="currency" :errors="errors"
+                    @price-input="delete errors.price; markDirty('price')"
+                    @currency-input="delete errors.currency; markDirty('currency')"
+                    @currency-selected="rememberWishCurrency(user.id, $event)" />
                   <div class="select-field">
                     <label for="wish-priority">{{ t('wishes.priorityLabel') }}</label>
                     <select id="wish-priority" v-model="priority" :aria-invalid="errors.priority ? 'true' : undefined" :aria-describedby="errors.priority ? 'priority-error' : undefined"><option v-for="value in ['low', 'medium', 'high']" :key="value" :value="value">{{ t(`wishes.priority.${value}`) }}</option></select>
@@ -247,7 +246,7 @@ h1 { margin: 0 0 var(--wx-space-4); font-size: 26px; line-height: 1.3; font-weig
 .form-card { padding: var(--wx-space-5) var(--wx-space-4); }
 fieldset { display: grid; gap: var(--wx-space-5); min-width: 0; margin: 0; padding: 0; border: 0; }fieldset:disabled { opacity: .7; }
 :deep(textarea.description-field) { min-height: 88px; }
-.price-fields { display: grid; gap: var(--wx-space-4); min-width: 0; }.select-field { display: grid; gap: var(--wx-space-2); }
+.select-field { display: grid; gap: var(--wx-space-2); }
 label { font-size: var(--wx-text-sm); font-weight: 600; line-height: 1.5; }
 select { width: 100%; min-width: 0; min-height: 48px; padding: var(--wx-space-3); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-md); color: var(--wx-text); background: var(--wx-surface); font-size: var(--wx-text-md); }
 select:hover { border-color: var(--wx-secondary); }
@@ -277,5 +276,5 @@ select:hover { border-color: var(--wx-secondary); }
   .form-actions { gap: var(--wx-space-2); }
   .form-actions .button { padding-inline: var(--wx-space-2); }
 }
-@media (min-width: 48rem) { h1 { font-size: var(--wx-text-2xl); }.form-card { padding: var(--wx-space-8); }.price-fields { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
+@media (min-width: 48rem) { h1 { font-size: var(--wx-text-2xl); }.form-card { padding: var(--wx-space-8); } }
 </style>
