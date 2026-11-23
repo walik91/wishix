@@ -11,28 +11,70 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import UserAvatar from '../components/ui/UserAvatar.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
 const props = defineProps({ own: Boolean, username: { type: String, default: '' }, initialKind: { type: String, default: 'following' } })
-const { user, checking, unavailable } = useSession()
+const { user, checking, unavailable, refresh } = useSession()
 const name = computed(() => props.own ? user.value?.username || '' : props.username)
-const kind = ref(props.initialKind), loading = ref(true), people = ref([]), cursor = ref(''), error = ref('')
+const kind = ref(props.initialKind)
+const loading = ref(false), people = ref([]), cursor = ref(''), error = ref('')
+const sessionChecking = computed(() => props.own && checking.value)
+const sessionError = computed(() => props.own && unavailable.value)
+const canLoad = computed(() => !sessionChecking.value && !sessionError.value)
+const unavailableKind = computed(() => error.value === 'unavailableList' ? kind.value : '')
 const details = ref(null)
+const detailsError = ref(false)
 const profileUsername = computed(() => details.value?.username || props.username)
-if (!props.own) {
-  onMounted(async () => {
-    try { details.value = await publicDetails(props.username) } catch { details.value = null }
-  })
+let requestId = 0
+
+async function loadDetails() {
+  detailsError.value = false
+  try { details.value = await publicDetails(props.username) }
+  catch (failure) { detailsError.value = failure.status !== 404 }
 }
+if (!props.own) onMounted(loadDetails)
+
 watchEffect(() => { document.title = `${t(`social.${kind.value}`)} · ${t('appName')}` })
-async function load(more = false) {
-  if (!name.value) return
-  loading.value = true; error.value = ''
-  try { const data = await socialPeople(name.value, kind.value, more ? cursor.value : ''); people.value = more ? [...people.value, ...data.people] : data.people; cursor.value = data.next_cursor }
-  catch (failure) { error.value = failure.status === 404 ? 'unavailableList' : 'loadError' }
-  finally { loading.value = false }
+async function load(after = '') {
+  const id = ++requestId
+  loading.value = true
+  error.value = ''
+  try {
+    const data = await socialPeople(name.value, kind.value, after)
+    if (id !== requestId) return
+    people.value = after ? [...people.value, ...data.people] : data.people
+    cursor.value = data.next_cursor
+  } catch (failure) {
+    if (id !== requestId) return
+    if (failure.status === 404) {
+      people.value = []
+      cursor.value = ''
+      error.value = 'unavailableList'
+    } else {
+      error.value = 'loadError'
+    }
+  } finally {
+    if (id === requestId) loading.value = false
+  }
 }
-watch([name, kind], ([current]) => { if (current) { people.value = []; cursor.value = ''; load() } }, { immediate: true })
+
+async function retry() {
+  if (sessionError.value) {
+    await refresh()
+    if (!user.value && !unavailable.value) window.location.replace('/login')
+  } else {
+    await load(cursor.value)
+  }
+}
+
+watch([name, kind, canLoad], () => {
+  requestId++
+  people.value = []
+  cursor.value = ''
+  error.value = ''
+  loading.value = false
+  if (name.value && canLoad.value) load()
+}, { immediate: true })
 </script>
 <template>
-  <div class="people-page" :class="{ 'public-people': !own }" :aria-busy="loading || checking">
+  <div class="people-page" :class="{ 'public-people': !own }">
     <template v-if="!own">
       <UiButton class="people-back" variant="ghost" :href="`/u/${encodeURIComponent(profileUsername)}`">
         <AppIcon name="arrow" />
@@ -41,14 +83,14 @@ watch([name, kind], ([current]) => { if (current) { people.value = []; cursor.va
       <PublicProfileNavigation
         :username="profileUsername"
         :current="kind"
-        :show-followers="details?.show_followers"
-        :show-following="details?.show_following"
+        :show-followers="details?.show_followers && unavailableKind !== 'followers'"
+        :show-following="details?.show_following && unavailableKind !== 'following'"
       />
     </template>
     <h1>{{ own ? t('social.title') : t(`social.${kind}`) }}</h1>
     <div v-if="own" class="people-tabs" role="group" :aria-label="t('social.title')"><UiButton v-for="tab in ['following', 'followers', 'blocked']" :key="tab" :variant="kind === tab ? 'primary' : 'secondary'" :aria-pressed="kind === tab" @click="kind = tab">{{ t(`social.${tab}`) }}</UiButton></div>
-    <UiSkeleton v-if="(loading && !people.length) || (own && checking)" class="people-skeleton" />
-    <UiCard v-else-if="error || (own && unavailable)" class="people-empty"><EmptyState icon="user" :title="t(`social.${error || 'loadError'}`)"><UiButton v-if="error !== 'unavailableList'" @click="load()">{{ t('checkAgain') }}</UiButton></EmptyState></UiCard>
+    <p class="sr-only" role="status">{{ sessionChecking ? t('auth.checkingSession') : loading ? t('social.loading') : '' }}</p>
+    <UiSkeleton v-if="sessionChecking || (loading && !people.length)" class="people-skeleton" />
     <ul v-else-if="people.length" class="people-list">
       <li v-for="person in people" :key="person.username">
         <a class="person-row" :href="`/u/${encodeURIComponent(person.username)}`">
@@ -61,8 +103,17 @@ watch([name, kind], ([current]) => { if (current) { people.value = []; cursor.va
         </a>
       </li>
     </ul>
-    <UiCard v-else class="people-empty"><EmptyState icon="users" :title="t(`social.empty.${kind}`)" /></UiCard>
-    <UiButton v-if="cursor" class="people-more" variant="secondary" :loading="loading" @click="load(true)">{{ t('search.more') }}</UiButton>
+    <UiCard v-else-if="!error && !sessionError && (!own || user)" class="people-empty"><EmptyState icon="users" :title="t(`social.empty.${kind}`)" /></UiCard>
+    <UiCard v-if="error || sessionError" class="people-empty" :class="{ 'people-more': people.length }">
+      <EmptyState :icon="error === 'unavailableList' ? 'lock' : 'globe'" :title="t(`social.${error || 'loadError'}`)">
+        <UiButton v-if="error !== 'unavailableList'" @click="retry">{{ t('checkAgain') }}</UiButton>
+      </EmptyState>
+    </UiCard>
+    <UiButton v-else-if="cursor" class="people-more" variant="secondary" :loading="loading" @click="load(cursor)">{{ t('search.more') }}</UiButton>
+    <div v-if="detailsError" class="people-details-error">
+      <span role="alert">{{ t('social.detailsError') }}</span>
+      <UiButton variant="secondary" @click="loadDetails">{{ t('checkAgain') }}</UiButton>
+    </div>
   </div>
 </template>
 <style scoped>
@@ -89,4 +140,5 @@ watch([name, kind], ([current]) => { if (current) { people.value = []; cursor.va
 .public-people .people-back { max-width: 100%; margin-bottom: var(--wx-space-2); padding-inline: var(--wx-space-2); text-align: start; }
 .people-back span { min-width: 0; overflow-wrap: anywhere; }
 .people-back .icon { transform: rotate(180deg); }
+.people-details-error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--wx-space-2); margin-top: var(--wx-space-4); color: var(--wx-error); }
 </style>

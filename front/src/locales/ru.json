@@ -488,6 +488,7 @@
   "social.reportReason": "Что произошло?",
   "social.reportHint": "Опишите проблему, до 1000 символов.",
   "social.reportSaved": "Жалоба сохранена.",
+  "social.loading": "Загружаем список…",
   "social.loadError": "Не удалось загрузить список.",
   "social.detailsError": "Не удалось загрузить все данные профиля.",
   "social.stateError": "Не удалось загрузить действия профиля.",

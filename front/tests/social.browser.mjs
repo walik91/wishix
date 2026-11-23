@@ -19,12 +19,16 @@ try {
     let details = { username, biography: '', birth_date: null, show_age: false, show_followers: false, show_following: false, has_avatar: false, username_changed_at: null }
     let reports = [], failDetails = false, failState = false
     let renameError = '', renameRequests = 0
-    let guest = false, showFollowers = true, showFollowing = true
+    let guest = false, sessionFailure = false, showFollowers = true, showFollowing = true
     let publicPeople = []
+    let peopleStatus = 200, nextCursor = '', pendingPeople
+    const publicCursors = []
     const publicName = width === 340 ? 'Bob Example ' + 'a'.repeat(88) : 'Bob Example'
-    await page.route('**/api/auth/me', route => guest
-      ? route.fulfill({ status: 401, json: { error: 'invalid_session' } })
-      : route.fulfill({ json: { user: { username, email: 'owner@example.test' } } }))
+    await page.route('**/api/auth/me', route => {
+      if (sessionFailure) return route.fulfill({ status: 503, json: { error: 'unavailable' } })
+      if (guest) return route.fulfill({ status: 401, json: { error: 'invalid_session' } })
+      return route.fulfill({ json: { user: { username, email: 'owner@example.test' } } })
+    })
     await page.route('**/api/lists', route => route.fulfill({ json: { lists: [] } }))
     await page.route('**/api/wishes', route => route.fulfill({ json: { wishes: [] } }))
     await page.route('**/u/bob', route => route.fulfill({ contentType: 'text/html', body: indexHTML }))
@@ -55,11 +59,14 @@ try {
     await page.route('**/api/social/bob/block', route => { const blocked = route.request().postDataJSON().block; state = { ...state, blocked, following: false, can_follow: !blocked }; return route.fulfill({ json: state }) })
     await page.route('**/api/social/bob/report', route => { reports.push(route.request().postDataJSON().message); return route.fulfill({ json: { status: 'ok' } }) })
     await page.route('**/api/social/*/people/*?*', route => route.fulfill({ json: { people: [{ username: 'bob', display_name: 'Bob Example' }], next_cursor: '' } }))
-    await page.route(/\/api\/social\/bob\/people\/(followers|following)\?/, route => {
-      const visible = new URL(route.request().url()).pathname.endsWith('/followers') ? showFollowers : showFollowing
-      return visible
-        ? route.fulfill({ json: { people: publicPeople, next_cursor: '' } })
-        : route.fulfill({ status: 404, json: { error: 'list_not_found' } })
+    await page.route(/\/api\/social\/bob\/people\/(followers|following)\?/, async route => {
+      const url = new URL(route.request().url())
+      publicCursors.push(url.searchParams.get('after'))
+      await pendingPeople
+      const visible = url.pathname.endsWith('/followers') ? showFollowers : showFollowing
+      if (!visible || peopleStatus === 404) return route.fulfill({ status: 404, json: { error: 'list_not_found' } })
+      if (peopleStatus !== 200) return route.fulfill({ status: peopleStatus, json: { error: 'unavailable' } })
+      return route.fulfill({ json: { people: publicPeople, next_cursor: nextCursor } })
     })
     await page.goto(`${origin}/my/profile`)
     const profileDialog = page.locator('dialog.profile-dialog')
@@ -335,6 +342,89 @@ try {
       assert.equal(await backLink.getAttribute('href'), '/u/bob')
     }
     showFollowers = showFollowing = true
+    if (width === 320 || (lang === 'ru' && [390, 1440].includes(width))) {
+      const peoplePage = page.locator('.people-page')
+      const empty = peoplePage.getByText(texts[lang]['social.empty.followers'], { exact: true })
+      const loadError = peoplePage.getByText(texts[lang]['social.loadError'], { exact: true })
+      const detailsError = peoplePage.getByText(texts[lang]['social.detailsError'], { exact: true })
+      const notAvailable = peoplePage.getByText(texts[lang]['social.unavailableList'], { exact: true })
+      const retry = peoplePage.getByRole('button', { name: texts[lang]['checkAgain'], exact: true })
+      const more = peoplePage.getByRole('button', { name: texts[lang]['search.more'], exact: true })
+      const gate = Promise.withResolvers()
+      pendingPeople = gate.promise
+      peopleStatus = 503
+      await page.goto(`${origin}/u/bob/followers`)
+      await peoplePage.getByRole('status').filter({ hasText: texts[lang]['social.loading'] }).waitFor({ state: 'attached' })
+      assert.equal(await peoplePage.locator('.people-skeleton').isVisible(), true)
+      assert.equal(await empty.count(), 0)
+      pendingPeople = undefined
+      gate.resolve()
+      await loadError.waitFor()
+      assert.equal(await empty.count(), 0)
+      if (lang === 'ru' && [390, 1440].includes(width)) {
+        await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/people-error-${width}.png`, import.meta.url)) })
+      }
+      peopleStatus = 200
+      await retry.click()
+      await empty.waitFor()
+
+      failDetails = true
+      await page.reload()
+      await detailsError.waitFor()
+      await empty.waitFor()
+      assert.equal(await followingLink.count(), 0)
+      await retry.click()
+      await followingLink.waitFor()
+      assert.equal(await active.getAttribute('href'), '/u/bob/followers')
+
+      publicPeople = [{ username: 'first' }]
+      nextCursor = 'first'
+      await page.reload()
+      await more.waitFor()
+      const first = peoplePage.getByRole('link', { name: 'first @first', exact: true })
+      peopleStatus = 503
+      await more.click()
+      await loadError.waitFor()
+      assert.equal(await first.isVisible(), true)
+      peopleStatus = 200
+      publicPeople = [{ username: 'second' }]
+      nextCursor = 'second'
+      await retry.click()
+      await peoplePage.getByRole('link', { name: 'second @second', exact: true }).waitFor()
+      assert.equal(await first.count(), 1)
+      assert.deepEqual(publicCursors.slice(-2), ['first', 'first'])
+      peopleStatus = 404
+      await more.click()
+      await notAvailable.waitFor()
+      assert.equal(await first.count(), 0)
+      assert.equal(await followersLink.count(), 0)
+      assert.equal(await followingLink.isVisible(), true)
+      assert.equal(await backLink.getAttribute('href'), '/u/bob')
+      assert.equal(await empty.count(), 0)
+      peopleStatus = 200
+      nextCursor = ''
+
+      if (lang === 'en' && width === 320) {
+        peopleStatus = 404
+        await page.route('**/api/public/profiles/bob/details', route => route.fulfill({ status: 404, json: { error: 'list_not_found' } }), { times: 1 })
+        const detailsResponse = page.waitForResponse('**/api/public/profiles/bob/details')
+        await page.reload()
+        await detailsResponse
+        await notAvailable.waitFor()
+        assert.equal(await retry.count(), 0)
+        assert.equal(await nav.getByRole('link').count(), 1)
+        peopleStatus = 200
+
+        guest = false
+        sessionFailure = true
+        await page.goto(`${origin}/my/following`)
+        await loadError.waitFor()
+        assert.equal(await peoplePage.locator('.people-skeleton').count(), 0)
+        sessionFailure = false
+        await retry.click()
+        await peoplePage.getByRole('link', { name: 'Bob Example @bob', exact: true }).waitFor()
+      }
+    }
     const longPerson = { username: 'a'.repeat(30), display_name: 'ДлинноеИмя'.repeat(10), has_avatar: false }
     publicPeople = [{ username: 'bob', has_avatar: true }, longPerson]
     for (const section of ['followers', 'following']) {
@@ -363,5 +453,5 @@ try {
     await context.close()
   }
   assert.deepEqual(errors, [])
-  console.log('Profile and social: EN/RU/RO × 320/340/390/768/1024/1440 passed, including the public header, profile actions and navigation.')
+  console.log('Profile and social: EN/RU/RO × 320/340/390/768/1024/1440 passed, including public navigation and social list states.')
 } finally { await browser.close() }
