@@ -28,6 +28,7 @@ import SearchPage from './pages/SearchPage.vue'
 import SocialPeoplePage from './pages/SocialPeoplePage.vue'
 import { useSession } from './composables/useSession.js'
 import { isNamedSharedListPath } from './sharedListPath.js'
+import { exampleWishlistPath } from './exampleWishlist.js'
 import { consumeReservationReturn } from './reservationReturn.js'
 
 // Full document navigation keeps the small auth flow independent of a router.
@@ -74,7 +75,7 @@ onMounted(async () => {
     <ListsPage v-else-if="page === '/my/lists'" />
     <NewListPage v-else-if="page === '/my/lists/new'" />
     <ListPage v-else-if="listMatch" :id="listMatch[1]" />
-    <SharedListPage v-else-if="isNamedSharedListPath(page)" />
+    <SharedListPage v-else-if="page === exampleWishlistPath || isNamedSharedListPath(page)" :example="page === exampleWishlistPath" />
     <PublicCollectionPage v-else-if="collectionMatch" :username="collectionMatch[1]" />
     <SocialPeoplePage v-else-if="peopleMatch" :username="peopleMatch[1]" :initial-kind="peopleMatch[2]" />
     <PublicProfilePage v-else-if="profileMatch" :username="profileMatch[1]" />
@@ -85,7 +86,7 @@ onMounted(async () => {
       <UiButton href="/">{{ t('notFound.home') }}</UiButton>
     </section>
   </component>
-  <CookieConsent v-if="page !== '/cp'" ref="cookieConsent" />
+  <CookieConsent v-if="page !== '/cp'" ref="cookieConsent" :bottom-navigation="privatePage" />
 </template>
 
 <style scoped>

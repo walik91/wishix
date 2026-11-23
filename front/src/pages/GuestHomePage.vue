@@ -5,6 +5,7 @@ import { useSession } from '../composables/useSession.js'
 import AppIcon from '../components/ui/AppIcon.vue'
 import UiButton from '../components/ui/UiButton.vue'
 import gift from '../assets/brand/gift-hero.svg'
+import { exampleWishlistPath } from '../exampleWishlist.js'
 
 const { user, checking } = useSession()
 const startHref = computed(() => user.value ? '/my/wishes' : '/register')
@@ -26,13 +27,13 @@ watchEffect(() => {
   <div class="guest-content">
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="eyebrow"><AppIcon name="heart" />{{ t('home.eyebrow') }}</p>
         <h1 id="hero-title">{{ t('home.title') }} <span>{{ t('home.titleAccent') }}</span></h1>
         <p class="hero-description">{{ t('home.description') }}</p>
         <div class="hero-actions">
           <UiButton :href="startHref" :loading="checking">{{ startLabel }}<AppIcon name="arrow" /></UiButton>
-          <a class="how-link" href="#how-it-works">{{ t('home.howItWorks') }}</a>
+          <UiButton :href="exampleWishlistPath" variant="secondary">{{ t('home.viewExample') }}</UiButton>
         </div>
+        <p class="hero-guest-hint">{{ t('home.guestHint') }}</p>
       </div>
       <div class="hero-visual">
         <img class="gift" :src="gift" alt="" width="370" height="300" fetchpriority="high" />
@@ -81,15 +82,14 @@ watchEffect(() => {
 </template>
 
 <style scoped>
-.how-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border-radius: var(--wx-space-1); color: var(--wx-primary); font-size: var(--wx-text-sm); font-weight: 600; line-height: 1.5; text-align: center; text-decoration: none; }
-.how-link:hover { color: var(--wx-primary-hover); text-decoration: underline; text-underline-offset: 4px; }
-.hero { display: grid; gap: var(--wx-space-4); padding: var(--wx-space-8) var(--wx-space-5) var(--wx-space-4); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-hero); background: linear-gradient(125deg, var(--wx-cream), var(--wx-lavender)); }
+.hero { display: grid; gap: var(--wx-space-4); padding: var(--wx-space-5) var(--wx-space-5) var(--wx-space-4); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-hero); background: linear-gradient(125deg, var(--wx-cream), var(--wx-lavender)); }
 .hero-copy { min-width: 0; }
 .eyebrow { display: flex; align-items: center; gap: var(--wx-space-2); margin: 0 0 var(--wx-space-4); color: var(--wx-primary-pressed); font-size: var(--wx-text-xs); font-weight: 600; line-height: 1.6; }
 h1 { max-width: 470px; margin: 0; font-size: var(--wx-text-xl); font-weight: 800; line-height: 1.25; letter-spacing: -.035em; text-wrap: balance; }
 h1 span { color: var(--wx-primary); }
-.hero-description { max-width: 440px; margin: var(--wx-space-5) 0 var(--wx-space-6); color: var(--wx-text-muted); font-size: var(--wx-text-md); line-height: 1.7; }
+.hero-description { max-width: 440px; margin: var(--wx-space-3) 0 var(--wx-space-4); color: var(--wx-text-muted); font-size: var(--wx-text-md); line-height: 1.5; }
 .hero-actions { display: flex; flex-direction: column; align-items: stretch; gap: var(--wx-space-2); }
+.hero-guest-hint { max-width: 440px; margin: var(--wx-space-3) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
 .hero-visual { display: grid; justify-items: center; align-content: center; min-width: 0; }
 .gift { display: block; width: min(100%, 300px); height: auto; }
 .wish-note { display: flex; align-items: center; gap: var(--wx-space-3); width: min(100%, 320px); margin-top: -20px; padding: var(--wx-space-4); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-card); background: var(--wx-surface); box-shadow: var(--wx-shadow-card); }
@@ -126,6 +126,11 @@ details > p { max-width: 700px; margin: 0 0 var(--wx-space-5); padding-right: va
 .closing { display: flex; flex-direction: column; align-items: center; margin-top: calc(var(--wx-space-10) + var(--wx-space-6)); padding: var(--wx-space-8) var(--wx-space-5); border-radius: var(--wx-radius-hero); background: var(--wx-lavender); text-align: center; }
 .closing-heart { margin-bottom: var(--wx-space-4); background: var(--wx-surface); }
 .closing > p { max-width: 460px; margin: var(--wx-space-3) 0 var(--wx-space-6); color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.7; }
+@media (max-width: 22rem) {
+  .hero { padding-inline: var(--wx-space-4); }
+  .hero-description { display: none; }
+  .hero-actions { margin-top: var(--wx-space-4); }
+}
 @media (min-width: 36rem) {
   .hero { padding: var(--wx-space-10); }
   .hero-actions { flex-direction: row; align-items: center; gap: var(--wx-space-5); }
@@ -133,6 +138,7 @@ details > p { max-width: 700px; margin: 0 0 var(--wx-space-5); padding-right: va
 @media (min-width: 48rem) {
   .hero { grid-template-columns: 1.15fr .85fr; align-items: center; gap: var(--wx-space-6); min-height: 440px; padding: var(--wx-space-10) var(--wx-space-8); }
   h1 { font-size: var(--wx-text-2xl); }
+  .hero-description { margin: var(--wx-space-5) 0 var(--wx-space-6); line-height: 1.7; }
   .hero-actions { flex-wrap: wrap; gap: var(--wx-space-2) var(--wx-space-5); }
   .gift { width: min(100%, 370px); }
   .wish-note { margin-top: -12px; }

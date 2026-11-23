@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const origin = process.env.WISHIX_TEST_ORIGIN || 'http://127.0.0.1:5193'
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 try {
   for (const locale of ['en', 'ru', 'ro']) for (const width of [320, 390, 768, 1024, 1440]) {
+    const texts = JSON.parse(await readFile(new URL(`../src/locales/${locale}.json`, import.meta.url)))
     const context = await browser.newContext({ locale, viewport: { width, height: 900 } })
     const page = await context.newPage()
     let googleRequests = 0
@@ -21,8 +23,8 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, locale + '/' + width + ' overflow')
     const offscreen = await page.locator('.cookie-panel button').evaluateAll(elements => elements.some(el => { const r=el.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth || r.width < 44 || r.height < 44 }))
     assert.equal(offscreen, false, locale + '/' + width + ' controls must fit')
-    assert.equal(await page.locator('.cookie-actions button').count(), 2, 'initial panel has accept and settings')
-    await page.locator('.cookie-actions button').nth(1).click()
+    assert.equal(await page.locator('.cookie-actions button').count(), 3, 'initial panel has accept, essentials only and settings')
+    await page.locator('.cookie-panel').getByRole('button', { name: texts['cookies.settings'], exact: true }).click()
     assert.equal(await page.locator('.cookie-option input').isChecked(), true, 'analytics is selected initially')
     assert.equal(googleRequests, 1, 'opening settings does not reload Google')
     await page.locator('.cookie-option input').uncheck()
@@ -58,26 +60,35 @@ try {
   await blockedStoragePage.waitForFunction(() => !!window.gtag)
   const streamId = await blockedStoragePage.locator('script[src*="googletagmanager.com/gtag/js"]').getAttribute('src').then(src => new URL(src).searchParams.get('id'))
   await blockedStoragePage.locator('.cookie-actions button').nth(1).click()
-  await blockedStoragePage.locator('.cookie-option input').uncheck()
-  await blockedStoragePage.locator('.cookie-actions button').nth(1).click()
   assert.equal(await blockedStoragePage.evaluate(id => window['ga-disable-' + id], streamId), true, 'denial takes effect without storage')
   await blockedStoragePage.locator('footer .cookie-settings-link').click()
   assert.equal(await blockedStoragePage.locator('.cookie-option input').isChecked(), false, 'denial remains in memory')
   await blockedStoragePage.locator('.cookie-actions button').first().click()
   assert.equal(await blockedStoragePage.evaluate(id => window['ga-disable-' + id], streamId), false, 'analytics can be re-enabled without storage')
   await blockedStorageContext.close()
-  const tabsContext = await browser.newContext()
-  await tabsContext.route('**/www.googletagmanager.com/**', route => route.fulfill({ contentType: 'text/javascript', body: '' }))
+  const tabsContext = await browser.newContext({ locale: 'en' })
+  let tagRequests = 0
+  await tabsContext.route('**/www.googletagmanager.com/**', route => {
+    tagRequests++
+    return route.fulfill({ contentType: 'text/javascript', body: '' })
+  })
   await tabsContext.route('**/api/auth/me', route => route.fulfill({ json: { user: null } }))
   const firstTab = await tabsContext.newPage()
   const secondTab = await tabsContext.newPage()
   await firstTab.goto(origin + '/')
   await secondTab.goto(origin + '/')
   await secondTab.waitForFunction(() => !!window.gtag)
-  await firstTab.locator('.cookie-actions button').nth(1).click()
-  await firstTab.locator('.cookie-option input').uncheck()
-  await firstTab.locator('.cookie-actions button').nth(1).click()
+  await tabsContext.addCookies(['_ga', '_ga_TEST', 'wishix_locale'].map(name => ({ name, value: 'en', url: origin })))
+  await Promise.all([
+    firstTab.waitForEvent('framenavigated'),
+    firstTab.getByRole('button', { name: 'Essential only', exact: true }).click(),
+  ])
+  await firstTab.waitForLoadState('load')
+  assert.equal(await firstTab.evaluate(() => localStorage.getItem('wishix_analytics_consent_v1')), 'denied')
+  assert.equal(await firstTab.locator('.cookie-panel').count(), 0, 'direct denial dismisses the banner')
+  assert.deepEqual((await tabsContext.cookies()).map(cookie => cookie.name), ['wishix_locale'], 'remove analytics cookies and keep the language cookie')
   await secondTab.waitForFunction(() => localStorage.getItem('wishix_analytics_consent_v1') === 'denied' && !window.gtag)
+  assert.equal(tagRequests, 2, 'reload after direct denial does not request the tag')
   await tabsContext.close()
   const unknownContext = await browser.newContext()
   const unknownPage = await unknownContext.newPage()

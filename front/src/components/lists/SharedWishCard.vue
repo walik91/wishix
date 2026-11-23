@@ -12,7 +12,7 @@ import TextField from '../ui/TextField.vue'
 import SocialAuthButtons from '../auth/SocialAuthButtons.vue'
 import { guestWishImage, publicCollectionImage } from '../../api/lists.js'
 import WishCard from '../wishes/WishCard.vue'
-const props = defineProps({ wish: { type: Object, required: true }, listId: { type: String, default: '' }, token: { type: String, default: '' }, username: { type: String, default: '' }, isOwner: Boolean, resume: Boolean })
+const props = defineProps({ wish: { type: Object, required: true }, listId: { type: String, default: '' }, token: { type: String, default: '' }, username: { type: String, default: '' }, isOwner: Boolean, resume: Boolean, example: Boolean })
 const emit = defineEmits(['updated', 'resumed'])
 const { user, checking } = useSession()
 const open = ref(false), mode = ref('start'), email = ref(''), code = ref(''), challenge = ref(''), busy = ref(false), failure = ref(''), success = ref(''), refreshNeeded = ref(false)
@@ -51,12 +51,12 @@ async function submit() {
   finally { busy.value = false }
 }
 const container = ref(null), image = ref('')
-const wish = computed(() => ({ ...props.wish, image_url: image.value }))
+const wish = computed(() => ({ ...props.wish, image_url: props.example ? props.wish.image_url : image.value }))
 let observer, request, mounted = false, version = 0
 function reset() { version++; observer?.disconnect(); request?.abort(); if (image.value) URL.revokeObjectURL(image.value); image.value = '' }
 function observe() {
   reset()
-  if (!mounted || !props.wish.has_image) return
+  if (!mounted || props.example || !props.wish.has_image) return
   observer = new IntersectionObserver(async entries => {
     if (!entries.some(entry => entry.isIntersecting)) return
     observer.disconnect(); const current = version
@@ -72,8 +72,18 @@ onBeforeUnmount(reset)
 </script>
 <template>
   <div ref="container" class="shared-wish">
-    <WishCard :wish="wish" read-only><template v-if="!username && !isOwner && !wish.received" #actions><div class="reservation-actions"><template v-if="wish.reserved"><span class="reservation-status">{{ t('reservation.reserved') }}</span><UiButton v-if="wish.guest_recoverable" variant="secondary" @click="show('recover')">{{ t('reservation.needLink') }}</UiButton></template><UiButton v-else @click="show('start')">{{ t('reservation.reserve') }}</UiButton></div></template></WishCard>
-    <UiDialog v-model:open="open" :busy="busy" :title="t(mode === 'recover' ? 'reservation.needLink' : 'reservation.reserve')">
+    <WishCard :wish="wish" read-only>
+      <template v-if="!username && !isOwner && !wish.received" #actions>
+        <div class="reservation-actions">
+          <template v-if="wish.reserved">
+            <span class="reservation-status">{{ t('reservation.reserved') }}</span>
+            <UiButton v-if="!example && wish.guest_recoverable" variant="secondary" @click="show('recover')">{{ t('reservation.needLink') }}</UiButton>
+          </template>
+          <UiButton v-else :disabled="example" @click="show('start')">{{ t('reservation.reserve') }}</UiButton>
+        </div>
+      </template>
+    </WishCard>
+    <UiDialog v-if="!example" v-model:open="open" :busy="busy" :title="t(mode === 'recover' ? 'reservation.needLink' : 'reservation.reserve')">
       <div v-if="mode === 'login'" class="reservation-form" role="status"><p>{{ t('reservation.accountExists') }}</p><UiButton href="/login" @click="rememberReturn">{{ t('reservation.signIn') }}</UiButton></div>
       <div v-else-if="mode === 'choose'" class="reservation-form">
         <p class="reservation-hint">{{ wish.title }}</p>
