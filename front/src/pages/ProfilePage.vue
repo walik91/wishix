@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { t } from '../i18n.js'
+import { locale, t } from '../i18n.js'
 import { useSession } from '../composables/useSession.js'
 import { getProfileName, setProfileName } from '../api/search.js'
 import { getProfileDetails, saveProfileDetails, changeUsername, uploadAvatar, deleteAvatar } from '../api/social.js'
@@ -16,10 +16,20 @@ const savedFields = ref(null)
 const displayName = ref(''), savedName = ref(null), nameLoadFailed = ref(false)
 const saveError = ref(''), saveNotice = ref(false)
 const avatarError = ref(''), avatarNotice = ref(''), addressError = ref(''), addressNotice = ref(false)
-const username = ref(''), confirmRename = ref(false), avatarVersion = ref(Date.now()), picker = ref(null)
+const username = ref(''), addressEditing = ref(false), confirmRename = ref(false)
+const addressToggle = ref(null), addressField = ref(null), addressCooldown = ref(null)
+const avatarVersion = ref(Date.now()), picker = ref(null)
 const content = ref(null), nameField = ref(null), biographyField = ref(null), saveStatus = ref(null)
 const busy = computed(() => !!operation.value)
 const avatarURL = computed(() => settings.value?.has_avatar ? `/api/profile/avatar?v=${avatarVersion.value}` : '')
+const profileOrigin = window.location.origin
+const profilePath = computed(() => `/u/${encodeURIComponent(settings.value.username)}`)
+const newUsername = computed(() => username.value.trim().toLowerCase())
+const nextAddressChange = computed(() => Date.parse(settings.value?.username_changed_at) + 30 * 24 * 60 * 60 * 1000)
+const now = ref(Date.now())
+const addressLocked = computed(() => now.value < nextAddressChange.value)
+const addressAvailableAt = computed(() => new Intl.DateTimeFormat(locale.value, { dateStyle: 'long', timeStyle: 'short' }).format(nextAddressChange.value))
+const addressFieldError = computed(() => ['profile.usernameInvalid', 'profile.usernameTaken'].includes(addressError.value) ? addressError.value : '')
 const nameChanged = computed(() => savedName.value !== null && displayName.value !== savedName.value)
 const detailsChanged = computed(() => {
   if (!settings.value) return false
@@ -27,7 +37,7 @@ const detailsChanged = computed(() => {
   return Object.keys(fields).some(key => fields[key] !== savedFields.value[key])
 })
 const hasProfileChanges = computed(() => nameChanged.value || detailsChanged.value)
-const hasUnsavedChanges = computed(() => hasProfileChanges.value || (!!settings.value && username.value !== settings.value.username))
+const hasUnsavedChanges = computed(() => hasProfileChanges.value || (addressEditing.value && username.value !== settings.value?.username))
 defineExpose({ hasUnsavedChanges, busy })
 
 function editableFields(value) {
@@ -40,6 +50,7 @@ function editableFields(value) {
   }
 }
 function acceptSavedDetails(details) {
+  if (!addressEditing.value || username.value === settings.value?.username) username.value = details.username
   savedFields.value = editableFields(details)
   settings.value = { ...details, birth_date: details.birth_date || '' }
 }
@@ -50,6 +61,17 @@ watch([user, checking, unavailable], ([account, pending, failed]) => {
   if (savedName.value === null) loadName()
 }, { immediate: true })
 watch(() => settings.value?.birth_date, value => { if (!value && settings.value) settings.value.show_age = false })
+watch([addressEditing, nextAddressChange], ([editing, availableAt], _, onCleanup) => {
+  if (!editing || !Number.isFinite(availableAt)) return
+  let timer
+  function updateAvailability() {
+    now.value = Date.now()
+    const remaining = availableAt - now.value
+    if (remaining > 0) timer = setTimeout(updateAvailability, Math.min(remaining, 2 ** 31 - 1))
+  }
+  updateAvailability()
+  onCleanup(() => clearTimeout(timer))
+})
 watch(hasProfileChanges, changed => {
   if (!changed) return
   saveNotice.value = false
@@ -62,7 +84,6 @@ async function load() {
   try {
     const details = await getProfileDetails()
     acceptSavedDetails(details)
-    username.value = details.username
   } catch { settings.value = null }
   finally { loading.value = false }
 }
@@ -112,9 +133,25 @@ async function cancelProfileChanges() {
   await nextTick()
   field?.focus()
 }
-function openRename() {
+async function toggleAddressEditor() {
+  addressEditing.value = !addressEditing.value
+  username.value = settings.value.username
   addressError.value = ''
   addressNotice.value = false
+  if (addressEditing.value) {
+    await nextTick()
+    if (addressLocked.value) addressCooldown.value?.focus()
+    else addressField.value?.focus()
+  }
+}
+function openRename() {
+  if (busy.value || addressLocked.value || newUsername.value === settings.value.username) return
+  addressError.value = ''
+  if (!/^[a-z0-9_]{3,30}$/.test(newUsername.value)) {
+    addressError.value = 'profile.usernameInvalid'
+    addressField.value?.focus()
+    return
+  }
   confirmRename.value = true
 }
 async function rename() {
@@ -122,16 +159,23 @@ async function rename() {
   operation.value = 'rename'
   addressError.value = ''
   try {
-    const updated = await changeUsername(username.value)
+    const updated = await changeUsername(newUsername.value)
     settings.value.username = updated.username
     settings.value.username_changed_at = updated.username_changed_at
     username.value = updated.username
     confirmRename.value = false
+    addressEditing.value = false
     await refresh()
     addressNotice.value = true
   } catch (failure) {
     addressError.value = { username_taken: 'profile.usernameTaken', username_cooldown: 'profile.usernameCooldown', username_invalid: 'profile.usernameInvalid' }[failure.code] || 'profile.saveError'
-  } finally { operation.value = '' }
+    confirmRename.value = false
+  } finally {
+    operation.value = ''
+    await nextTick()
+    if (addressEditing.value) addressField.value?.focus()
+    else addressToggle.value?.$el.focus({ preventScroll: true })
+  }
 }
 async function selectAvatar(event) {
   const file = event.target.files?.[0]
@@ -203,13 +247,28 @@ async function removeAvatar() {
           <slot name="collection" />
         </section>
       </form>
-      <form v-if="settings" class="profile-address" @submit.prevent="openRename">
-        <TextField id="profile-username" v-model="username" :label="t('profile.address')" maxlength="30" :hint="t('profile.addressHint')" :disabled="busy" @update:model-value="addressError = ''; addressNotice = false" />
-        <p class="profile-hint">{{ t('profile.usernameHint') }} {{ t('profile.redirectHint') }}</p>
-        <UiButton type="submit" variant="secondary" :disabled="busy || username.trim().toLowerCase() === settings.username">{{ t('profile.changeUsername') }}</UiButton>
-        <p v-if="addressError && !confirmRename" class="profile-error" role="alert">{{ t(addressError) }}</p>
+      <section v-if="settings" class="profile-address" aria-labelledby="profile-address-title">
+        <div class="profile-address-row">
+          <div class="profile-address-current">
+            <h3 id="profile-address-title">{{ t('profile.address') }}</h3>
+            <p class="profile-hint">{{ profileOrigin }}{{ profilePath }}</p>
+          </div>
+          <div class="profile-actions">
+            <UiButton variant="ghost" :href="profilePath" :disabled="busy">{{ t('profile.openPublicProfile') }}</UiButton>
+            <UiButton ref="addressToggle" variant="secondary" :disabled="busy" :aria-expanded="addressEditing" aria-controls="profile-address-editor" @click="toggleAddressEditor">
+              {{ t(addressEditing ? 'profile.cancelAddressEdit' : 'profile.editAddress') }}
+            </UiButton>
+          </div>
+        </div>
+        <form v-show="addressEditing" id="profile-address-editor" class="profile-address-editor" @submit.prevent="openRename">
+          <TextField id="profile-username" ref="addressField" v-model="username" :label="t('profile.newUsername')" maxlength="30" autocapitalize="none" spellcheck="false" :hint="addressFieldError ? '' : t('profile.usernameInvalid')" :error="addressFieldError ? t(addressFieldError) : ''" :disabled="busy || addressLocked" @update:model-value="addressError = ''" />
+          <p class="profile-hint">{{ t('profile.usernameHint') }} {{ t('profile.redirectHint') }}</p>
+          <p v-if="addressLocked" ref="addressCooldown" class="profile-hint" tabindex="-1">{{ t('profile.usernameAvailableAt') }} <time :datetime="new Date(nextAddressChange).toISOString()">{{ addressAvailableAt }}</time>.</p>
+          <p v-if="addressError && !addressFieldError" class="profile-error" role="alert">{{ t(addressError) }}</p>
+          <UiButton type="submit" variant="secondary" :disabled="busy || addressLocked || newUsername === settings.username">{{ t('profile.changeUsername') }}</UiButton>
+        </form>
         <p v-if="addressNotice" class="profile-success" role="status">{{ t('profile.usernameSaved') }}</p>
-      </form>
+      </section>
       <div class="profile-links"><slot name="links" /></div>
     </div>
     <div v-if="hasProfileChanges || saveNotice" class="profile-footer">
@@ -221,9 +280,8 @@ async function removeAvatar() {
       </div>
     </div>
     <UiDialog v-if="settings" v-model:open="confirmRename" :title="t('profile.changeUsername')" :busy="busy">
-      <p>{{ t('profile.renameConfirm') }} <strong>{{ username }}</strong></p>
+      <p>{{ t('profile.renameConfirm') }} <strong>/u/{{ newUsername }}</strong></p>
       <p>{{ t('profile.usernameHint') }}</p>
-      <p v-if="addressError" class="profile-error" role="alert">{{ t(addressError) }}</p>
       <div class="profile-actions">
         <UiButton :loading="operation === 'rename'" @click="rename">{{ t('profile.changeUsername') }}</UiButton>
         <UiButton variant="secondary" :disabled="busy" @click="confirmRename = false">{{ t('wishes.cancel') }}</UiButton>
@@ -243,13 +301,16 @@ async function removeAvatar() {
   overscroll-behavior: contain;
   scroll-padding-block: var(--wx-space-2);
 }
-.profile-photo, .profile-address, .profile-panel { display: grid; gap: var(--wx-space-3); min-width: 0; }
+.profile-photo, .profile-address, .profile-address-editor, .profile-panel { display: grid; gap: var(--wx-space-3); min-width: 0; }
 .profile-panel, .profile-address { padding-bottom: var(--wx-space-4); border-bottom: 1px solid var(--wx-border); }
-.profile-address > .button { justify-self: start; }
+.profile-address-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--wx-space-2); }
+.profile-address-current { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
+.profile-address-editor > .button { justify-self: start; }
+.profile-address-row .button { min-height: 44px; padding: var(--wx-space-2) var(--wx-space-3); }
 .profile-panel :deep(textarea) { min-height: 0; }
 .profile-hint, .profile-error, .profile-success { margin: 0; font-size: var(--wx-text-sm); line-height: 1.5; }
 .profile-hint { color: var(--wx-text-muted); }
-.profile-visibility h3 { margin: 0 0 var(--wx-space-1); font-size: var(--wx-text-md); }
+.profile-visibility h3, .profile-address h3 { margin: 0 0 var(--wx-space-1); font-size: var(--wx-text-md); }
 .visibility-row { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; font-size: var(--wx-text-sm); cursor: pointer; }
 .visibility-row input { flex: 0 0 auto; width: 20px; height: 20px; margin: 0; accent-color: var(--wx-primary); }
 .visibility-row:has(input:disabled) { color: var(--wx-text-muted); cursor: default; }

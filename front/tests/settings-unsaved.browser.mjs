@@ -106,7 +106,8 @@ try {
     assert.ok((await settings.boundingBox()).width <= 720, `${locale}/${width}: settings width`)
     assert.equal(await settings.getByText('tester@example.test', { exact: true }).isVisible(), false)
     assert.equal(await settings.getByRole('button', { name: messages['auth.logout'] }).isVisible(), false)
-    assert.equal(await settings.getByLabel(messages['profile.address'], { exact: true }).inputValue(), originalDetails.username)
+    assert.equal(await settings.getByText(`${origin}/u/${originalDetails.username}`, { exact: true }).isVisible(), true)
+    assert.equal(await settings.locator('#profile-username').isVisible(), false)
     assert.equal(await settings.evaluate(el => el.scrollWidth > el.clientWidth), false, `${locale}/${width}: profile width`)
     if (locale === 'ru' && [390, 1440].includes(width)) {
       await page.screenshot({ path: fileURLToPath(new URL(`settings-profile-${width}.png`, screenshots)) })
@@ -166,6 +167,7 @@ try {
     assert.equal(await accountTab.getAttribute('aria-pressed'), 'true')
     assert.equal(await settings.getByRole('button', { name: messages['google.connect'] }).isVisible(), false)
     const username = settings.locator('#profile-username')
+    const editAddress = settings.getByRole('button', { name: messages['profile.editAddress'] })
     const date = settings.locator('#profile-birth-date')
     const showAge = settings.getByRole('checkbox', { name: messages['profile.showAge'] })
     const showFollowers = settings.getByRole('checkbox', { name: messages['profile.showFollowers'] })
@@ -174,6 +176,7 @@ try {
     const cancel = settings.locator('.profile-footer').getByRole('button', { name: messages['profile.cancelChanges'] })
 
     await ui.openProfile()
+    await editAddress.click()
     const edits = [
       [() => username.fill('draft_address'), () => username.fill(originalDetails.username)],
       [() => date.fill('2001-01-02'), () => date.fill(originalDetails.birth_date)],
@@ -193,6 +196,7 @@ try {
 
     await ui.openSettings()
     await ui.openProfile()
+    await editAddress.click()
     await name.fill('Cancelled name')
     await bio.fill('Cancelled bio')
     await showFollowers.check()

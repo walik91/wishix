@@ -255,7 +255,6 @@ async function logout() {
             </div>
           </template>
           <template #links>
-            <UiButton variant="ghost" :href="`/u/${encodeURIComponent(profileAccount.username)}`">{{ t('lists.publicProfile') }}</UiButton>
             <UiButton variant="ghost" href="/my/following">{{ t('profile.following') }}</UiButton>
           </template>
         </ProfilePage>

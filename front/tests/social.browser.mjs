@@ -9,14 +9,16 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const errors = []
 await mkdir(new URL('../../.cache/social-screens/', import.meta.url), { recursive: true })
 try {
-  for (const lang of ['en', 'ru', 'ro']) for (const width of [320, 390, 768, 1024, 1440]) {
+  for (const lang of ['en', 'ru', 'ro']) for (const width of [320, 340, 390, 768, 1024, 1440]) {
     const context = await browser.newContext({ locale: lang, viewport: { width, height: 900 } })
     const page = await context.newPage()
     page.on('pageerror', e => errors.push(e.message))
     page.on('console', m => { if (m.text().includes('[Vue warn]')) errors.push(m.text()) })
-    let username = 'example', name = { display_name: 'example' }, state = { self: false, following: false, blocked: false, can_follow: true }
+    if (width === 340) await page.clock.install()
+    let username = width === 340 ? 'a'.repeat(30) : 'example', name = { display_name: 'example' }, state = { self: false, following: false, blocked: false, can_follow: true }
     let details = { username, biography: '', birth_date: null, show_age: false, show_followers: false, show_following: false, has_avatar: false, username_changed_at: null }
     let reports = [], failDetails = false, failState = false
+    let renameError = '', renameRequests = 0
     await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { username, email: 'owner@example.test' } } }))
     await page.route('**/api/lists', route => route.fulfill({ json: { lists: [] } }))
     await page.route('**/api/wishes', route => route.fulfill({ json: { wishes: [] } }))
@@ -24,7 +26,14 @@ try {
     await page.route('**/api/profile/name', route => { if (route.request().method() === 'PUT') name = route.request().postDataJSON(); return route.fulfill({ json: name }) })
     await page.route('**/api/profile/details', route => { if (route.request().method() === 'PUT') details = { ...details, ...route.request().postDataJSON() }; return route.fulfill({ json: details }) })
     await page.route('**/api/profile/collection', route => route.fulfill({ json: { show_all_wishes: false } }))
-    await page.route('**/api/profile/username', route => { assert.deepEqual(Object.keys(route.request().postDataJSON()), ['username']); username = route.request().postDataJSON().username; details.username = username; return route.fulfill({ json: details }) })
+    await page.route('**/api/profile/username', route => {
+      renameRequests++
+      assert.deepEqual(route.request().postDataJSON(), { username: 'example_new' })
+      if (renameError) return route.fulfill({ status: 409, json: { error: renameError } })
+      username = details.username = route.request().postDataJSON().username
+      details.username_changed_at = new Date().toISOString()
+      return route.fulfill({ json: details })
+    })
     await page.route('**/api/profile/avatar*', route => {
       if (route.request().method() === 'PUT') { details.has_avatar = true; return route.fulfill({ json: { status: 'ok' } }) }
       if (route.request().method() === 'DELETE') { details.has_avatar = false; return route.fulfill({ json: { status: 'ok' } }) }
@@ -80,15 +89,76 @@ try {
     })
     assert.equal(sticky, true, `${lang}/${width}: dialog header and section navigation remain visible`)
     if (width < 1024) assert.equal(await page.locator('.bottom-navigation a, .bottom-navigation button').evaluateAll(nodes => nodes.every(node => { const rect = node.getBoundingClientRect(); return !rect.width || (rect.width >= 44 && rect.height >= 44) })), true, `${lang}/${width}/navigation`)
-    if (lang === 'ru' && [390, 1440].includes(width)) await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/profile-${width}.png`, import.meta.url)), fullPage: true })
-    const usernameForm = page.locator('#profile-username').locator('xpath=ancestor::form')
+    const address = profileDialog.getByRole('region', { name: texts[lang]['profile.address'] })
+    const editAddress = address.getByRole('button', { name: texts[lang]['profile.editAddress'], exact: true })
+    const openProfile = address.getByRole('link', { name: texts[lang]['profile.openPublicProfile'], exact: true })
+    const currentAddress = address.getByText(`${origin}/u/${username}`, { exact: true })
+    const usernameField = address.getByLabel(texts[lang]['profile.newUsername'], { exact: true })
+    const usernameForm = address.locator('#profile-address-editor')
+    const change = address.getByRole('button', { name: texts[lang]['profile.changeUsername'], exact: true })
+    const confirm = page.getByRole('dialog', { name: texts[lang]['profile.changeUsername'] })
+    const confirmChange = confirm.getByRole('button', { name: texts[lang]['profile.changeUsername'], exact: true })
+    assert.equal(await openProfile.getAttribute('href'), `/u/${username}`)
+    assert.equal(await editAddress.getAttribute('aria-expanded'), 'false')
+    assert.equal(await currentAddress.isVisible(), true)
+    assert.equal(await usernameForm.isVisible(), false)
+    assert.equal(await address.evaluate(el => el.scrollWidth > el.clientWidth), false, `${lang}/${width}: address width`)
+    assert.equal(await address.locator('.profile-actions > *').evaluateAll(nodes => nodes.every(node => node.offsetWidth >= 44 && node.offsetHeight >= 44)), true)
+    if (lang === 'ru' && [340, 390, 1440].includes(width)) {
+      await currentAddress.scrollIntoViewIfNeeded()
+      await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/profile-${width}.png`, import.meta.url)) })
+    }
+    await editAddress.click()
+    assert.equal(await usernameField.evaluate(el => document.activeElement === el), true)
+    assert.equal(await usernameField.inputValue(), username)
+    assert.equal(await change.isDisabled(), true)
     assert.equal(await usernameForm.locator('input[type=checkbox]').count(), 0)
     assert.equal(await usernameForm.getByText(texts[lang]['profile.redirectHint']).isVisible(), true)
-    await page.locator('#profile-username').fill('example_new')
-    await page.getByRole('button', { name: texts[lang]['profile.changeUsername'], exact: true }).first().click()
-    await page.getByRole('dialog', { name: texts[lang]['profile.changeUsername'] }).getByRole('button', { name: texts[lang]['profile.changeUsername'], exact: true }).click()
+    assert.equal(await usernameForm.getByText(texts[lang]['profile.usernameHint']).isVisible(), true)
+    if (width === 340) {
+      await usernameField.fill('bad address!')
+      await change.click()
+      assert.equal(await usernameField.getAttribute('aria-invalid'), 'true')
+      assert.equal(await address.locator('#profile-username-error').textContent(), texts[lang]['profile.usernameInvalid'])
+      assert.equal(renameRequests, 0)
+      assert.equal(await confirm.isVisible(), false)
+      await address.getByRole('button', { name: texts[lang]['profile.cancelAddressEdit'], exact: true }).click()
+      assert.equal(await usernameForm.isVisible(), false)
+      await editAddress.click()
+      assert.equal(await usernameField.inputValue(), username)
+      await usernameField.fill('Example_New')
+      for (const [error, message] of [['username_taken', 'profile.usernameTaken'], ['username_cooldown', 'profile.usernameCooldown']]) {
+        renameError = error
+        await change.click()
+        await confirmChange.click()
+        await confirm.waitFor({ state: 'hidden' })
+        await usernameForm.getByText(texts[lang][message], { exact: true }).waitFor()
+        assert.equal(await usernameField.inputValue(), 'Example_New')
+        assert.equal(await currentAddress.isVisible(), true)
+      }
+      renameError = ''
+    }
+    await usernameField.fill('Example_New')
+    await change.click()
+    assert.equal(await confirm.getByText('/u/example_new', { exact: true }).isVisible(), true)
+    assert.equal(renameRequests, width === 340 ? 2 : 0)
+    await confirmChange.click()
     await profileDialog.locator('.profile-address').getByRole('status').getByText(texts[lang]['profile.usernameSaved']).waitFor()
     assert.equal(username, 'example_new')
+    assert.equal(await usernameForm.isVisible(), false)
+    assert.equal(await openProfile.getAttribute('href'), '/u/example_new')
+    assert.equal(await editAddress.evaluate(el => document.activeElement === el), true)
+    await editAddress.click()
+    assert.equal(await usernameField.isDisabled(), true)
+    assert.equal(await change.isDisabled(), true)
+    const availableAt = new Date(Date.parse(details.username_changed_at) + 30 * 24 * 60 * 60 * 1000).toISOString()
+    assert.equal(await address.locator('time').getAttribute('datetime'), availableAt)
+    if (width === 340) {
+      assert.equal(await profileDialog.locator('.profile-scroll').evaluate(el => el.scrollWidth > el.clientWidth), false)
+      await page.clock.fastForward(30 * 24 * 60 * 60 * 1000 + 1000)
+      await usernameField.locator('xpath=self::*[not(@disabled)]').waitFor()
+      assert.equal(await address.locator('time').count(), 0)
+    }
     await profileDialog.locator(':scope > header > button.close').click()
     await page.waitForURL('**/my')
     assert.equal(new URL(page.url()).pathname, '/my')
@@ -96,7 +166,8 @@ try {
     await page.locator('.app-navigation:visible').getByRole('button', { name: texts[lang]['my.profile'], exact: true }).click()
     assert.equal(await profileDialog.getAttribute('aria-label'), texts[lang]['profile.settings'])
     assert.equal(await profileDialog.getByRole('button', { name: texts[lang]['my.profile'], exact: true }).getAttribute('aria-pressed'), 'true')
-    assert.equal(await profileDialog.getByRole('link', { name: texts[lang]['lists.publicProfile'] }).getAttribute('href'), '/u/example_new')
+    await openProfile.waitFor()
+    assert.equal(await openProfile.getAttribute('href'), '/u/example_new')
     await profileDialog.getByRole('link', { name: texts[lang]['profile.following'], exact: true }).click()
     await page.waitForURL(`${origin}/my/following`)
     await page.getByRole('heading', { name: texts[lang]['social.title'] }).waitFor()
@@ -130,5 +201,5 @@ try {
     await context.close()
   }
   assert.deepEqual(errors, [])
-  console.log('Profile and social: EN/RU/RO × 320/390/768/1024/1440 passed.')
+  console.log('Profile and social: EN/RU/RO × 320/340/390/768/1024/1440 passed, including address validation and cooldown.')
 } finally { await browser.close() }
