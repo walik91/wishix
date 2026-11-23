@@ -9,8 +9,7 @@ import UiBadge from '../ui/UiBadge.vue'
 import UiButton from '../ui/UiButton.vue'
 import UiDialog from '../ui/UiDialog.vue'
 
-const props = defineProps({ wish: { type: Object, required: true }, readOnly: Boolean, removeFromList: Boolean, preview: Boolean })
-const canEdit = computed(() => !props.readOnly && !props.preview)
+const props = defineProps({ wish: { type: Object, required: true }, readOnly: Boolean, removeFromList: Boolean })
 const windowListID = window.location.pathname.split('/').pop()
 const emit = defineEmits(['delete', 'image', 'copied'])
 const copying = ref(false), copyError = ref(false)
@@ -34,27 +33,25 @@ function shopHost(link) { try { return new URL(link).hostname } catch { return l
 </script>
 
 <template>
-  <UiCard class="wish-card" :class="{ 'wish-card-preview': preview }" :data-wish-id="wish.id">
+  <UiCard class="wish-card" :data-wish-id="wish.id">
     <div class="wish-heading">
-      <component :is="canEdit ? 'button' : 'div'" class="wish-image" :type="canEdit ? 'button' : undefined" :aria-label="canEdit ? `${t(wish.image_url ? 'wishes.replaceImage' : 'wishes.chooseImage')}: ${wish.title}` : undefined" @click="canEdit && $emit('image', wish)"><img v-if="wish.image_url" :src="wish.image_url" :alt="preview ? '' : wish.title" loading="lazy" decoding="async" /><AppIcon v-else name="image" /></component>
+      <component :is="readOnly ? 'div' : 'button'" class="wish-image" :type="readOnly ? undefined : 'button'" :aria-label="readOnly ? undefined : `${t(wish.image_url ? 'wishes.replaceImage' : 'wishes.chooseImage')}: ${wish.title}`" @click="!readOnly && $emit('image', wish)"><img v-if="wish.image_url" :src="wish.image_url" :alt="wish.title" loading="lazy" decoding="async" /><AppIcon v-else name="image" /></component>
       <div class="wish-summary">
         <h2>{{ wish.title }}</h2>
         <p v-if="price" class="wish-price"><span aria-hidden="true">≈ </span><span class="sr-only">{{ t('wishes.approximate') }} </span>{{ price }}</p>
       </div>
-      <button v-if="canEdit" class="delete-wish" type="button" :aria-label="`${t(removeFromList ? 'lists.remove' : 'wishes.delete')}: ${wish.title}`" @click="$emit('delete', wish)"><AppIcon :name="removeFromList ? 'close' : 'trash'" /></button>
+      <button v-if="!readOnly" class="delete-wish" type="button" :aria-label="`${t(removeFromList ? 'lists.remove' : 'wishes.delete')}: ${wish.title}`" @click="$emit('delete', wish)"><AppIcon :name="removeFromList ? 'close' : 'trash'" /></button>
     </div>
-    <template v-if="!preview">
-      <UiBadge class="priority" :class="wish.priority">{{ t(`wishes.priority.${wish.priority}`) }}</UiBadge>
-      <UiBadge v-if="wish.received" class="priority">{{ t('lists.received') }}</UiBadge>
-      <p v-if="wish.description" class="description collapsed">{{ wish.description }}</p>
-      <button v-if="wish.description" class="description-toggle" type="button" aria-haspopup="dialog" @click="descriptionOpen = true">{{ t('wishes.showMore') }}</button>
-      <ul v-if="wish.shop_links.length" class="shop-links" :aria-label="t('wishes.shopLinks')">
-        <li v-for="(link, index) in wish.shop_links" :key="index"><a :href="link" target="_blank" rel="noopener noreferrer" @click="trackEvent('shop_link_opened')"><AppIcon name="link" /><span>{{ shopHost(link) }}</span><span class="sr-only"> · {{ t('wishes.newTab') }}</span></a></li>
-      </ul>
-      <div v-if="canEdit || $slots.actions" class="wish-actions"><a v-if="canEdit" class="edit-wish" :href="`/my/wishes/${encodeURIComponent(wish.id)}/edit${removeFromList ? `?list=${encodeURIComponent(windowListID)}` : ''}`">{{ t('wishes.edit') }}</a><UiButton v-if="canEdit" variant="secondary" :loading="copying" @click="copy">{{ t('wishes.copy') }}</UiButton><slot name="actions" /></div>
-      <p v-if="copyError" class="copy-error" role="alert">{{ t('wishes.copyError') }}</p>
-      <Teleport to="body"><UiDialog v-model:open="descriptionOpen" :title="wish.title"><p class="full-description">{{ wish.description }}</p></UiDialog></Teleport>
-    </template>
+    <UiBadge class="priority" :class="wish.priority">{{ t(`wishes.priority.${wish.priority}`) }}</UiBadge>
+    <UiBadge v-if="wish.received" class="priority">{{ t('lists.received') }}</UiBadge>
+    <p v-if="wish.description" class="description collapsed">{{ wish.description }}</p>
+    <button v-if="wish.description" class="description-toggle" type="button" aria-haspopup="dialog" @click="descriptionOpen = true">{{ t('wishes.showMore') }}</button>
+    <ul v-if="wish.shop_links.length" class="shop-links" :aria-label="t('wishes.shopLinks')">
+      <li v-for="(link, index) in wish.shop_links" :key="index"><a :href="link" target="_blank" rel="noopener noreferrer" @click="trackEvent('shop_link_opened')"><AppIcon name="link" /><span>{{ shopHost(link) }}</span><span class="sr-only"> · {{ t('wishes.newTab') }}</span></a></li>
+    </ul>
+    <div v-if="!readOnly || $slots.actions" class="wish-actions"><a v-if="!readOnly" class="edit-wish" :href="`/my/wishes/${encodeURIComponent(wish.id)}/edit${removeFromList ? `?list=${encodeURIComponent(windowListID)}` : ''}`">{{ t('wishes.edit') }}</a><UiButton v-if="!readOnly" variant="secondary" :loading="copying" @click="copy">{{ t('wishes.copy') }}</UiButton><slot name="actions" /></div>
+    <p v-if="copyError" class="copy-error" role="alert">{{ t('wishes.copyError') }}</p>
+    <Teleport to="body"><UiDialog v-model:open="descriptionOpen" :title="wish.title"><p class="full-description">{{ wish.description }}</p></UiDialog></Teleport>
   </UiCard>
 </template>
 
@@ -70,9 +67,6 @@ function shopHost(link) { try { return new URL(link).hostname } catch { return l
 .wish-summary { flex: 1; min-width: 0; padding-top: var(--wx-space-1); }
 h2 { margin: 0; font-size: var(--wx-text-md); line-height: 1.5; font-weight: 650; }
 .wish-price { margin: var(--wx-space-2) 0 0; font-size: var(--wx-text-sm); font-weight: 600; line-height: 1.5; }
-.wish-card-preview .wish-heading { align-items: center; }
-.wish-card-preview .wish-summary { padding-top: 0; }
-.wish-card-preview .wish-price { margin-top: var(--wx-space-1); }
 .delete-wish { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; margin: -4px -4px 0 0; border: 0; border-radius: var(--wx-radius-sm); color: var(--wx-text-muted); background: transparent; cursor: pointer; }
 .delete-wish:hover { color: var(--wx-error); background: var(--wx-background); }
 .delete-wish:active { color: var(--wx-error); background: var(--wx-lavender); }
