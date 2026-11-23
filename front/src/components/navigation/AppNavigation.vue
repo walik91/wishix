@@ -3,10 +3,11 @@ import { t } from '../../i18n.js'
 import AppIcon from '../ui/AppIcon.vue'
 defineProps({ profileAvailable: Boolean, profileActive: Boolean })
 defineEmits(['profile'])
-const inWishes = window.location.pathname.startsWith('/my/wishes')
-const inLists = window.location.pathname.startsWith('/my/lists')
-const inSearch = window.location.pathname === '/my/search'
-const inFollowing = window.location.pathname === '/my/following'
+const path = window.location.pathname.replace(/\/+$/, '')
+const inWishes = path.startsWith('/my/wishes')
+const inLists = path.startsWith('/my/lists')
+const inSearch = path === '/my/search'
+const inFollowing = path === '/my/following'
 </script>
 
 <template>
@@ -16,23 +17,27 @@ const inFollowing = window.location.pathname === '/my/following'
     <a class="nav-item" :class="{ active: inLists }" href="/my/lists" :aria-current="inLists ? 'page' : undefined"><AppIcon name="list" /><span>{{ t('lists.nav') }}</span></a>
     <a class="nav-item" :class="{ active: inSearch }" href="/my/search" :aria-current="inSearch ? 'page' : undefined"><AppIcon name="search" /><span>{{ t('my.search') }}</span></a>
     <a class="nav-item following" :class="{ active: inFollowing }" href="/my/following" :aria-current="inFollowing ? 'page' : undefined"><AppIcon name="users" /><span>{{ t('my.following') }}</span></a>
-    <button class="nav-item" :class="{ active: profileActive }" type="button" :disabled="!profileAvailable" @click="$emit('profile')"><AppIcon name="user" /><span>{{ t('my.profile') }}</span></button>
+    <button class="nav-item" :class="{ active: profileActive }" type="button" aria-haspopup="dialog" :aria-expanded="profileActive" :disabled="!profileAvailable" @click="$emit('profile')"><AppIcon name="user" /><span>{{ t('my.profile') }}</span></button>
   </nav>
 </template>
 
 <style scoped>
 .app-navigation { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--wx-space-1); }
-.nav-item { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--wx-space-1); min-width: 0; min-height: 56px; padding: var(--wx-space-2) var(--wx-space-1); border: 0; border-radius: var(--wx-radius-md); color: var(--wx-text-muted); background: transparent; font-size: var(--wx-text-xs); font-weight: 500; line-height: 1.4; text-align: center; text-decoration: none; overflow-wrap: anywhere; cursor: pointer; }
+.nav-item { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--wx-space-1); min-width: 0; min-height: 56px; padding: var(--wx-space-1) 0; border: 0; border-radius: var(--wx-radius-md); color: var(--wx-text-muted); background: transparent; font-size: var(--wx-text-xs); font-weight: 500; line-height: 1.4; text-align: center; text-decoration: none; cursor: pointer; }
 .nav-item .icon { width: 22px; height: 22px; }
+.nav-item span { max-width: 100%; }
 .active { color: var(--wx-primary); background: var(--wx-lavender); font-weight: 600; }
 .nav-item:hover:not(:disabled, .active) { color: var(--wx-primary); background: var(--wx-background); }
 .nav-item:active:not(:disabled) { background: var(--wx-lavender); }
 .nav-item:disabled { opacity: .55; cursor: not-allowed; }
 small { display: none; }
 .following { display: none; }
+@media (width < 64rem) {
+  .nav-item:focus-visible { outline-offset: -3px; }
+}
 @media (min-width: 64rem) {
   .app-navigation { grid-template-columns: 1fr; gap: var(--wx-space-2); }
-  .nav-item { flex-direction: row; justify-content: flex-start; gap: var(--wx-space-3); min-height: 48px; padding: var(--wx-space-3); font-size: var(--wx-text-sm); text-align: left; }
+  .nav-item { flex-direction: row; justify-content: flex-start; gap: var(--wx-space-3); min-height: 48px; padding: var(--wx-space-3); font-size: var(--wx-text-sm); text-align: left; overflow-wrap: anywhere; }
   small { display: inline; margin-left: auto; font-size: var(--wx-text-xs); font-weight: 400; }
   .following { display: flex; }
 }

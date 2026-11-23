@@ -241,7 +241,15 @@ async function logout() {
 .profile-button:disabled { opacity: .55; cursor: default; }
 .header-username, .profile-chevron { display: none; }
 .app-content { flex: 1; width: 100%; max-width: var(--wx-content-max); margin-inline: auto; padding: var(--wx-space-6) var(--wx-space-4); }
-.bottom-navigation { position: fixed; z-index: 5; inset: auto 0 0; padding: var(--wx-space-2) var(--wx-space-2) max(var(--wx-space-2), env(safe-area-inset-bottom)); border-top: 1px solid var(--wx-border); background: var(--wx-surface); }
+.bottom-navigation {
+  position: fixed;
+  z-index: 5;
+  inset: auto 0 0;
+  padding-block: var(--wx-space-2) max(var(--wx-space-2), env(safe-area-inset-bottom));
+  padding-inline: max(var(--wx-space-1), env(safe-area-inset-left)) max(var(--wx-space-1), env(safe-area-inset-right));
+  border-top: 1px solid var(--wx-border);
+  background: var(--wx-surface);
+}
 .profile-layout { min-width: 0; }
 .profile-sections { position: sticky; z-index: 1; top: calc(45px + var(--wx-space-3) + var(--wx-space-3)); padding: var(--wx-space-2) var(--wx-space-5); border-bottom: 1px solid var(--wx-border); background: var(--wx-surface); }
 .profile-section-list { display: flex; gap: var(--wx-space-2); }
