@@ -12,7 +12,7 @@ import UiSkeleton from '../components/ui/UiSkeleton.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import TextField from '../components/ui/TextField.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
-import WishDiscardDialog from '../components/wishes/WishDiscardDialog.vue'
+import DiscardChangesDialog from '../components/ui/DiscardChangesDialog.vue'
 import WishPriceFields from '../components/wishes/WishPriceFields.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -166,7 +166,7 @@ async function submit() {
       </template>
     </template>
   </div>
-  <WishDiscardDialog :open="!!leaveDestination" @update:open="leaveDestination = ''" @discard="leave(leaveDestination)" />
+  <DiscardChangesDialog :open="!!leaveDestination" :description="t('wishes.discard.description')" @update:open="leaveDestination = ''" @discard="leave(leaveDestination)" />
 </template>
 
 <style scoped>

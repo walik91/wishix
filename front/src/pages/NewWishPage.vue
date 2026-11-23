@@ -15,7 +15,7 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import TextField from '../components/ui/TextField.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
 import WishImageInput from '../components/wishes/WishImageInput.vue'
-import WishDiscardDialog from '../components/wishes/WishDiscardDialog.vue'
+import DiscardChangesDialog from '../components/ui/DiscardChangesDialog.vue'
 import WishPriceFields from '../components/wishes/WishPriceFields.vue'
 import ListCheckboxes from '../components/lists/ListCheckboxes.vue'
 import { listLists } from '../api/lists.js'
@@ -236,7 +236,7 @@ async function submit() {
       <UiToast v-if="importNotice" :key="importNoticeSequence" :duration="importNotice === 'ok' ? 3000 : 6000" :variant="importNotice === 'ok' ? 'success' : 'info'" @dismiss="importNotice = ''">{{ t(`wishes.import.${importNotice}`) }}</UiToast>
     </template>
   </div>
-  <WishDiscardDialog :open="!!leaveDestination" @update:open="leaveDestination = ''" @discard="leave(leaveDestination)" />
+  <DiscardChangesDialog :open="!!leaveDestination" :description="t('wishes.discard.description')" @update:open="leaveDestination = ''" @discard="leave(leaveDestination)" />
 </template>
 
 <style scoped>

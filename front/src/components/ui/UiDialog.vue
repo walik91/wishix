@@ -2,14 +2,19 @@
 import { onMounted, ref, watch } from 'vue'
 import { t } from '../../i18n.js'
 import AppIcon from './AppIcon.vue'
-const props = defineProps({ open: Boolean, busy: Boolean, title: { type: String, required: true } })
+const props = defineProps({ open: Boolean, busy: Boolean, title: { type: String, required: true }, beforeClose: Function })
 const emit = defineEmits(['update:open'])
 const dialog = ref(null)
 function syncOpen() {
   if (props.open && !dialog.value.open) dialog.value.showModal()
   else if (!props.open && dialog.value.open) dialog.value.close()
 }
-function close() { if (!props.busy) dialog.value.close() }
+function requestClose() {
+  if (!props.busy && (!props.beforeClose || props.beforeClose())) emit('update:open', false)
+}
+function onClose() {
+  if (props.open && !dialog.value.open) emit('update:open', false)
+}
 function trapFocus(event) {
   if (event.target.closest('dialog') !== dialog.value) return
   if (event.key !== 'Tab') return
@@ -28,15 +33,15 @@ function trapFocus(event) {
 function backdrop(event) {
   if (event.target !== dialog.value) return
   const rect = dialog.value.getBoundingClientRect()
-  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close()
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) requestClose()
 }
 onMounted(syncOpen)
 watch(() => props.open, syncOpen)
 </script>
 
 <template>
-  <dialog ref="dialog" class="dialog" :aria-label="title" :aria-busy="busy || undefined" @cancel="busy && $event.preventDefault()" @close="emit('update:open', false)" @click="backdrop" @keydown="trapFocus">
-    <header><h2>{{ title }}</h2><button type="button" class="close" :disabled="busy" autofocus :aria-label="t('my.close')" @click="close"><AppIcon name="close" /></button></header>
+  <dialog ref="dialog" class="dialog" :aria-label="title" :aria-busy="busy || undefined" @cancel.prevent="requestClose" @close="onClose" @click="backdrop" @keydown="trapFocus">
+    <header><h2>{{ title }}</h2><button type="button" class="close" :disabled="busy" :aria-label="t('my.close')" @click="requestClose"><AppIcon name="close" /></button></header>
     <slot />
   </dialog>
 </template>

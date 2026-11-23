@@ -12,6 +12,7 @@ import LanguagePicker from '../components/ui/LanguagePicker.vue'
 import UserAvatar from '../components/ui/UserAvatar.vue'
 import UiDialog from '../components/ui/UiDialog.vue'
 import UiButton from '../components/ui/UiButton.vue'
+import DiscardChangesDialog from '../components/ui/DiscardChangesDialog.vue'
 import SiteFooter from '../components/layout/SiteFooter.vue'
 import SocialAuthButtons from '../components/auth/SocialAuthButtons.vue'
 import CodeVerification from '../components/auth/CodeVerification.vue'
@@ -28,48 +29,80 @@ const facebookResult = new URLSearchParams(window.location.search).get('facebook
 const profileLink = window.location.pathname.replace(/\/+$/, '') === '/my/profile'
 const profileOpen = ref(profileLink || ['linked', 'error', 'conflict'].includes(googleResult) || ['linked', 'error', 'conflict'].includes(facebookResult) || new URLSearchParams(window.location.search).has('add_email'))
 const profileSection = ref('general'), profileVisited = ref(false)
-const profileDialog = ref(null)
+const profileDialog = ref(null), profilePage = ref(null), discardProfileOpen = ref(false)
 const googleEnabled = ref(false), googleLinked = ref(false), googleBusy = ref(false), googleError = ref('')
 const facebookEnabled = ref(false), facebookLinked = ref(false), facebookBusy = ref(false), facebookError = ref('')
 const emailInput = ref(''), emailChallenge = ref('')
 const { busy: emailBusy, error: emailError, remaining: emailRemaining, cooldown: emailCooldown, run: emailRun } = useAuthForm()
 const signingOut = ref(false)
 const error = ref('')
-const collectionEnabled = ref(false), collectionLoading = ref(false), collectionReady = ref(false), collectionError = ref('')
-const displayName = ref(''), nameReady = ref(false), nameLoading = ref(false), nameError = ref(''), nameSaved = ref(false)
-watch(profileOpen, async open => {
+const collectionEnabled = ref(false), savedCollection = ref(null), collectionLoading = ref(false), collectionError = ref('')
+const displayName = ref(''), savedName = ref(null), nameLoading = ref(false), nameError = ref(''), nameSaved = ref(false)
+const nameReady = computed(() => savedName.value !== null)
+const collectionReady = computed(() => savedCollection.value !== null)
+const collectionChanged = computed(() => collectionReady.value && collectionEnabled.value !== savedCollection.value)
+const profileSaving = computed(() => (nameReady.value && nameLoading.value) || (collectionReady.value && collectionLoading.value) || !!profilePage.value?.busy)
+
+watch(profileOpen, async (open, _, onCleanup) => {
   if (!open) {
     profileSection.value = 'general'; profileVisited.value = false
     if (window.location.pathname.replace(/\/+$/, '') === '/my/profile') window.history.replaceState(null, '', '/my')
     return
   }
-  nameLoading.value = true; nameReady.value = false; nameError.value = ''; nameSaved.value = false
-  try { const data = await getProfileName(); displayName.value = data.display_name; nameReady.value = true }
-  catch { nameError.value = t('profile.nameError') }
-  finally { nameLoading.value = false }
-  try { const status = await googleStatus(); googleEnabled.value = status.enabled; googleLinked.value = status.linked }
-  catch { googleEnabled.value = false }
-  try { const status = await facebookStatus(); facebookEnabled.value = status.enabled; facebookLinked.value = status.linked }
-  catch { facebookEnabled.value = false }
-  collectionLoading.value = true; collectionReady.value = false; collectionError.value = ''
-  try { collectionEnabled.value = (await getCollectionSetting()).show_all_wishes; collectionReady.value = true }
-  catch { collectionError.value = t('profile.settingsError') }
-  finally { collectionLoading.value = false }
+  let active = true
+  onCleanup(() => { active = false })
+  nameLoading.value = true; savedName.value = null; nameError.value = ''; nameSaved.value = false
+  collectionLoading.value = true; savedCollection.value = null; collectionError.value = ''
+  try {
+    const data = await getProfileName()
+    if (active) displayName.value = savedName.value = data.display_name
+  } catch { if (active) nameError.value = t('profile.nameError') }
+  finally { if (active) nameLoading.value = false }
+  if (!active) return
+  try {
+    const status = await googleStatus()
+    if (active) { googleEnabled.value = status.enabled; googleLinked.value = status.linked }
+  } catch { if (active) googleEnabled.value = false }
+  if (!active) return
+  try {
+    const status = await facebookStatus()
+    if (active) { facebookEnabled.value = status.enabled; facebookLinked.value = status.linked }
+  } catch { if (active) facebookEnabled.value = false }
+  if (!active) return
+  try {
+    const data = await getCollectionSetting()
+    if (active) collectionEnabled.value = savedCollection.value = data.show_all_wishes
+  } catch { if (active) collectionError.value = t('profile.settingsError') }
+  finally { if (active) collectionLoading.value = false }
 }, { immediate: true })
+function beforeProfileClose() {
+  const nameChanged = nameReady.value && displayName.value !== savedName.value
+  if (!nameChanged && !collectionChanged.value && !profilePage.value?.hasUnsavedChanges) return true
+  discardProfileOpen.value = true
+  return false
+}
+async function discardProfileChanges() {
+  discardProfileOpen.value = false
+  await nextTick()
+  profileOpen.value = false
+}
 function selectProfileSection(section) {
   if (profileSection.value === section) return
   profileSection.value = section
   if (section === 'profile') profileVisited.value = true
   nextTick(() => profileDialog.value?.$el.scrollTo({ top: 0 }))
 }
-watch(displayName, () => { nameSaved.value = false })
 async function saveName() {
   if (nameLoading.value) return
   nameError.value = ''; nameSaved.value = false
   if (!displayName.value.trim()) { nameError.value = t('profile.nameRequired'); return }
   if ([...displayName.value.trim()].length > 100) { nameError.value = t('profile.nameTooLong'); return }
   nameLoading.value = true
-  try { const data = await setProfileName(displayName.value); displayName.value = data.display_name; nameSaved.value = true }
+  try {
+    const data = await setProfileName(displayName.value)
+    displayName.value = savedName.value = data.display_name
+    nameSaved.value = true
+  }
   catch { nameError.value = t('profile.nameError') }
   finally { nameLoading.value = false }
 }
@@ -88,11 +121,17 @@ async function linkFacebook() {
 function sendEmailCode() { return emailRun(async () => { const result = await addEmail({ email: emailInput.value, locale: locale.value }); emailChallenge.value = result.challenge; emailCooldown(result.resend_after) }) }
 function resendEmailCode() { return emailRun(async () => { const result = await resendCode(emailChallenge.value); emailCooldown(result.resend_after) }) }
 function verifyAddedEmail(code) { return emailRun(async () => { await confirmAddedEmail(emailChallenge.value, code); emailChallenge.value = ''; await refresh() }) }
-async function changeCollection(event) {
-  const next = event.target.checked
+function changeCollection(event) {
+  collectionEnabled.value = event.target.checked
+  saveCollection()
+}
+async function saveCollection() {
+  if (collectionLoading.value) return
   collectionLoading.value = true; collectionError.value = ''
-  try { collectionEnabled.value = (await setCollectionSetting(next)).show_all_wishes }
-  catch { collectionReady.value = false; collectionError.value = t('profile.settingsError'); event.target.checked = collectionEnabled.value }
+  try {
+    const data = await setCollectionSetting(collectionEnabled.value)
+    collectionEnabled.value = savedCollection.value = data.show_all_wishes
+  } catch { collectionError.value = t('profile.settingsError') }
   finally { collectionLoading.value = false }
 }
 async function logout() {
@@ -139,7 +178,7 @@ async function logout() {
       <AppNavigation :profile-available="!!account" :profile-active="profileOpen" @profile="profileOpen = true" />
     </div>
 
-    <UiDialog ref="profileDialog" v-model:open="profileOpen" class="profile-dialog" :title="t(profileSection === 'general' ? 'profile.general' : 'my.profile')">
+    <UiDialog ref="profileDialog" v-model:open="profileOpen" class="profile-dialog" :busy="profileSaving" :before-close="beforeProfileClose" :title="t(profileSection === 'general' ? 'profile.general' : 'my.profile')">
       <template v-if="profileAccount">
         <div class="profile-layout">
           <nav class="profile-sections" :aria-label="t('my.profile')">
@@ -162,7 +201,7 @@ async function logout() {
             </dl>
             <form class="name-setting" @submit.prevent="saveName">
               <div class="name-field-row">
-                <TextField id="profile-display-name" v-model="displayName" :label="t('profile.displayName')" :hint="t('profile.nameHint')" maxlength="200" required :disabled="nameLoading || !nameReady" />
+                <TextField id="profile-display-name" v-model="displayName" :label="t('profile.displayName')" :hint="t('profile.nameHint')" maxlength="200" required :disabled="nameLoading || !nameReady" @update:model-value="nameSaved = false" />
                 <UiButton type="submit" variant="secondary" :loading="nameLoading" :disabled="!nameReady">{{ t('profile.saveName') }}</UiButton>
               </div>
               <p v-if="nameSaved" role="status">{{ t('profile.nameSaved') }}</p>
@@ -195,6 +234,7 @@ async function logout() {
               <label><input type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
               <p>{{ t('profile.showAllWarning') }}</p>
               <p v-if="collectionError" class="auth-error" role="alert">{{ collectionError }}</p>
+              <UiButton v-if="collectionError && collectionChanged" variant="secondary" @click="saveCollection">{{ t('checkAgain') }}</UiButton>
             </div>
             <div class="profile-actions">
               <UiButton class="profile-public-link" variant="secondary" href="/my/following">{{ t('social.title') }}</UiButton>
@@ -205,10 +245,11 @@ async function logout() {
             </div>
             <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
           </div>
-          <div v-if="profileOpen && profileVisited" v-show="profileSection === 'profile'" class="profile-content"><ProfilePage /></div>
+          <div v-if="profileOpen && profileVisited" v-show="profileSection === 'profile'" class="profile-content"><ProfilePage ref="profilePage" /></div>
         </div>
       </template>
     </UiDialog>
+    <DiscardChangesDialog v-model:open="discardProfileOpen" :description="t('profile.discardDescription')" @discard="discardProfileChanges" />
   </div>
 </template>
 

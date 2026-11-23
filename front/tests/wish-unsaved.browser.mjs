@@ -26,14 +26,14 @@ async function setup(locale = 'en', width = 390) {
   })
   const page = await context.newPage()
   const messages = JSON.parse(await readFile(new URL(`../src/locales/${locale}.json`, import.meta.url)))
-  const dialog = page.getByRole('dialog', { name: messages['wishes.discard.title'] })
+  const dialog = page.getByRole('dialog', { name: messages['discard.title'] })
   return {
     context, page, dialog, messages,
     title: page.locator('#wish-title'),
     menu: page.locator('.app-navigation a[href="/my"]:visible'),
     cancel: page.getByRole('link', { name: messages['wishes.cancel'], exact: true }),
-    keep: dialog.getByRole('button', { name: messages['wishes.discard.continue'] }),
-    leave: dialog.getByRole('button', { name: messages['wishes.discard.leave'] }),
+    keep: dialog.getByRole('button', { name: messages['discard.continue'] }),
+    leave: dialog.getByRole('button', { name: messages['discard.leave'] }),
   }
 }
 

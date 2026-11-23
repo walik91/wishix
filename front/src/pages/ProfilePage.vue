@@ -11,21 +11,50 @@ import UiSkeleton from '../components/ui/UiSkeleton.vue'
 import UserAvatar from '../components/ui/UserAvatar.vue'
 const { user, checking, unavailable, refresh } = useSession()
 const loading = ref(true), busy = ref(false), error = ref(''), notice = ref(''), settings = ref(null)
+const savedFields = ref(null)
 const username = ref(''), confirmRename = ref(false), avatarVersion = ref(Date.now()), picker = ref(null)
 const avatarURL = computed(() => settings.value?.has_avatar ? `/api/profile/avatar?v=${avatarVersion.value}` : '')
+const hasUnsavedChanges = computed(() => {
+  if (!settings.value) return false
+  const fields = editableFields(settings.value)
+  return username.value !== settings.value.username
+    || Object.keys(fields).some(key => fields[key] !== savedFields.value[key])
+})
+defineExpose({ hasUnsavedChanges, busy })
+
+function editableFields(value) {
+  return {
+    biography: value.biography,
+    birth_date: value.birth_date || null,
+    show_age: !!value.birth_date && value.show_age,
+    show_followers: value.show_followers,
+    show_following: value.show_following,
+  }
+}
+function acceptSavedDetails(details) {
+  savedFields.value = editableFields(details)
+  settings.value = { ...details, birth_date: details.birth_date || '' }
+}
+
 watch([user, checking, unavailable], async ([account, pending, failed]) => { if (account && !pending && !failed && !settings.value) await load() }, { immediate: true })
 watch(() => settings.value?.birth_date, value => { if (!value && settings.value) settings.value.show_age = false })
 async function load() {
   loading.value = true; error.value = ''
-  try { const details = await getProfileDetails(); details.birth_date ||= ''; settings.value = details; username.value = details.username }
+  try {
+    const details = await getProfileDetails()
+    acceptSavedDetails(details)
+    username.value = details.username
+  }
   catch { error.value = t('profile.loadError') }
   finally { loading.value = false }
 }
 async function saveDetails() {
   if (busy.value) return
   busy.value = true; error.value = ''; notice.value = ''
-  const value = settings.value
-  try { settings.value = await saveProfileDetails({ biography: value.biography, birth_date: value.birth_date || null, show_age: !!value.birth_date && value.show_age, show_followers: value.show_followers, show_following: value.show_following }); settings.value.birth_date ||= ''; notice.value = t('profile.saved') }
+  try {
+    acceptSavedDetails(await saveProfileDetails(editableFields(settings.value)))
+    notice.value = t('profile.saved')
+  }
   catch (failure) { error.value = failure.code === 'invalid_input' ? t('profile.invalidDetails') : t('profile.saveError') } finally { busy.value = false }
 }
 async function rename() {
