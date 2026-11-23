@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { t } from '../../i18n.js'
+import { rememberProfileDestination } from '../../composables/usePublicProfileFocus.js'
 
 const props = defineProps({
   username: { type: String, required: true },
@@ -25,6 +26,7 @@ const sections = computed(() => {
       :key="section.id"
       :href="section.href"
       :aria-current="section.id === current ? 'page' : undefined"
+      @click="rememberProfileDestination"
     >{{ t(section.label) }}</a>
   </nav>
 </template>

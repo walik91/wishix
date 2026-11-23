@@ -23,7 +23,7 @@ try {
     let publicPeople = []
     let peopleStatus = 200, nextCursor = '', pendingPeople
     const publicCursors = []
-    const publicName = width === 340 ? 'Bob Example ' + 'a'.repeat(88) : 'Bob Example'
+    const publicName = width <= 390 ? 'Bob Example ' + 'a'.repeat(88) : 'Bob Example'
     await page.route('**/api/auth/me', route => {
       if (sessionFailure) return route.fulfill({ status: 503, json: { error: 'unavailable' } })
       if (guest) return route.fulfill({ status: 401, json: { error: 'invalid_session' } })
@@ -31,7 +31,7 @@ try {
     })
     await page.route('**/api/lists', route => route.fulfill({ json: { lists: [] } }))
     await page.route('**/api/wishes', route => route.fulfill({ json: { wishes: [] } }))
-    await page.route('**/u/bob', route => route.fulfill({ contentType: 'text/html', body: indexHTML }))
+    await page.route('**/u/bob', route => route.fulfill({ headers: { 'referrer-policy': 'no-referrer' }, contentType: 'text/html', body: indexHTML }))
     await page.route('**/api/profile/name', route => { if (route.request().method() === 'PUT') name = route.request().postDataJSON(); return route.fulfill({ json: name }) })
     await page.route('**/api/profile/details', route => { if (route.request().method() === 'PUT') details = { ...details, ...route.request().postDataJSON() }; return route.fulfill({ json: details }) })
     await page.route('**/api/profile/collection', route => route.fulfill({ json: { show_all_wishes: false } }))
@@ -203,6 +203,11 @@ try {
     await page.goto(`${origin}/u/bob`)
     const profileHeading = page.getByRole('heading', { name: `${publicName} @bob`, exact: true })
     await profileHeading.waitFor()
+    const skipLink = page.getByRole('link', { name: texts[lang]['home.skipToContent'], exact: true })
+    await page.keyboard.press('Tab')
+    await skipLink.and(page.locator(':focus-visible')).waitFor()
+    await page.keyboard.press('Enter')
+    await page.getByRole('main').and(page.locator(':focus')).waitFor()
     await page.getByText(`${texts[lang]['profile.age']}: 25`, { exact: true }).waitFor()
     const publicHeader = page.locator('.public-header')
     const mySpace = publicHeader.getByRole('link', { name: texts[lang]['auth.my'], exact: true })
@@ -285,6 +290,8 @@ try {
     const followingLink = nav.getByRole('link', { name: texts[lang]['social.following'], exact: true })
     const backLink = page.getByRole('link', { name: texts[lang]['social.backToProfile'].replace('{username}', '@bob'), exact: true })
     const active = nav.locator('[aria-current="page"]')
+    const followersHeading = page.getByRole('heading', { name: texts[lang]['social.followers'], exact: true, level: 1 })
+    const followingHeading = page.getByRole('heading', { name: texts[lang]['social.following'], exact: true, level: 1 })
     await followingLink.waitFor()
     await menuToggle.click()
     await profileHeading.click()
@@ -293,14 +300,17 @@ try {
     assert.deepEqual(await nav.getByRole('link').evaluateAll(links => links.map(link => link.getAttribute('href'))), ['/u/bob', '/u/bob/followers', '/u/bob/following'])
     await followersLink.press('Enter')
     await page.waitForURL(`${origin}/u/bob/followers`)
+    await followersHeading.and(page.locator(':focus-visible')).waitFor()
     await page.getByText(texts[lang]['social.empty.followers'], { exact: true }).waitFor()
-    assert.equal(await active.getAttribute('href'), '/u/bob/followers')
+    assert.equal(await followersLink.getAttribute('aria-current'), 'page')
     assert.equal(await backLink.getAttribute('href'), '/u/bob')
     await followingLink.click()
     await page.waitForURL(`${origin}/u/bob/following`)
-    assert.equal(await active.getAttribute('href'), '/u/bob/following')
+    await followingHeading.and(page.locator(':focus')).waitFor()
+    assert.equal(await followingLink.getAttribute('aria-current'), 'page')
     await page.reload()
     assert.equal(await active.getAttribute('href'), '/u/bob/following')
+    assert.equal(await isFocused(followingHeading), false)
     await page.goBack()
     await page.waitForURL(`${origin}/u/bob/followers`)
     assert.equal(await active.getAttribute('href'), '/u/bob/followers')
@@ -311,7 +321,8 @@ try {
     }
     await backLink.click()
     await page.waitForURL(`${origin}/u/bob`)
-    await profileHeading.waitFor()
+    await profileHeading.and(page.locator(':focus')).waitFor()
+    assert.equal(await listsLink.getAttribute('aria-current'), 'page')
     if (lang === 'ru' && [390, 1440].includes(width)) {
       await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/public-profile-navigation-${width}.png`, import.meta.url)) })
     }
@@ -448,7 +459,21 @@ try {
         await shortRow.press('Enter')
       }
       await page.waitForURL(`${origin}/u/bob`)
-      await profileHeading.waitFor()
+      await profileHeading.and(page.locator(':focus')).waitFor()
+      await page.goBack()
+      await page.waitForURL(`${origin}/u/bob/${section}`)
+      await shortRow.and(page.locator(':focus')).waitFor()
+      await page.keyboard.press('Tab')
+      await longRow.and(page.locator(':focus-visible')).waitFor()
+      await page.keyboard.press('Shift+Tab')
+      await shortRow.and(page.locator(':focus-visible')).waitFor()
+    }
+    if (lang === 'en' && width === 340) {
+      await page.getByRole('link', { name: 'bob @bob', exact: true }).press('Enter')
+      await profileHeading.and(page.locator(':focus')).waitFor()
+      publicPeople = []
+      await page.goBack()
+      await followingHeading.and(page.locator(':focus')).waitFor()
     }
     await context.close()
   }

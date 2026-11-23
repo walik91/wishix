@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, ref, watch, watchEffect } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { t } from '../i18n.js'
 import { useSession } from '../composables/useSession.js'
+import { rememberProfileDestination, usePublicProfileFocus } from '../composables/usePublicProfileFocus.js'
 import { socialPeople, publicAvatarURL, publicDetails } from '../api/social.js'
 import PublicProfileNavigation from '../components/navigation/PublicProfileNavigation.vue'
 import UiButton from '../components/ui/UiButton.vue'
@@ -22,7 +23,41 @@ const unavailableKind = computed(() => error.value === 'unavailableList' ? kind.
 const details = ref(null)
 const detailsError = ref(false)
 const profileUsername = computed(() => details.value?.username || props.username)
+const heading = props.own ? ref(null) : usePublicProfileFocus()
+const peopleList = ref(null)
 let requestId = 0
+
+function rememberPerson(event) {
+  if (props.own || !rememberProfileDestination(event)) return
+  history.replaceState({ ...history.state, profileReturnPath: event.currentTarget.pathname }, '')
+}
+
+function restorePersonFocus(fromCache = false) {
+  const { profileReturnPath, ...state } = history.state ?? {}
+  if (!profileReturnPath) return
+  history.replaceState(state, '')
+  if (!fromCache && document.activeElement !== document.body) return
+  const links = peopleList.value?.querySelectorAll('a[href]') ?? []
+  const row = Array.from(links).find(link => link.pathname === profileReturnPath)
+  const target = row ?? heading.value
+  target?.focus()
+}
+
+function restoreCachedFocus(event) {
+  if (event.persisted) restorePersonFocus(true)
+}
+
+if (!props.own) {
+  onMounted(() => {
+    const navigation = performance.getEntriesByType('navigation')[0]
+    if (history.state?.profileReturnPath && (!navigation || navigation.type === 'back_forward')) {
+      if (loading.value) watch(loading, () => restorePersonFocus(), { once: true, flush: 'post' })
+      else restorePersonFocus()
+    }
+    window.addEventListener('pageshow', restoreCachedFocus)
+  })
+  onUnmounted(() => window.removeEventListener('pageshow', restoreCachedFocus))
+}
 
 async function loadDetails() {
   detailsError.value = false
@@ -76,7 +111,7 @@ watch([name, kind, canLoad], () => {
 <template>
   <div class="people-page" :class="{ 'public-people': !own }">
     <template v-if="!own">
-      <UiButton class="people-back" variant="ghost" :href="`/u/${encodeURIComponent(profileUsername)}`">
+      <UiButton class="people-back" variant="ghost" :href="`/u/${encodeURIComponent(profileUsername)}`" @click="rememberProfileDestination">
         <AppIcon name="arrow" />
         <span>{{ t('social.backToProfile').replace('{username}', `@${profileUsername}`) }}</span>
       </UiButton>
@@ -87,13 +122,13 @@ watch([name, kind, canLoad], () => {
         :show-following="details?.show_following && unavailableKind !== 'following'"
       />
     </template>
-    <h1>{{ own ? t('social.title') : t(`social.${kind}`) }}</h1>
+    <h1 ref="heading" :tabindex="own ? undefined : -1">{{ own ? t('social.title') : t(`social.${kind}`) }}</h1>
     <div v-if="own" class="people-tabs" role="group" :aria-label="t('social.title')"><UiButton v-for="tab in ['following', 'followers', 'blocked']" :key="tab" :variant="kind === tab ? 'primary' : 'secondary'" :aria-pressed="kind === tab" @click="kind = tab">{{ t(`social.${tab}`) }}</UiButton></div>
     <p class="sr-only" role="status">{{ sessionChecking ? t('auth.checkingSession') : loading ? t('social.loading') : '' }}</p>
     <UiSkeleton v-if="sessionChecking || (loading && !people.length)" class="people-skeleton" />
-    <ul v-else-if="people.length" class="people-list">
+    <ul v-else-if="people.length" ref="peopleList" class="people-list">
       <li v-for="person in people" :key="person.username">
-        <a class="person-row" :href="`/u/${encodeURIComponent(person.username)}`">
+        <a class="person-row" :href="`/u/${encodeURIComponent(person.username)}`" @click="rememberPerson">
           <UserAvatar :username="person.display_name || person.username" :src="person.has_avatar ? publicAvatarURL(person.username) : ''" />
           <span class="person-details">
             <strong>{{ person.display_name || person.username }}</strong>

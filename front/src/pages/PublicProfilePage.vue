@@ -4,6 +4,7 @@ import { t } from '../i18n.js'
 import { publicProfile } from '../api/lists.js'
 import { publicDetails, publicAvatarURL, socialState, setFollow, setBlock, sendReport } from '../api/social.js'
 import { useSession } from '../composables/useSession.js'
+import { usePublicProfileFocus } from '../composables/usePublicProfileFocus.js'
 import { sharedListPath } from '../sharedListPath.js'
 import PublicProfileNavigation from '../components/navigation/PublicProfileNavigation.vue'
 import ListCard from '../components/wishes/ListCard.vue'
@@ -18,6 +19,7 @@ import AppIcon from '../components/ui/AppIcon.vue'
 const props = defineProps({ username: { type: String, required: true } })
 const { user, checking } = useSession()
 const username = ref(''), displayName = ref(''), showAllWishes = ref(false), lists = ref([]), details = ref(null), state = ref(null), loading = ref(true), error = ref(''), actionError = ref(''), notice = ref(''), busy = ref(false), dialog = ref(''), report = ref('')
+const heading = usePublicProfileFocus(loading)
 const detailsError = ref(false), stateError = ref(false)
 const canUseSocialActions = computed(() => user.value && state.value && !state.value.self)
 const menuOpen = ref(false)
@@ -95,7 +97,7 @@ onMounted(load)
         <div class="profile-heading">
           <UserAvatar :username="displayName || username" :src="details?.has_avatar ? publicAvatarURL(username) : ''" />
           <div>
-            <h1>{{ displayName || username }} <span class="profile-address">@{{ username }}</span></h1>
+            <h1 ref="heading" tabindex="-1">{{ displayName || username }} <span class="profile-address">@{{ username }}</span></h1>
             <p v-if="details?.age != null" class="list-muted">{{ t('profile.age') }}: {{ details.age }}</p>
             <p v-if="details?.biography" class="profile-biography">{{ details.biography }}</p>
           </div>
