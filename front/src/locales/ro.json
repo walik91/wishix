@@ -436,7 +436,7 @@
   "profile.avatarSaved": "Fotografia a fost actualizată.",
   "profile.avatarRemoved": "Fotografia a fost eliminată.",
   "profile.birthDate": "Data nașterii",
-  "profile.birthDateHint": "Opțional. Data nașterii rămâne privată.",
+  "profile.birthDateHint": "Opțional. Introdu ziua, luna și anul în ordinea afișată în câmp sau alege o dată din calendar. Data nașterii rămâne privată.",
   "profile.visibility": "Ce pot vedea ceilalți",
   "profile.showAge": "Arată vârsta",
   "profile.ageHint": "Adaugă data nașterii pentru a afișa vârsta.",

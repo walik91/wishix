@@ -32,6 +32,10 @@ const accountLink = ['linked', 'error', 'conflict'].includes(googleResult)
 const profileOpen = ref(profileLink || accountLink)
 const profileSection = ref(profileLink && !accountLink ? 'profile' : 'account')
 const profileVisited = ref(profileSection.value === 'profile')
+const profileSections = [
+  { id: 'account', label: 'profile.account', icon: 'lock' },
+  { id: 'profile', label: 'my.profile', icon: 'user' },
+]
 const profilePage = ref(null), discardProfileOpen = ref(false)
 const settingsViewport = ref(null)
 const google = ref(null), googleLoading = ref(false), googleBusy = ref(false), googleError = ref('')
@@ -106,6 +110,24 @@ async function discardProfileChanges() {
 function selectProfileSection(section) {
   if (section === 'profile') profileVisited.value = true
   profileSection.value = section
+}
+async function navigateProfileSections(event) {
+  if (event.altKey || event.ctrlKey || event.metaKey) return
+  const current = profileSections.findIndex(section => section.id === profileSection.value)
+  const count = profileSections.length
+  const destination = {
+    ArrowLeft: (current - 1 + count) % count,
+    ArrowRight: (current + 1) % count,
+    Home: 0,
+    End: count - 1,
+  }
+  if (!Object.hasOwn(destination, event.key)) return
+  event.preventDefault()
+  const next = destination[event.key]
+  const tab = event.currentTarget.querySelectorAll('[role="tab"]')[next]
+  selectProfileSection(profileSections[next].id)
+  await nextTick()
+  tab.focus()
 }
 function openSettings(section) {
   selectProfileSection(section)
@@ -201,13 +223,23 @@ async function logout() {
 
     <UiDialog v-model:open="profileOpen" class="profile-dialog" :style="settingsViewport" :busy="profileSaving" :before-close="beforeProfileClose" :title="t('profile.settings')">
       <template v-if="profileAccount">
-        <nav class="profile-sections" :aria-label="t('profile.settings')">
-          <div class="profile-section-list">
-            <button type="button" class="profile-section" :class="{ active: profileSection === 'account' }" :aria-pressed="profileSection === 'account'" @click="selectProfileSection('account')"><AppIcon name="lock" /><span>{{ t('profile.account') }}</span></button>
-            <button type="button" class="profile-section" :class="{ active: profileSection === 'profile' }" :aria-pressed="profileSection === 'profile'" @click="selectProfileSection('profile')"><AppIcon name="user" /><span>{{ t('my.profile') }}</span></button>
+        <div class="profile-sections">
+          <div class="profile-section-list" role="tablist" :aria-label="t('profile.settings')" @keydown="navigateProfileSections">
+            <button
+              v-for="section in profileSections"
+              :id="`settings-tab-${section.id}`"
+              :key="section.id"
+              type="button"
+              class="profile-section"
+              role="tab"
+              :aria-selected="profileSection === section.id"
+              :aria-controls="`settings-panel-${section.id}`"
+              :tabindex="profileSection === section.id ? 0 : -1"
+              @click="selectProfileSection(section.id)"
+            ><AppIcon :name="section.icon" /><span>{{ t(section.label) }}</span></button>
           </div>
-        </nav>
-        <div v-show="profileSection === 'account'" class="settings-scroll account-content">
+        </div>
+        <div v-show="profileSection === 'account'" id="settings-panel-account" class="settings-scroll account-content" role="tabpanel" aria-labelledby="settings-tab-account" tabindex="0">
           <dl class="account-details">
             <div><dt>{{ t('login.email') }}</dt><dd>{{ profileAccount.email || t('profile.noEmail') }}</dd></div>
           </dl>
@@ -245,19 +277,21 @@ async function logout() {
             <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
           </div>
         </div>
-        <ProfilePage v-if="profileOpen && profileVisited" v-show="profileSection === 'profile'" ref="profilePage">
-          <template #collection>
-            <div class="collection-setting">
-              <label><input ref="collectionInput" type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" aria-describedby="profile-collection-warning" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
-              <p id="profile-collection-warning">{{ t('profile.showAllWarning') }}</p>
-              <p v-if="collectionError" class="auth-error" role="alert">{{ collectionError }}</p>
-              <UiButton v-if="collectionError && collectionChanged" variant="secondary" @click="saveCollection">{{ t('checkAgain') }}</UiButton>
-            </div>
-          </template>
-          <template #links>
-            <UiButton variant="ghost" href="/my/following">{{ t('profile.following') }}</UiButton>
-          </template>
-        </ProfilePage>
+        <div v-show="profileSection === 'profile'" id="settings-panel-profile" class="profile-content" role="tabpanel" aria-labelledby="settings-tab-profile" tabindex="0">
+          <ProfilePage v-if="profileOpen && profileVisited" ref="profilePage">
+            <template #collection>
+              <div class="collection-setting">
+                <label><input ref="collectionInput" type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" aria-describedby="profile-collection-warning" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
+                <p id="profile-collection-warning">{{ t('profile.showAllWarning') }}</p>
+                <p v-if="collectionError" class="auth-error" role="alert">{{ collectionError }}</p>
+                <UiButton v-if="collectionError && collectionChanged" variant="secondary" @click="saveCollection">{{ t('checkAgain') }}</UiButton>
+              </div>
+            </template>
+            <template #links>
+              <UiButton variant="ghost" href="/my/following">{{ t('profile.following') }}</UiButton>
+            </template>
+          </ProfilePage>
+        </div>
       </template>
     </UiDialog>
     <UiDialog v-model:open="confirmCollectionOpen" :title="t('profile.publishCollection')" aria-describedby="publish-collection-warning">
@@ -311,8 +345,10 @@ async function logout() {
 .profile-section-list { display: flex; gap: var(--wx-space-2); }
 .profile-section { display: flex; align-items: center; gap: var(--wx-space-2); min-width: 44px; min-height: 44px; padding: var(--wx-space-2) var(--wx-space-3); border: 0; border-radius: var(--wx-radius-sm); color: var(--wx-text-muted); background: transparent; font-size: var(--wx-text-sm); font-weight: 600; cursor: pointer; }
 .profile-section:hover { background: var(--wx-background); }
-.profile-section.active { color: var(--wx-primary); background: var(--wx-lavender); }
+.profile-section[aria-selected="true"] { color: var(--wx-primary); background: var(--wx-lavender); }
 .profile-section .icon { width: 18px; height: 18px; }
+.profile-content { display: flex; flex-direction: column; min-height: 0; }
+[role="tabpanel"]:focus-visible { outline-offset: -3px; }
 .account-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--wx-space-4) var(--settings-padding-inline) var(--settings-padding-bottom); }
 .account-details { margin: 0; padding-bottom: var(--wx-space-4); border-bottom: 1px solid var(--wx-border); font-size: var(--wx-text-sm); }
 .account-details dt { margin-bottom: var(--wx-space-1); font-weight: 600; }

@@ -18,7 +18,7 @@ const saveError = ref(''), saveNotice = ref(false)
 const avatarError = ref(''), avatarNotice = ref(''), addressError = ref(''), addressNotice = ref(false)
 const username = ref(''), addressEditing = ref(false), confirmRename = ref(false)
 const addressToggle = ref(null), addressField = ref(null), addressCooldown = ref(null)
-const avatarVersion = ref(Date.now()), picker = ref(null)
+const avatarVersion = ref(Date.now()), picker = ref(null), choosePhoto = ref(null)
 const content = ref(null), nameField = ref(null), biographyField = ref(null), saveStatus = ref(null)
 const busy = computed(() => !!operation.value)
 const avatarURL = computed(() => settings.value?.has_avatar ? `/api/profile/avatar?v=${avatarVersion.value}` : '')
@@ -187,6 +187,8 @@ async function selectAvatar(event) {
     avatarError.value = 'profile.avatarInvalid'
     return
   }
+  const choice = choosePhoto.value?.$el
+  const restoreFocus = document.activeElement === choice
   operation.value = 'uploadAvatar'
   try {
     await uploadAvatar(file)
@@ -194,7 +196,11 @@ async function selectAvatar(event) {
     avatarVersion.value = Date.now()
     avatarNotice.value = 'profile.avatarSaved'
   } catch { avatarError.value = 'profile.avatarInvalid' }
-  finally { operation.value = '' }
+  finally {
+    operation.value = ''
+    await nextTick()
+    if (restoreFocus && document.activeElement === document.body) choice.focus({ preventScroll: true })
+  }
 }
 async function removeAvatar() {
   if (busy.value) return
@@ -218,11 +224,11 @@ async function removeAvatar() {
       <div v-else class="profile-photo">
         <div class="avatar-row">
           <UserAvatar :username="settings.username" :src="avatarURL" />
-          <input ref="picker" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" tabindex="-1" :aria-label="t('profile.chooseAvatar')" :disabled="busy" @change="selectAvatar" />
-          <UiButton variant="secondary" :loading="operation === 'uploadAvatar'" :disabled="busy" @click="picker.click()">{{ t('profile.chooseAvatar') }}</UiButton>
+          <input ref="picker" type="file" accept="image/jpeg,image/png,image/webp" hidden :disabled="busy" @change="selectAvatar" />
+          <UiButton ref="choosePhoto" variant="secondary" :loading="operation === 'uploadAvatar'" :disabled="busy" aria-describedby="profile-avatar-hint" @click="picker.click()">{{ t('profile.chooseAvatar') }}</UiButton>
           <UiButton v-if="settings.has_avatar" variant="ghost" :loading="operation === 'removeAvatar'" :disabled="busy" @click="removeAvatar">{{ t('profile.removeAvatar') }}</UiButton>
         </div>
-        <p class="profile-hint">{{ t('profile.avatarHint') }}</p>
+        <p id="profile-avatar-hint" class="profile-hint">{{ t('profile.avatarHint') }}</p>
         <p v-if="avatarError" class="profile-error" role="alert">{{ t(avatarError) }}</p>
         <p v-if="avatarNotice" class="profile-success" role="status">{{ t(avatarNotice) }}</p>
       </div>
@@ -237,7 +243,7 @@ async function removeAvatar() {
           <h3 id="profile-visibility-title">{{ t('profile.visibility') }}</h3>
           <template v-if="settings">
             <label class="visibility-row">
-              <input v-model="settings.show_age" type="checkbox" :disabled="busy || !settings.birth_date" :aria-describedby="settings.birth_date ? 'profile-birth-date-hint' : 'profile-age-hint profile-birth-date-hint'" />
+              <input v-model="settings.show_age" type="checkbox" :disabled="busy || !settings.birth_date" :aria-describedby="settings.birth_date ? undefined : 'profile-age-hint'" />
               {{ t('profile.showAge') }}
             </label>
             <p v-if="!settings.birth_date" id="profile-age-hint" class="profile-hint">{{ t('profile.ageHint') }}</p>

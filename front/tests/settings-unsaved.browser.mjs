@@ -13,7 +13,8 @@ const originalDetails = {
 }
 
 async function setup(locale = 'en', width = 390) {
-  const context = await browser.newContext({ locale, viewport: { width, height: width === 320 ? 640 : 900 } })
+  const context = await browser.newContext({ locale: width === 390 ? 'en-US' : locale, viewport: { width, height: width === 320 ? 640 : 900 } })
+  await context.addCookies([{ name: 'wishix_locale', value: locale, url: origin }])
   await context.addInitScript(() => localStorage.setItem('wishix_analytics_consent_v1', 'denied'))
   const failures = new Set()
   const writes = []
@@ -61,13 +62,14 @@ async function setup(locale = 'en', width = 390) {
   const bio = settings.locator('#profile-biography')
   const collectionBox = settings.getByRole('checkbox', { name: messages['profile.showAll'] })
   const close = settings.locator(':scope > header > button')
-  const accountTab = settings.getByRole('button', { name: messages['profile.account'], exact: true })
-  const profileTab = settings.getByRole('button', { name: messages['my.profile'], exact: true })
+  const tabs = settings.getByRole('tablist', { name: messages['profile.settings'] })
+  const accountTab = tabs.getByRole('tab', { name: messages['profile.account'], exact: true })
+  const profileTab = tabs.getByRole('tab', { name: messages['my.profile'], exact: true })
   const openSettings = async () => {
     await opener.click()
     await settings.getByText('tester@example.test', { exact: true }).waitFor()
     assert.equal(await settings.getAttribute('aria-label'), messages['profile.settings'])
-    assert.equal(await accountTab.getAttribute('aria-pressed'), 'true')
+    assert.equal(await accountTab.getAttribute('aria-selected'), 'true')
     assert.equal(await name.isVisible(), false)
   }
   const openProfile = async () => {
@@ -81,9 +83,13 @@ async function setup(locale = 'en', width = 390) {
   }
   await openSettings()
   return {
-    context, page, settings, confirmation, keep, leave, messages, name, bio, collectionBox,
+    context, page, settings, confirmation, keep, leave, messages, name, bio, collectionBox, opener,
     close, accountTab, profileTab, openSettings, openProfile, waitClosed, failures, writes,
   }
+}
+
+async function assertFocused(locator) {
+  assert.equal(await locator.evaluate(element => document.activeElement === element), true)
 }
 
 try {
@@ -91,14 +97,76 @@ try {
     const ui = await setup(locale, width)
     const { page, settings, confirmation, keep, leave, messages, name, bio, close, accountTab, profileTab } = ui
     await settings.getByText(messages['google.notLinked'], { exact: true }).waitFor()
-    await settings.getByRole('button', { name: messages['google.connect'] }).waitFor()
-    await settings.getByRole('button', { name: messages['auth.logout'] }).waitFor()
+    const connect = settings.getByRole('button', { name: messages['google.connect'] })
+    const logout = settings.getByRole('button', { name: messages['auth.logout'] })
+    await connect.waitFor()
+    await logout.waitFor()
+    await assertFocused(close)
+    const accountPanel = settings.getByRole('tabpanel', { name: messages['profile.account'] })
+    const profilePanel = settings.getByRole('tabpanel', { name: messages['my.profile'] })
+    await page.keyboard.press('Tab')
+    await assertFocused(accountTab)
+    await page.keyboard.press('Tab')
+    await assertFocused(accountPanel)
+    await page.keyboard.press('Tab')
+    await assertFocused(connect)
+    await page.keyboard.press('Tab')
+    await assertFocused(logout)
+    await page.keyboard.press('Tab')
+    await assertFocused(close)
+    await page.keyboard.press('Shift+Tab')
+    await assertFocused(logout)
     assert.equal(await settings.evaluate(el => el.scrollWidth > el.clientWidth), false, `${locale}/${width}: account width`)
     if (locale === 'ru' && [390, 1440].includes(width)) {
       await mkdir(screenshots, { recursive: true })
       await page.screenshot({ path: fileURLToPath(new URL(`settings-account-${width}.png`, screenshots)) })
     }
-    await ui.openProfile()
+    await accountTab.focus()
+    for (const [key, tab, panel] of [
+      ['ArrowLeft', profileTab, profilePanel], ['ArrowRight', accountTab, accountPanel],
+      ['End', profileTab, profilePanel], ['Home', accountTab, accountPanel], ['ArrowRight', profileTab, profilePanel],
+    ]) {
+      await page.keyboard.press(key)
+      await assertFocused(tab)
+      assert.equal(await tab.getAttribute('aria-selected'), 'true')
+      assert.equal(await tab.getAttribute('aria-controls'), await panel.getAttribute('id'))
+      assert.equal(await settings.getByRole('tab', { selected: true }).count(), 1)
+      assert.equal(await settings.getByRole('tabpanel').count(), 1)
+    }
+    assert.equal(await accountTab.getAttribute('tabindex'), '-1')
+    assert.equal(await profileTab.getAttribute('tabindex'), '0')
+    await settings.locator('#profile-display-name:enabled').waitFor()
+    const choosePhoto = profilePanel.getByRole('button', { name: messages['profile.chooseAvatar'], exact: true })
+    assert.equal(await profilePanel.getByRole('button', { name: messages['profile.chooseAvatar'], exact: true }).count(), 1)
+    assert.equal(await profilePanel.locator('input[type=file]').isHidden(), true)
+    await page.keyboard.press('Tab')
+    await assertFocused(profilePanel)
+    await page.keyboard.press('Tab')
+    await assertFocused(choosePhoto)
+    await page.keyboard.press('Tab')
+    await assertFocused(name)
+    await page.keyboard.press('Tab')
+    await assertFocused(bio)
+
+    if (width === 390) {
+      const date = profilePanel.getByLabel(messages['profile.birthDate'], { exact: true })
+      const showAge = profilePanel.getByRole('checkbox', { name: messages['profile.showAge'] })
+      const hint = profilePanel.locator('#profile-birth-date-hint')
+      assert.equal(await date.getAttribute('aria-describedby'), await hint.getAttribute('id'))
+      assert.equal(await hint.textContent(), messages['profile.birthDateHint'])
+      assert.equal(await date.inputValue(), originalDetails.birth_date)
+      await date.fill('2002-05-15')
+      await bio.focus()
+      await page.keyboard.press('Tab')
+      await assertFocused(date)
+      await page.keyboard.press('ArrowUp')
+      assert.match(await date.inputValue(), /^(2002-05-16|2002-06-15|2003-05-15)$/)
+      for (let i = 0; i < 5 && await date.evaluate(element => document.activeElement === element); i++) {
+        await page.keyboard.press('Tab')
+      }
+      await assertFocused(showAge)
+      await date.fill(originalDetails.birth_date)
+    }
     const save = settings.getByRole('button', { name: messages['profile.saveChanges'] })
     assert.equal(await save.isVisible(), false)
     const tabs = await Promise.all([accountTab.boundingBox(), profileTab.boundingBox()])
@@ -148,6 +216,7 @@ try {
     await page.mouse.click(4, 4)
     await leave.click()
     await ui.waitClosed()
+    await assertFocused(ui.opener)
 
     await ui.openSettings()
     await ui.openProfile()
@@ -155,6 +224,18 @@ try {
     assert.equal(await bio.inputValue(), originalDetails.biography)
     await close.click()
     await ui.waitClosed()
+    await assertFocused(ui.opener)
+
+    const navigationOpener = page.locator(width < 1024 ? '.bottom-navigation' : '.sidebar')
+      .getByRole('button', { name: messages['my.profile'], exact: true })
+    await navigationOpener.press('Enter')
+    await profilePanel.waitFor()
+    await assertFocused(close)
+    await page.keyboard.press('Tab')
+    await assertFocused(profileTab)
+    await page.keyboard.press('Escape')
+    await settings.waitFor({ state: 'hidden' })
+    await assertFocused(navigationOpener)
     await ui.context.close()
   }
 
@@ -164,7 +245,7 @@ try {
     await settings.getByRole('button', { name: messages['google.connect'] }).click()
     await page.waitForURL(`${origin}/my?google=linked`)
     await settings.getByText(messages['google.linked'], { exact: true }).waitFor()
-    assert.equal(await accountTab.getAttribute('aria-pressed'), 'true')
+    assert.equal(await accountTab.getAttribute('aria-selected'), 'true')
     assert.equal(await settings.getByRole('button', { name: messages['google.connect'] }).isVisible(), false)
     const username = settings.locator('#profile-username')
     const editAddress = settings.getByRole('button', { name: messages['profile.editAddress'] })
@@ -268,7 +349,9 @@ try {
     const avatar = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aXcAAAAASUVORK5CYII=', 'base64')
     await ui.openSettings()
     await ui.openProfile()
-    await settings.locator('input[type=file]').setInputFiles({ name: 'avatar.png', mimeType: 'image/png', buffer: avatar })
+    const choosePhoto = settings.getByRole('button', { name: messages['profile.chooseAvatar'], exact: true })
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), choosePhoto.press('Space')])
+    await chooser.setFiles({ name: 'avatar.png', mimeType: 'image/png', buffer: avatar })
     assert.equal(await close.isDisabled(), true)
     await page.keyboard.press('Escape')
     assert.equal(await settings.getAttribute('open'), '')
@@ -276,6 +359,7 @@ try {
     upload.resolve()
     await settings.getByRole('button', { name: messages['profile.removeAvatar'] }).waitFor()
     await settings.locator('.profile-photo').getByRole('status').getByText(messages['profile.avatarSaved']).waitFor()
+    await assertFocused(choosePhoto)
     await close.click()
     await ui.waitClosed()
     await ui.context.close()
@@ -303,5 +387,5 @@ try {
     assert.equal(await scroll.evaluate(el => el.scrollWidth > el.clientWidth), false)
     await context.close()
   }
-  console.log('Settings layout and drafts passed in 15 locale and viewport combinations, including partial saves, independent photo upload and a reduced visual viewport.')
+  console.log('Settings layout, keyboard access and drafts passed in 15 locale and viewport combinations, including native date entry and photo selection.')
 } finally { await browser.close() }

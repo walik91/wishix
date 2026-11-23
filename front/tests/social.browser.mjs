@@ -53,7 +53,7 @@ try {
     assert.equal(await profileDialog.locator(':scope > header h2').textContent(), texts[lang]['profile.settings'])
     const nameField = profileDialog.locator('#profile-display-name')
     await profileDialog.locator('#profile-display-name:enabled').waitFor()
-    assert.equal(await profileDialog.getByRole('button', { name: texts[lang]['my.profile'], exact: true }).getAttribute('aria-pressed'), 'true')
+    assert.equal(await profileDialog.getByRole('tab', { name: texts[lang]['my.profile'], selected: true }).count(), 1)
     assert.equal(await nameField.inputValue(), 'example')
     const save = profileDialog.getByRole('button', { name: texts[lang]['profile.saveChanges'] })
     await nameField.fill('   ')
@@ -155,7 +155,10 @@ try {
     assert.equal(await address.locator('time').getAttribute('datetime'), availableAt)
     if (width === 340) {
       assert.equal(await profileDialog.locator('.profile-scroll').evaluate(el => el.scrollWidth > el.clientWidth), false)
-      await page.clock.fastForward(30 * 24 * 60 * 60 * 1000 + 1000)
+      // Keep each Playwright clock jump within the signed 32-bit limit.
+      const halfCooldown = 15 * 24 * 60 * 60 * 1000
+      await page.clock.fastForward(halfCooldown)
+      await page.clock.fastForward(halfCooldown + 1000)
       await usernameField.locator('xpath=self::*[not(@disabled)]').waitFor()
       assert.equal(await address.locator('time').count(), 0)
     }
@@ -165,7 +168,7 @@ try {
     assert.equal(await page.locator('.app-navigation:visible a[href="/my"]').getAttribute('aria-current'), 'page')
     await page.locator('.app-navigation:visible').getByRole('button', { name: texts[lang]['my.profile'], exact: true }).click()
     assert.equal(await profileDialog.getAttribute('aria-label'), texts[lang]['profile.settings'])
-    assert.equal(await profileDialog.getByRole('button', { name: texts[lang]['my.profile'], exact: true }).getAttribute('aria-pressed'), 'true')
+    assert.equal(await profileDialog.getByRole('tab', { name: texts[lang]['my.profile'], selected: true }).count(), 1)
     await openProfile.waitFor()
     assert.equal(await openProfile.getAttribute('href'), '/u/example_new')
     await profileDialog.getByRole('link', { name: texts[lang]['profile.following'], exact: true }).click()

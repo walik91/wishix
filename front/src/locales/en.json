@@ -436,7 +436,7 @@
   "profile.avatarSaved": "Photo updated.",
   "profile.avatarRemoved": "Photo removed.",
   "profile.birthDate": "Date of birth",
-  "profile.birthDateHint": "Optional. Your date of birth stays private.",
+  "profile.birthDateHint": "Optional. Enter the day, month and year in the order shown in the field, or choose a date from the calendar. Your date of birth stays private.",
   "profile.visibility": "What others can see",
   "profile.showAge": "Show age",
   "profile.ageHint": "Add your date of birth to show your age.",
