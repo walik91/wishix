@@ -8,7 +8,7 @@ const { user, checking } = useSession()
 </script>
 
 <template>
-  <header class="public-header">
+  <header class="public-header" :class="{ 'signed-in': user }">
     <a class="brand" href="/" :aria-label="t('appName')"><img :src="logo" :alt="t('appName')" width="147" height="45" /></a>
     <nav class="section-nav" :aria-label="t('home.navigation')">
       <a href="/#how-it-works">{{ t('home.howItWorks') }}</a>
@@ -36,6 +36,16 @@ const { user, checking } = useSession()
 .login-link, .section-nav a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border-radius: var(--wx-space-1); color: var(--wx-primary); font-size: var(--wx-text-sm); font-weight: 600; line-height: 1.5; text-align: center; text-decoration: none; }
 .login-link { padding-inline: var(--wx-space-3); }
 .login-link:hover, .section-nav a:hover { color: var(--wx-primary-hover); text-decoration: underline; text-underline-offset: 4px; }
+@media (width < 36rem) {
+  .public-header.signed-in {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: var(--wx-space-2);
+    padding-block: var(--wx-space-3);
+  }
+  .signed-in .brand img { width: 120px; }
+  .signed-in .account-nav { grid-column: auto; }
+  .signed-in .account-nav .button { min-height: 44px; padding: var(--wx-space-2); }
+}
 @media (min-width: 36rem) {
   .public-header { display: flex; flex-wrap: wrap; }
   .language { margin-left: auto; }

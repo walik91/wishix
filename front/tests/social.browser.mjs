@@ -20,6 +20,7 @@ try {
     let reports = [], failDetails = false, failState = false
     let renameError = '', renameRequests = 0
     let guest = false, showFollowers = true, showFollowing = true
+    const publicName = width === 340 ? 'Bob Example ' + 'a'.repeat(88) : 'Bob Example'
     await page.route('**/api/auth/me', route => guest
       ? route.fulfill({ status: 401, json: { error: 'invalid_session' } })
       : route.fulfill({ json: { user: { username, email: 'owner@example.test' } } }))
@@ -42,7 +43,7 @@ try {
       if (route.request().method() === 'DELETE') { details.has_avatar = false; return route.fulfill({ json: { status: 'ok' } }) }
       return route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aXcAAAAASUVORK5CYII=', 'base64') })
     })
-    await page.route('**/api/public/profiles/bob', route => route.fulfill({ json: { username: 'bob', display_name: 'Bob Example', show_all_wishes: false, lists: [] } }))
+    await page.route('**/api/public/profiles/bob', route => route.fulfill({ json: { username: 'bob', display_name: publicName, show_all_wishes: width === 340, lists: [] } }))
     await page.route('**/api/public/profiles/bob/details', route => { if (failDetails) { failDetails = false; return route.fulfill({ status: 503, json: { error: 'unavailable' } }) }; return route.fulfill({ json: { username: 'bob', biography: 'A public description', age: 25, has_avatar: false, show_followers: showFollowers, show_following: showFollowing } }) })
     await page.route('**/api/social/bob/state', route => { if (failState) { failState = false; return route.fulfill({ status: 503, json: { error: 'unavailable' } }) }; return route.fulfill({ json: state }) })
     await page.route('**/api/social/bob/follow', route => { state = { ...state, following: route.request().postDataJSON().follow }; return route.fulfill({ json: state }) })
@@ -188,14 +189,70 @@ try {
     await page.getByRole('link', { name: /Bob Example/ }).waitFor()
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `${lang}/${width}/following`)
     await page.goto(`${origin}/u/bob`)
-    await page.getByRole('heading', { name: 'Bob Example' }).waitFor()
+    const profileHeading = page.getByRole('heading', { name: `${publicName} @bob`, exact: true })
+    await profileHeading.waitFor()
+    await page.getByText(`${texts[lang]['profile.age']}: 25`, { exact: true }).waitFor()
+    const publicHeader = page.locator('.public-header')
+    const mySpace = publicHeader.getByRole('link', { name: texts[lang]['auth.my'], exact: true })
+    assert.equal(await mySpace.getAttribute('href'), '/my')
+    const mySpaceBox = await mySpace.boundingBox()
+    assert.ok(mySpaceBox.width >= 44 && mySpaceBox.height >= 44)
+    if (width <= 390) {
+      for (const item of [publicHeader.locator('.brand'), publicHeader.getByRole('combobox')]) {
+        const box = await item.boundingBox()
+        assert.ok(Math.abs(box.y + box.height / 2 - (mySpaceBox.y + mySpaceBox.height / 2)) <= 1, `${lang}/${width}/public header`)
+      }
+    }
+    if (width === 340) {
+      assert.equal(await page.getByRole('link', { name: texts[lang]['profile.allWishes'], exact: true }).getAttribute('href'), '/u/bob/wishes')
+    }
     await page.getByRole('button', { name: texts[lang]['social.follow'], exact: true }).click()
     await page.getByRole('button', { name: texts[lang]['social.unfollow'], exact: true }).waitFor()
-    await page.getByRole('button', { name: texts[lang]['social.block'], exact: true }).click()
-    await page.getByRole('dialog', { name: texts[lang]['social.block'] }).getByRole('button', { name: texts[lang]['social.block'], exact: true }).click()
-    await page.getByRole('button', { name: texts[lang]['social.unblock'], exact: true }).waitFor()
-    await page.getByRole('button', { name: texts[lang]['social.unblock'], exact: true }).click()
-    await page.getByRole('button', { name: texts[lang]['social.report'], exact: true }).click()
+    const menuToggle = page.getByRole('button', { name: texts[lang]['social.profileActions'], exact: true })
+    const blockAction = page.getByRole('button', { name: texts[lang]['social.block'], exact: true })
+    const reportAction = page.getByRole('button', { name: texts[lang]['social.report'], exact: true })
+    const isFocused = locator => locator.evaluate(el => document.activeElement === el)
+    assert.equal(await menuToggle.getAttribute('aria-expanded'), 'false')
+    assert.equal(await blockAction.count(), 0)
+    assert.equal(await reportAction.count(), 0)
+    await menuToggle.press('Enter')
+    assert.equal(await menuToggle.getAttribute('aria-expanded'), 'true')
+    const menuBox = await menuToggle.boundingBox()
+    assert.ok(menuBox.width >= 44 && menuBox.height >= 44)
+    for (const action of [blockAction, reportAction]) {
+      const box = await action.boundingBox()
+      assert.ok(box.height >= 44 && box.x >= 0 && box.x + box.width <= width)
+    }
+    await page.keyboard.press('Tab')
+    assert.equal(await isFocused(blockAction), true)
+    assert.equal(await blockAction.evaluate(el => el.matches(':focus-visible')), true)
+    await page.keyboard.press('Tab')
+    assert.equal(await isFocused(reportAction), true)
+    await page.keyboard.press('Shift+Tab')
+    assert.equal(await isFocused(blockAction), true)
+    await page.keyboard.press('Escape')
+    assert.equal(await isFocused(menuToggle), true)
+    assert.equal(await menuToggle.getAttribute('aria-expanded'), 'false')
+    if (lang === 'ru' && [390, 1440].includes(width)) {
+      await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/public-profile-header-${width}.png`, import.meta.url)) })
+    }
+    await menuToggle.press('Space')
+    await blockAction.press('Enter')
+    const blockDialog = page.getByRole('dialog', { name: texts[lang]['social.block'] })
+    await blockDialog.waitFor()
+    await page.keyboard.press('Escape')
+    await blockDialog.waitFor({ state: 'hidden' })
+    assert.equal(state.blocked, false)
+    assert.equal(await isFocused(menuToggle), true)
+    await menuToggle.press('Enter')
+    await blockAction.press('Enter')
+    await blockDialog.getByRole('button', { name: texts[lang]['social.block'], exact: true }).click()
+    await page.getByText(texts[lang]['social.blockedNotice'], { exact: true }).waitFor()
+    await menuToggle.press('Enter')
+    await page.getByRole('button', { name: texts[lang]['social.unblock'], exact: true }).press('Enter')
+    await page.getByText(texts[lang]['social.unblockedNotice'], { exact: true }).waitFor()
+    await menuToggle.press('Enter')
+    await reportAction.press('Enter')
     const reportDialog = page.getByRole('dialog', { name: texts[lang]['social.report'] })
     await reportDialog.getByLabel(texts[lang]['social.reportReason']).fill('Problem')
     await reportDialog.getByRole('button', { name: texts[lang]['social.report'], exact: true }).click()
@@ -217,6 +274,9 @@ try {
     const backLink = page.getByRole('link', { name: texts[lang]['social.backToProfile'].replace('{username}', '@bob'), exact: true })
     const active = nav.locator('[aria-current="page"]')
     await followingLink.waitFor()
+    await menuToggle.click()
+    await profileHeading.click()
+    assert.equal(await menuToggle.getAttribute('aria-expanded'), 'false')
     assert.equal(await active.getAttribute('href'), '/u/bob')
     assert.deepEqual(await nav.getByRole('link').evaluateAll(links => links.map(link => link.getAttribute('href'))), ['/u/bob', '/u/bob/followers', '/u/bob/following'])
     await followersLink.press('Enter')
@@ -239,11 +299,17 @@ try {
     }
     await backLink.click()
     await page.waitForURL(`${origin}/u/bob`)
-    await page.getByRole('heading', { name: 'Bob Example' }).waitFor()
+    await profileHeading.waitFor()
     if (lang === 'ru' && [390, 1440].includes(width)) {
       await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/public-profile-navigation-${width}.png`, import.meta.url)) })
     }
     if (width === 320) {
+      state = { ...state, self: true }
+      const selfState = page.waitForResponse('**/api/social/bob/state')
+      await page.reload()
+      await selfState
+      await profileHeading.waitFor()
+      assert.equal(await menuToggle.count(), 0)
       guest = true
       showFollowers = false
       await page.goto(`${origin}/u/bob/following`)
@@ -254,6 +320,8 @@ try {
       await page.waitForURL(`${origin}/u/bob`)
       await followingLink.waitFor()
       assert.equal(await followersLink.count(), 0)
+      await page.getByRole('link', { name: texts[lang]['social.signIn'], exact: true }).waitFor()
+      assert.equal(await menuToggle.count(), 0)
       showFollowing = false
       await page.goto(`${origin}/u/bob/followers`)
       await page.getByText(texts[lang]['social.unavailableList'], { exact: true }).waitFor()
@@ -264,5 +332,5 @@ try {
     await context.close()
   }
   assert.deepEqual(errors, [])
-  console.log('Profile and social: EN/RU/RO × 320/340/390/768/1024/1440 passed, including public profile navigation and address validation.')
+  console.log('Profile and social: EN/RU/RO × 320/340/390/768/1024/1440 passed, including the public header, profile actions and navigation.')
 } finally { await browser.close() }

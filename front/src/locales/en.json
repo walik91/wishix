@@ -468,6 +468,7 @@
   "profile.usernameInvalid": "Use 3–30 Latin letters, digits or underscores.",
   "social.title": "People",
   "social.profileNavigation": "Profile navigation",
+  "social.profileActions": "Profile actions",
   "social.wishLists": "Wish lists",
   "social.backToProfile": "Back to {username}’s profile",
   "social.following": "Following",

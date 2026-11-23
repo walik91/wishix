@@ -468,6 +468,7 @@
   "profile.usernameInvalid": "Используйте 3–30 латинских букв, цифр или знаков подчёркивания.",
   "social.title": "Подписки и подписчики",
   "social.profileNavigation": "Навигация по профилю",
+  "social.profileActions": "Действия с профилем",
   "social.wishLists": "Списки желаний",
   "social.backToProfile": "К профилю {username}",
   "social.following": "Подписки",
