@@ -4,12 +4,14 @@ import { t } from '../i18n.js'
 import { useSession } from '../composables/useSession.js'
 import AppIcon from '../components/ui/AppIcon.vue'
 import UiButton from '../components/ui/UiButton.vue'
+import WishCard from '../components/wishes/WishCard.vue'
 import gift from '../assets/brand/gift-hero.svg'
-import { exampleWishlistPath } from '../exampleWishlist.js'
+import { exampleWishlist, exampleWishlistPath } from '../exampleWishlist.js'
 
 const { user, checking } = useSession()
 const startHref = computed(() => user.value ? '/my/wishes' : '/register')
 const startLabel = computed(() => t(checking.value ? 'auth.checkingSession' : user.value ? 'home.openMyWishes' : 'home.start'))
+const exampleWish = computed(() => exampleWishlist().wishes[0])
 
 const steps = [
   { key: 'collect', icon: 'list' },
@@ -37,7 +39,11 @@ watchEffect(() => {
       </div>
       <div class="hero-visual">
         <img class="gift" :src="gift" alt="" width="370" height="300" fetchpriority="high" />
-        <div class="wish-note"><span class="wish-icon"><AppIcon name="heart" /></span><div><p>{{ t('home.wishNoteTitle') }}</p><span>{{ t('home.wishNoteDescription') }}</span></div></div>
+        <a class="hero-example" :href="exampleWishlistPath">
+          <WishCard class="hero-wish" :wish="exampleWish" preview />
+          <AppIcon name="arrow" />
+          <span class="sr-only"> · {{ t('home.viewExample') }}</span>
+        </a>
       </div>
     </section>
 
@@ -92,11 +98,12 @@ h1 span { color: var(--wx-primary); }
 .hero-guest-hint { max-width: 440px; margin: var(--wx-space-3) 0 0; color: var(--wx-text-muted); font-size: var(--wx-text-sm); line-height: 1.5; }
 .hero-visual { display: grid; justify-items: center; align-content: center; min-width: 0; }
 .gift { display: block; width: min(100%, 300px); height: auto; }
-.wish-note { display: flex; align-items: center; gap: var(--wx-space-3); width: min(100%, 320px); margin-top: -20px; padding: var(--wx-space-4); border: 1px solid var(--wx-border); border-radius: var(--wx-radius-card); background: var(--wx-surface); box-shadow: var(--wx-shadow-card); }
-.wish-icon, .step-icon, .giving-icon, .closing-heart { display: grid; place-items: center; flex: 0 0 auto; width: 44px; height: 44px; border-radius: var(--wx-radius-md); color: var(--wx-primary); background: var(--wx-lavender); }
-.wish-note p { margin: 0 0 var(--wx-space-1); font-size: var(--wx-text-sm); font-weight: 650; line-height: 1.5; }
-.wish-note span { font-size: var(--wx-text-xs); color: var(--wx-text-muted); line-height: 1.5; }
-.wish-note .wish-icon { color: var(--wx-primary); }
+.hero-example { position: relative; width: min(100%, 320px); margin-top: calc(-1 * var(--wx-space-5)); border-radius: var(--wx-radius-card); color: inherit; text-decoration: none; }
+.hero-example .hero-wish { padding: var(--wx-space-3); padding-inline-end: var(--wx-space-10); }
+.hero-example > .icon { position: absolute; inset-inline-end: var(--wx-space-3); top: 50%; width: 20px; height: 20px; transform: translateY(-50%); color: var(--wx-primary); }
+.hero-example:hover .hero-wish { border-color: var(--wx-secondary); }
+.hero-example:active .hero-wish { background: var(--wx-background); }
+.step-icon, .giving-icon, .closing-heart { display: grid; place-items: center; flex: 0 0 auto; width: 44px; height: 44px; border-radius: var(--wx-radius-md); color: var(--wx-primary); background: var(--wx-lavender); }
 .steps-section, .faq-section { padding-top: calc(var(--wx-space-10) + var(--wx-space-6)); scroll-margin-top: var(--wx-space-6); }
 .section-heading { max-width: 560px; margin-bottom: var(--wx-space-6); }
 .section-heading .eyebrow { margin-bottom: var(--wx-space-2); }
@@ -141,7 +148,7 @@ details > p { max-width: 700px; margin: 0 0 var(--wx-space-5); padding-right: va
   .hero-description { margin: var(--wx-space-5) 0 var(--wx-space-6); line-height: 1.7; }
   .hero-actions { flex-wrap: wrap; gap: var(--wx-space-2) var(--wx-space-5); }
   .gift { width: min(100%, 370px); }
-  .wish-note { margin-top: -12px; }
+  .hero-example { margin-top: calc(-1 * var(--wx-space-3)); }
   .section-heading { margin-bottom: var(--wx-space-8); }
   .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .step-card { padding: var(--wx-space-5); }

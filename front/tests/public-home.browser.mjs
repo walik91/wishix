@@ -37,19 +37,45 @@ try {
       const hero = page.locator('.hero')
       const signUp = hero.locator('a[href="/register"]')
       const example = hero.getByRole('link', { name: texts['home.viewExample'], exact: true })
+      const preview = hero.locator('.hero-example')
+      const previewCard = preview.locator('.wish-card')
       await signUp.waitFor()
       assert.equal(await signUp.innerText(), texts['home.start'])
       assert.equal(await hero.getByText(texts['home.guestHint'], { exact: true }).count(), 1)
-      for (const link of [signUp, example]) {
+      assert.equal(await preview.getAttribute('href'), await example.getAttribute('href'))
+      assert.equal(await preview.getByRole('heading').innerText(), texts['exampleWishlist.headphones'])
+      assert.equal(await preview.locator('a, button').count(), 0)
+      const previewID = await previewCard.getAttribute('data-wish-id')
+      const previewPrice = await previewCard.locator('.wish-price').innerText()
+      const previewImage = await previewCard.locator('img').getAttribute('src')
+      await page.waitForFunction(() => document.querySelector('.hero-example img')?.naturalWidth > 0)
+      for (const link of [signUp, example, preview]) {
         const { width, height } = await link.boundingBox()
         assert.ok(width >= 44 && height >= 44, 'hero actions meet the minimum touch size')
       }
       await checkOverflow(page, `Home ${locale}/${viewport.width}`)
-      await example.click()
+      if (viewport.width === 320 || viewport.width === 1440) {
+        await example.click()
+      } else {
+        const essentialCookies = page.getByRole('button', { name: texts['cookies.reject'], exact: true })
+        if (await essentialCookies.isVisible()) await essentialCookies.click()
+        if (viewport.width === 390) {
+          await example.focus()
+          await page.keyboard.press('Tab')
+          assert.equal(await preview.evaluate(link => link.matches(':focus-visible')), true)
+          await page.keyboard.press('Enter')
+          await page.waitForURL(origin + '/wishlist/example')
+        } else {
+          await preview.click()
+        }
+      }
       assert.equal(new URL(page.url()).pathname, '/wishlist/example')
       await page.getByRole('heading', { name: texts['exampleWishlist.title'], exact: true }).waitFor()
       const cards = page.locator('.shared-wish-grid .wish-card')
       assert.equal(await cards.count(), 2)
+      const featured = cards.and(page.locator(`[data-wish-id="${previewID}"]`))
+      assert.equal(await featured.locator('.wish-price').innerText(), previewPrice)
+      assert.equal(await featured.locator('img').getAttribute('src'), previewImage)
       assert.equal(await cards.getByRole('button', { name: texts['reservation.reserve'], exact: true }).isDisabled(), true)
       assert.equal(await cards.getByText(texts['reservation.reserved'], { exact: true }).count(), 1)
       const images = cards.getByRole('img')
