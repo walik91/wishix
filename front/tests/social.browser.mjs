@@ -19,7 +19,10 @@ try {
     let details = { username, biography: '', birth_date: null, show_age: false, show_followers: false, show_following: false, has_avatar: false, username_changed_at: null }
     let reports = [], failDetails = false, failState = false
     let renameError = '', renameRequests = 0
-    await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { username, email: 'owner@example.test' } } }))
+    let guest = false, showFollowers = true, showFollowing = true
+    await page.route('**/api/auth/me', route => guest
+      ? route.fulfill({ status: 401, json: { error: 'invalid_session' } })
+      : route.fulfill({ json: { user: { username, email: 'owner@example.test' } } }))
     await page.route('**/api/lists', route => route.fulfill({ json: { lists: [] } }))
     await page.route('**/api/wishes', route => route.fulfill({ json: { wishes: [] } }))
     await page.route('**/u/bob', route => route.fulfill({ contentType: 'text/html', body: indexHTML }))
@@ -40,12 +43,18 @@ try {
       return route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aXcAAAAASUVORK5CYII=', 'base64') })
     })
     await page.route('**/api/public/profiles/bob', route => route.fulfill({ json: { username: 'bob', display_name: 'Bob Example', show_all_wishes: false, lists: [] } }))
-    await page.route('**/api/public/profiles/bob/details', route => { if (failDetails) { failDetails = false; return route.fulfill({ status: 503, json: { error: 'unavailable' } }) }; return route.fulfill({ json: { username: 'bob', biography: 'A public description', age: 25, has_avatar: false, show_followers: true, show_following: true } }) })
+    await page.route('**/api/public/profiles/bob/details', route => { if (failDetails) { failDetails = false; return route.fulfill({ status: 503, json: { error: 'unavailable' } }) }; return route.fulfill({ json: { username: 'bob', biography: 'A public description', age: 25, has_avatar: false, show_followers: showFollowers, show_following: showFollowing } }) })
     await page.route('**/api/social/bob/state', route => { if (failState) { failState = false; return route.fulfill({ status: 503, json: { error: 'unavailable' } }) }; return route.fulfill({ json: state }) })
     await page.route('**/api/social/bob/follow', route => { state = { ...state, following: route.request().postDataJSON().follow }; return route.fulfill({ json: state }) })
     await page.route('**/api/social/bob/block', route => { const blocked = route.request().postDataJSON().block; state = { ...state, blocked, following: false, can_follow: !blocked }; return route.fulfill({ json: state }) })
     await page.route('**/api/social/bob/report', route => { reports.push(route.request().postDataJSON().message); return route.fulfill({ json: { status: 'ok' } }) })
     await page.route('**/api/social/*/people/*?*', route => route.fulfill({ json: { people: [{ username: 'bob', display_name: 'Bob Example' }], next_cursor: '' } }))
+    await page.route(/\/api\/social\/bob\/people\/(followers|following)\?/, route => {
+      const visible = new URL(route.request().url()).pathname.endsWith('/followers') ? showFollowers : showFollowing
+      return visible
+        ? route.fulfill({ json: { people: [], next_cursor: '' } })
+        : route.fulfill({ status: 404, json: { error: 'list_not_found' } })
+    })
     await page.goto(`${origin}/my/profile`)
     const profileDialog = page.locator('dialog.profile-dialog')
     assert.equal(await profileDialog.isVisible(), true)
@@ -201,8 +210,59 @@ try {
       await page.getByRole('button', { name: texts[lang]['checkAgain'] }).click()
       await page.getByRole('button', { name: texts[lang]['social.follow'], exact: true }).waitFor()
     }
+    const nav = page.getByRole('navigation', { name: texts[lang]['social.profileNavigation'] })
+    const listsLink = nav.getByRole('link', { name: texts[lang]['social.wishLists'], exact: true })
+    const followersLink = nav.getByRole('link', { name: texts[lang]['social.followers'], exact: true })
+    const followingLink = nav.getByRole('link', { name: texts[lang]['social.following'], exact: true })
+    const backLink = page.getByRole('link', { name: texts[lang]['social.backToProfile'].replace('{username}', '@bob'), exact: true })
+    const active = nav.locator('[aria-current="page"]')
+    await followingLink.waitFor()
+    assert.equal(await active.getAttribute('href'), '/u/bob')
+    assert.deepEqual(await nav.getByRole('link').evaluateAll(links => links.map(link => link.getAttribute('href'))), ['/u/bob', '/u/bob/followers', '/u/bob/following'])
+    await followersLink.press('Enter')
+    await page.waitForURL(`${origin}/u/bob/followers`)
+    await page.getByText(texts[lang]['social.empty.followers'], { exact: true }).waitFor()
+    assert.equal(await active.getAttribute('href'), '/u/bob/followers')
+    assert.equal(await backLink.getAttribute('href'), '/u/bob')
+    await followingLink.click()
+    await page.waitForURL(`${origin}/u/bob/following`)
+    assert.equal(await active.getAttribute('href'), '/u/bob/following')
+    await page.reload()
+    assert.equal(await active.getAttribute('href'), '/u/bob/following')
+    await page.goBack()
+    await page.waitForURL(`${origin}/u/bob/followers`)
+    assert.equal(await active.getAttribute('href'), '/u/bob/followers')
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `${lang}/${width}/public followers`)
+    assert.equal(await nav.getByRole('link').evaluateAll(links => links.every(link => link.offsetHeight >= 44 && link.offsetWidth >= 44)), true)
+    if (lang === 'ru' && [390, 1440].includes(width)) {
+      await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/public-followers-${width}.png`, import.meta.url)) })
+    }
+    await backLink.click()
+    await page.waitForURL(`${origin}/u/bob`)
+    await page.getByRole('heading', { name: 'Bob Example' }).waitFor()
+    if (lang === 'ru' && [390, 1440].includes(width)) {
+      await page.screenshot({ path: fileURLToPath(new URL(`../../.cache/social-screens/public-profile-navigation-${width}.png`, import.meta.url)) })
+    }
+    if (width === 320) {
+      guest = true
+      showFollowers = false
+      await page.goto(`${origin}/u/bob/following`)
+      await page.getByRole('heading', { name: texts[lang]['social.following'], exact: true }).waitFor()
+      assert.equal(await active.getAttribute('href'), '/u/bob/following')
+      assert.equal(await followersLink.count(), 0)
+      await listsLink.click()
+      await page.waitForURL(`${origin}/u/bob`)
+      await followingLink.waitFor()
+      assert.equal(await followersLink.count(), 0)
+      showFollowing = false
+      await page.goto(`${origin}/u/bob/followers`)
+      await page.getByText(texts[lang]['social.unavailableList'], { exact: true }).waitFor()
+      assert.equal(await nav.getByRole('link').count(), 1)
+      assert.equal(await active.count(), 0)
+      assert.equal(await backLink.getAttribute('href'), '/u/bob')
+    }
     await context.close()
   }
   assert.deepEqual(errors, [])
-  console.log('Profile and social: EN/RU/RO × 320/340/390/768/1024/1440 passed, including address validation and cooldown.')
+  console.log('Profile and social: EN/RU/RO × 320/340/390/768/1024/1440 passed, including public profile navigation and address validation.')
 } finally { await browser.close() }

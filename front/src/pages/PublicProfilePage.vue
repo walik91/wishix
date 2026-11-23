@@ -5,6 +5,7 @@ import { publicProfile } from '../api/lists.js'
 import { publicDetails, publicAvatarURL, socialState, setFollow, setBlock, sendReport } from '../api/social.js'
 import { useSession } from '../composables/useSession.js'
 import { sharedListPath } from '../sharedListPath.js'
+import PublicProfileNavigation from '../components/navigation/PublicProfileNavigation.vue'
 import ListCard from '../components/wishes/ListCard.vue'
 import UiSkeleton from '../components/ui/UiSkeleton.vue'
 import UiCard from '../components/ui/UiCard.vue'
@@ -60,10 +61,14 @@ onMounted(load)
       <div class="profile-actions">
         <template v-if="user && state && !state.self"><UiButton v-if="state.can_follow || state.following" :disabled="busy" :variant="state.following ? 'secondary' : 'primary'" @click="follow">{{ t(state.following ? 'social.unfollow' : 'social.follow') }}</UiButton><UiButton variant="secondary" :disabled="busy" @click="state.blocked ? block() : openDialog('block')">{{ t(state.blocked ? 'social.unblock' : 'social.block') }}</UiButton><UiButton variant="secondary" :disabled="busy" @click="openDialog('report')">{{ t('social.report') }}</UiButton><span v-if="!state.can_follow && !state.blocked" class="list-muted">{{ t('social.cannotFollow') }}</span></template>
         <UiButton v-else-if="!user && !checking" href="/login" variant="secondary">{{ t('social.signIn') }}</UiButton>
-        <UiButton v-if="details?.show_followers" variant="secondary" :href="`/u/${encodeURIComponent(username)}/followers`">{{ t('social.followers') }}</UiButton>
-        <UiButton v-if="details?.show_following" variant="secondary" :href="`/u/${encodeURIComponent(username)}/following`">{{ t('social.following') }}</UiButton>
         <UiButton v-if="showAllWishes" variant="secondary" :href="`/u/${encodeURIComponent(username)}/wishes`">{{ t('profile.allWishes') }}</UiButton>
       </div>
+      <PublicProfileNavigation
+        :username="username"
+        current="lists"
+        :show-followers="details?.show_followers"
+        :show-following="details?.show_following"
+      />
       <h2 class="public-lists-title">{{ t('lists.publicLists') }}</h2>
       <div v-if="lists.length" class="list-grid"><ListCard v-for="(list, index) in lists" :key="index" :list="list" :href="sharedListPath(username, list.share_path)" :manage="false" /></div>
       <UiCard v-else class="list-empty"><EmptyState icon="list" :title="t('lists.noPublicLists')" /></UiCard>
