@@ -2,7 +2,6 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { locale, t } from '../i18n.js'
 import { getCollectionSetting, setCollectionSetting } from '../api/lists.js'
-import { getProfileName, setProfileName } from '../api/search.js'
 import { googleStatus, startGoogle, facebookStatus, startFacebook, addEmail, confirmAddedEmail, resendCode } from '../api/auth.js'
 import { useSession } from '../composables/useSession.js'
 import { authError, useAuthForm } from '../composables/useAuthForm.js'
@@ -33,7 +32,8 @@ const accountLink = ['linked', 'error', 'conflict'].includes(googleResult)
 const profileOpen = ref(profileLink || accountLink)
 const profileSection = ref(profileLink && !accountLink ? 'profile' : 'account')
 const profileVisited = ref(profileSection.value === 'profile')
-const profileDialog = ref(null), profilePage = ref(null), discardProfileOpen = ref(false)
+const profilePage = ref(null), discardProfileOpen = ref(false)
+const settingsViewport = ref(null)
 const google = ref(null), googleLoading = ref(false), googleBusy = ref(false), googleError = ref('')
 const facebookEnabled = ref(false), facebookLinked = ref(false), facebookBusy = ref(false), facebookError = ref('')
 const emailInput = ref(''), emailChallenge = ref('')
@@ -41,11 +41,9 @@ const { busy: emailBusy, error: emailError, remaining: emailRemaining, cooldown:
 const signingOut = ref(false)
 const error = ref('')
 const collectionEnabled = ref(false), savedCollection = ref(null), collectionLoading = ref(false), collectionError = ref('')
-const displayName = ref(''), savedName = ref(null), nameLoading = ref(false), nameError = ref(''), nameSaved = ref(false)
-const nameReady = computed(() => savedName.value !== null)
 const collectionReady = computed(() => savedCollection.value !== null)
 const collectionChanged = computed(() => collectionReady.value && collectionEnabled.value !== savedCollection.value)
-const profileSaving = computed(() => (nameReady.value && nameLoading.value) || (collectionReady.value && collectionLoading.value) || !!profilePage.value?.busy)
+const profileSaving = computed(() => (collectionReady.value && collectionLoading.value) || !!profilePage.value?.busy)
 
 watch(profileOpen, (open, _, onCleanup) => {
   if (!open) {
@@ -55,14 +53,9 @@ watch(profileOpen, (open, _, onCleanup) => {
   }
   let active = true
   onCleanup(() => { active = false })
-  nameLoading.value = true; savedName.value = null; nameError.value = ''; nameSaved.value = false
   collectionLoading.value = true; savedCollection.value = null; collectionError.value = ''
   google.value = null; googleLoading.value = true
   facebookEnabled.value = false
-  getProfileName()
-    .then(data => { if (active) displayName.value = savedName.value = data.display_name })
-    .catch(() => { if (active) nameError.value = t('profile.nameError') })
-    .finally(() => { if (active) nameLoading.value = false })
   getCollectionSetting()
     .then(data => { if (active) collectionEnabled.value = savedCollection.value = data.show_all_wishes })
     .catch(() => { if (active) collectionError.value = t('profile.settingsError') })
@@ -75,9 +68,32 @@ watch(profileOpen, (open, _, onCleanup) => {
     .then(status => { if (active) { facebookEnabled.value = status.enabled; facebookLinked.value = status.linked } })
     .catch(() => { if (active) facebookEnabled.value = false })
 }, { immediate: true })
+watch(profileOpen, (open, _, onCleanup) => {
+  const viewport = window.visualViewport
+  if (!open || !viewport) return
+  function updateViewport() {
+    settingsViewport.value = {
+      '--settings-viewport-height': `${viewport.height}px`,
+      '--settings-viewport-top': `${viewport.offsetTop}px`,
+    }
+  }
+  function resizeViewport() {
+    updateViewport()
+    nextTick(() => {
+      const focused = document.activeElement
+      if (focused?.closest('.profile-dialog .settings-scroll')) focused.scrollIntoView({ block: 'nearest' })
+    })
+  }
+  updateViewport()
+  viewport.addEventListener('resize', resizeViewport)
+  viewport.addEventListener('scroll', updateViewport)
+  onCleanup(() => {
+    viewport.removeEventListener('resize', resizeViewport)
+    viewport.removeEventListener('scroll', updateViewport)
+  })
+}, { immediate: true })
 function beforeProfileClose() {
-  const nameChanged = nameReady.value && displayName.value !== savedName.value
-  if (!nameChanged && !collectionChanged.value && !profilePage.value?.hasUnsavedChanges) return true
+  if (!collectionChanged.value && !profilePage.value?.hasUnsavedChanges) return true
   discardProfileOpen.value = true
   return false
 }
@@ -88,27 +104,11 @@ async function discardProfileChanges() {
 }
 function selectProfileSection(section) {
   if (section === 'profile') profileVisited.value = true
-  if (profileSection.value === section) return
   profileSection.value = section
-  nextTick(() => profileDialog.value?.$el.scrollTo({ top: 0 }))
 }
 function openSettings(section) {
   selectProfileSection(section)
   profileOpen.value = true
-}
-async function saveName() {
-  if (nameLoading.value) return
-  nameError.value = ''; nameSaved.value = false
-  if (!displayName.value.trim()) { nameError.value = t('profile.nameRequired'); return }
-  if ([...displayName.value.trim()].length > 100) { nameError.value = t('profile.nameTooLong'); return }
-  nameLoading.value = true
-  try {
-    const data = await setProfileName(displayName.value)
-    displayName.value = savedName.value = data.display_name
-    nameSaved.value = true
-  }
-  catch { nameError.value = t('profile.nameError') }
-  finally { nameLoading.value = false }
 }
 async function linkGoogle() {
   if (googleBusy.value) return
@@ -182,80 +182,66 @@ async function logout() {
       <AppNavigation :profile-available="!!account" :profile-active="profileOpen" @profile="openSettings('profile')" />
     </div>
 
-    <UiDialog ref="profileDialog" v-model:open="profileOpen" class="profile-dialog" :busy="profileSaving" :before-close="beforeProfileClose" :title="t('profile.settings')">
+    <UiDialog v-model:open="profileOpen" class="profile-dialog" :style="settingsViewport" :busy="profileSaving" :before-close="beforeProfileClose" :title="t('profile.settings')">
       <template v-if="profileAccount">
-        <div class="profile-layout">
-          <nav class="profile-sections" :aria-label="t('profile.settings')">
-            <div class="profile-section-list">
-              <button type="button" class="profile-section" :class="{ active: profileSection === 'account' }" :aria-pressed="profileSection === 'account'" @click="selectProfileSection('account')"><AppIcon name="lock" /><span>{{ t('profile.account') }}</span></button>
-              <button type="button" class="profile-section" :class="{ active: profileSection === 'profile' }" :aria-pressed="profileSection === 'profile'" @click="selectProfileSection('profile')"><AppIcon name="user" /><span>{{ t('my.profile') }}</span></button>
-            </div>
-          </nav>
-          <div v-show="profileSection === 'account'" class="profile-content">
-            <dl class="account-details">
-              <div><dt>{{ t('login.email') }}</dt><dd>{{ profileAccount.email || t('profile.noEmail') }}</dd></div>
-            </dl>
-            <div v-if="!profileAccount.email" class="email-setting">
-              <p>{{ t('profile.emailForMail') }}</p>
-              <template v-if="emailChallenge"><p>{{ t('reservation.codeSent') }} {{ emailInput }}</p><CodeVerification :busy="emailBusy" :remaining="emailRemaining" @verify="verifyAddedEmail" @resend="resendEmailCode" /></template>
-              <form v-else @submit.prevent="sendEmailCode">
-                <TextField id="profile-email" v-model="emailInput" type="email" required maxlength="254" autocomplete="email" :label="t('login.email')" />
-                <UiButton type="submit" :loading="emailBusy">{{ t('profile.addEmail') }}</UiButton>
-              </form>
-              <p v-if="emailError" class="auth-error" role="alert">{{ emailError }}</p>
-            </div>
-            <div class="provider-setting">
-              <div class="provider-row" :aria-busy="googleLoading || undefined">
-                <div>
-                  <strong>Google</strong>
-                  <p v-if="!googleLoading" role="status">{{ t(google?.linked ? 'google.linked' : google?.enabled ? 'google.notLinked' : 'google.unavailable') }}</p>
-                </div>
-                <SocialAuthButtons v-if="google?.enabled && !google.linked" :busy="googleBusy" :label="t('google.connect')" @select="linkGoogle" />
-              </div>
-              <p v-if="googleResult === 'error' || googleResult === 'conflict'" class="auth-error" role="alert">{{ t(googleResult === 'conflict' ? 'google.linkConflict' : 'google.error') }}</p>
-              <p v-if="googleError" class="auth-error" role="alert">{{ googleError }}</p>
-            </div>
-            <div v-if="facebookEnabled" class="provider-setting">
-              <strong>Facebook</strong>
-              <p v-if="facebookLinked" role="status">{{ t('facebook.linked') }}</p>
-              <SocialAuthButtons v-else :google="false" facebook :busy="facebookBusy" :label="t('facebook.connect')" @select="linkFacebook" />
-              <p v-if="facebookResult === 'error' || facebookResult === 'conflict'" class="auth-error" role="alert">{{ t(facebookResult === 'conflict' ? 'facebook.linkConflict' : 'facebook.error') }}</p>
-              <p v-if="facebookError" class="auth-error" role="alert">{{ facebookError }}</p>
-            </div>
-            <div class="account-actions">
-              <UiButton variant="secondary" :loading="signingOut" @click="logout">
-                <AppIcon name="logout" />{{ t('auth.logout') }}
-              </UiButton>
-              <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
-            </div>
+        <nav class="profile-sections" :aria-label="t('profile.settings')">
+          <div class="profile-section-list">
+            <button type="button" class="profile-section" :class="{ active: profileSection === 'account' }" :aria-pressed="profileSection === 'account'" @click="selectProfileSection('account')"><AppIcon name="lock" /><span>{{ t('profile.account') }}</span></button>
+            <button type="button" class="profile-section" :class="{ active: profileSection === 'profile' }" :aria-pressed="profileSection === 'profile'" @click="selectProfileSection('profile')"><AppIcon name="user" /><span>{{ t('my.profile') }}</span></button>
           </div>
-          <div v-if="profileOpen && profileVisited" v-show="profileSection === 'profile'" class="profile-content">
-            <ProfilePage ref="profilePage">
-              <template #name>
-                <form class="name-setting" @submit.prevent="saveName">
-                  <div class="name-field-row">
-                    <TextField id="profile-display-name" v-model="displayName" :label="t('profile.displayName')" :hint="t('profile.nameHint')" maxlength="200" required :disabled="nameLoading || !nameReady" @update:model-value="nameSaved = false" />
-                    <UiButton type="submit" variant="secondary" :loading="nameLoading" :disabled="!nameReady">{{ t('profile.saveName') }}</UiButton>
-                  </div>
-                  <p v-if="nameSaved" role="status">{{ t('profile.nameSaved') }}</p>
-                  <p v-if="nameError" class="auth-error" role="alert">{{ nameError }}</p>
-                </form>
-              </template>
-              <template #collection>
-                <div class="collection-setting">
-                  <label><input type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
-                  <p>{{ t('profile.showAllWarning') }}</p>
-                  <p v-if="collectionError" class="auth-error" role="alert">{{ collectionError }}</p>
-                  <UiButton v-if="collectionError && collectionChanged" variant="secondary" @click="saveCollection">{{ t('checkAgain') }}</UiButton>
-                </div>
-              </template>
-            </ProfilePage>
-            <div class="profile-actions">
-              <UiButton variant="ghost" :href="`/u/${encodeURIComponent(profileAccount.username)}`">{{ t('lists.publicProfile') }}</UiButton>
-              <UiButton variant="ghost" href="/my/following">{{ t('profile.following') }}</UiButton>
+        </nav>
+        <div v-show="profileSection === 'account'" class="settings-scroll account-content">
+          <dl class="account-details">
+            <div><dt>{{ t('login.email') }}</dt><dd>{{ profileAccount.email || t('profile.noEmail') }}</dd></div>
+          </dl>
+          <div v-if="!profileAccount.email" class="email-setting">
+            <p>{{ t('profile.emailForMail') }}</p>
+            <template v-if="emailChallenge"><p>{{ t('reservation.codeSent') }} {{ emailInput }}</p><CodeVerification :busy="emailBusy" :remaining="emailRemaining" @verify="verifyAddedEmail" @resend="resendEmailCode" /></template>
+            <form v-else @submit.prevent="sendEmailCode">
+              <TextField id="profile-email" v-model="emailInput" type="email" required maxlength="254" autocomplete="email" :label="t('login.email')" />
+              <UiButton type="submit" :loading="emailBusy">{{ t('profile.addEmail') }}</UiButton>
+            </form>
+            <p v-if="emailError" class="auth-error" role="alert">{{ emailError }}</p>
+          </div>
+          <div class="provider-setting">
+            <div class="provider-row" :aria-busy="googleLoading || undefined">
+              <div>
+                <strong>Google</strong>
+                <p v-if="!googleLoading" role="status">{{ t(google?.linked ? 'google.linked' : google?.enabled ? 'google.notLinked' : 'google.unavailable') }}</p>
+              </div>
+              <SocialAuthButtons v-if="google?.enabled && !google.linked" :busy="googleBusy" :label="t('google.connect')" @select="linkGoogle" />
             </div>
+            <p v-if="googleResult === 'error' || googleResult === 'conflict'" class="auth-error" role="alert">{{ t(googleResult === 'conflict' ? 'google.linkConflict' : 'google.error') }}</p>
+            <p v-if="googleError" class="auth-error" role="alert">{{ googleError }}</p>
+          </div>
+          <div v-if="facebookEnabled" class="provider-setting">
+            <strong>Facebook</strong>
+            <p v-if="facebookLinked" role="status">{{ t('facebook.linked') }}</p>
+            <SocialAuthButtons v-else :google="false" facebook :busy="facebookBusy" :label="t('facebook.connect')" @select="linkFacebook" />
+            <p v-if="facebookResult === 'error' || facebookResult === 'conflict'" class="auth-error" role="alert">{{ t(facebookResult === 'conflict' ? 'facebook.linkConflict' : 'facebook.error') }}</p>
+            <p v-if="facebookError" class="auth-error" role="alert">{{ facebookError }}</p>
+          </div>
+          <div class="account-actions">
+            <UiButton variant="secondary" :loading="signingOut" @click="logout">
+              <AppIcon name="logout" />{{ t('auth.logout') }}
+            </UiButton>
+            <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
           </div>
         </div>
+        <ProfilePage v-if="profileOpen && profileVisited" v-show="profileSection === 'profile'" ref="profilePage">
+          <template #collection>
+            <div class="collection-setting">
+              <label><input type="checkbox" :checked="collectionEnabled" :disabled="collectionLoading || !collectionReady" @change="changeCollection" /><strong>{{ t('profile.showAll') }}</strong></label>
+              <p>{{ t('profile.showAllWarning') }}</p>
+              <p v-if="collectionError" class="auth-error" role="alert">{{ collectionError }}</p>
+              <UiButton v-if="collectionError && collectionChanged" variant="secondary" @click="saveCollection">{{ t('checkAgain') }}</UiButton>
+            </div>
+          </template>
+          <template #links>
+            <UiButton variant="ghost" :href="`/u/${encodeURIComponent(profileAccount.username)}`">{{ t('lists.publicProfile') }}</UiButton>
+            <UiButton variant="ghost" href="/my/following">{{ t('profile.following') }}</UiButton>
+          </template>
+        </ProfilePage>
       </template>
     </UiDialog>
     <DiscardChangesDialog v-model:open="discardProfileOpen" :description="t('profile.discardDescription')" @discard="discardProfileChanges" />
@@ -285,21 +271,31 @@ async function logout() {
   border-top: 1px solid var(--wx-border);
   background: var(--wx-surface);
 }
-.profile-layout { min-width: 0; }
-.profile-sections { position: sticky; z-index: 1; top: calc(45px + var(--wx-space-3) + var(--wx-space-3)); padding: var(--wx-space-2) var(--wx-space-5); border-bottom: 1px solid var(--wx-border); background: var(--wx-surface); }
+.profile-dialog {
+  --settings-padding-inline: max(var(--wx-space-4), env(safe-area-inset-left), env(safe-area-inset-right));
+  --settings-padding-bottom: max(var(--wx-space-3), env(safe-area-inset-bottom));
+  --settings-top-gap: max(var(--wx-space-2), env(safe-area-inset-top));
+  inset: calc(var(--settings-viewport-top, 0px) + var(--settings-top-gap)) 0 auto;
+  height: calc(var(--settings-viewport-height, 100dvh) - var(--settings-top-gap));
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+}
+.profile-dialog[open] { display: flex; flex-direction: column; }
+.profile-dialog > :deep(header) { flex: none; margin: 0; padding: var(--wx-space-2) var(--settings-padding-inline); }
+.profile-dialog > :deep(header h2) { font-size: var(--wx-text-lg); }
+.profile-sections { flex: none; padding: 0 var(--settings-padding-inline) var(--wx-space-2); border-bottom: 1px solid var(--wx-border); }
 .profile-section-list { display: flex; gap: var(--wx-space-2); }
 .profile-section { display: flex; align-items: center; gap: var(--wx-space-2); min-width: 44px; min-height: 44px; padding: var(--wx-space-2) var(--wx-space-3); border: 0; border-radius: var(--wx-radius-sm); color: var(--wx-text-muted); background: transparent; font-size: var(--wx-text-sm); font-weight: 600; cursor: pointer; }
 .profile-section:hover { background: var(--wx-background); }
 .profile-section.active { color: var(--wx-primary); background: var(--wx-lavender); }
 .profile-section .icon { width: 18px; height: 18px; }
-.profile-content { min-width: 0; padding: var(--wx-space-5); }
+.account-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--wx-space-4) var(--settings-padding-inline) var(--settings-padding-bottom); }
 .account-details { margin: 0; padding-bottom: var(--wx-space-4); border-bottom: 1px solid var(--wx-border); font-size: var(--wx-text-sm); }
 .account-details dt { margin-bottom: var(--wx-space-1); font-weight: 600; }
 .account-details dd { margin: 0; line-height: 1.5; }
 .provider-setting, .email-setting { padding-block: var(--wx-space-4); border-bottom: 1px solid var(--wx-border); }
-.name-setting { display: grid; gap: var(--wx-space-1); }
-.name-field-row, .email-setting form { display: grid; gap: var(--wx-space-3); }
-.name-setting p { margin: 0; }
+.email-setting form { display: grid; gap: var(--wx-space-3); }
 .collection-setting { display: grid; gap: var(--wx-space-2); padding-bottom: var(--wx-space-4); border-bottom: 1px solid var(--wx-border); }
 .collection-setting .button { justify-self: start; }
 .collection-setting label { display: flex; align-items: center; gap: var(--wx-space-3); min-height: 44px; cursor: pointer; font-size: var(--wx-text-sm); }
@@ -310,16 +306,19 @@ async function logout() {
 .provider-setting p { margin: 0; line-height: 1.5; }
 .provider-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--wx-space-3); }
 .email-setting { display: grid; gap: var(--wx-space-3); }.email-setting p { margin: 0; line-height: 1.5; }
-.account-actions, .profile-actions { padding-top: var(--wx-space-4); }
-.profile-actions { display: flex; flex-wrap: wrap; gap: var(--wx-space-2); margin-top: var(--wx-space-4); border-top: 1px solid var(--wx-border); }
+.account-actions { padding-top: var(--wx-space-4); }
 @media (min-width: 48rem) {
-  .profile-layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); }
-  .profile-sections { position: static; padding: var(--wx-space-5) var(--wx-space-3); border-right: 1px solid var(--wx-border); border-bottom: 0; }
-  .profile-section-list { position: sticky; top: calc(45px + var(--wx-space-3) + var(--wx-space-3) + var(--wx-space-5)); flex-direction: column; }
-  .profile-section { width: 100%; text-align: left; }
-  .profile-content { padding: var(--wx-space-6); }
-  .name-field-row { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
-  .name-field-row > .button { margin-top: 29px; }
+  .profile-dialog {
+    --settings-padding-inline: var(--wx-space-6);
+    --settings-padding-bottom: var(--wx-space-4);
+    --settings-window-gap: clamp(8px, calc(var(--settings-viewport-height, 100dvh) / 20), 24px);
+    inset: calc(var(--settings-viewport-top, 0px) + var(--settings-viewport-height, 100dvh) / 2) 0 auto;
+    width: min(720px, 100% - 48px);
+    height: fit-content;
+    max-height: calc(var(--settings-viewport-height, 100dvh) - 2 * var(--settings-window-gap));
+    margin: 0 auto;
+    transform: translateY(-50%);
+  }
   .app-header { min-height: 88px; padding-inline: var(--wx-space-6); }
   .header-actions { gap: var(--wx-space-4); }
   .header-username { display: inline; max-width: 160px; overflow: hidden; text-overflow: ellipsis; font-size: var(--wx-text-sm); font-weight: 600; }

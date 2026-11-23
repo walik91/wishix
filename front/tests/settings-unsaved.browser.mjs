@@ -16,6 +16,7 @@ async function setup(locale = 'en', width = 390) {
   const context = await browser.newContext({ locale, viewport: { width, height: width === 320 ? 640 : 900 } })
   await context.addInitScript(() => localStorage.setItem('wishix_analytics_consent_v1', 'denied'))
   const failures = new Set()
+  const writes = []
   let details = { ...originalDetails }, displayName = 'Saved name', collection = false, googleLinked = false
   await context.route(`${origin}/api/**`, route => {
     const request = route.request()
@@ -27,6 +28,7 @@ async function setup(locale = 'en', width = 390) {
       return route.fulfill({ json: { url: `${origin}/my?google=linked` } })
     }
     if (request.method() === 'PUT') {
+      writes.push(path)
       if (failures.delete(path)) return route.fulfill({ status: 503, json: { error: 'unavailable' } })
       const input = request.postDataJSON()
       if (path === '/api/profile/name') displayName = input.display_name.trim()
@@ -80,7 +82,7 @@ async function setup(locale = 'en', width = 390) {
   await openSettings()
   return {
     context, page, settings, confirmation, keep, leave, messages, name, bio, collectionBox,
-    close, accountTab, profileTab, openSettings, openProfile, waitClosed, failures,
+    close, accountTab, profileTab, openSettings, openProfile, waitClosed, failures, writes,
   }
 }
 
@@ -97,6 +99,11 @@ try {
       await page.screenshot({ path: fileURLToPath(new URL(`settings-account-${width}.png`, screenshots)) })
     }
     await ui.openProfile()
+    const save = settings.getByRole('button', { name: messages['profile.saveChanges'] })
+    assert.equal(await save.isVisible(), false)
+    const tabs = await Promise.all([accountTab.boundingBox(), profileTab.boundingBox()])
+    assert.equal(tabs[0].y, tabs[1].y, `${locale}/${width}: horizontal tabs`)
+    assert.ok((await settings.boundingBox()).width <= 720, `${locale}/${width}: settings width`)
     assert.equal(await settings.getByText('tester@example.test', { exact: true }).isVisible(), false)
     assert.equal(await settings.getByRole('button', { name: messages['auth.logout'] }).isVisible(), false)
     assert.equal(await settings.getByLabel(messages['profile.address'], { exact: true }).inputValue(), originalDetails.username)
@@ -106,6 +113,9 @@ try {
     }
     await name.fill('Draft name')
     await bio.fill('Draft bio')
+    if (locale === 'ru' && [390, 1440].includes(width)) {
+      await page.screenshot({ path: fileURLToPath(new URL(`settings-profile-dirty-${width}.png`, screenshots)) })
+    }
     await accountTab.click()
     assert.equal(await name.isVisible(), false)
     await profileTab.click()
@@ -160,8 +170,8 @@ try {
     const showAge = settings.getByRole('checkbox', { name: messages['profile.showAge'] })
     const showFollowers = settings.getByRole('checkbox', { name: messages['profile.showFollowers'] })
     const showFollowing = settings.getByRole('checkbox', { name: messages['profile.showFollowing'] })
-    const saveName = settings.getByRole('button', { name: messages['profile.saveName'] })
-    const saveDetails = settings.getByRole('button', { name: messages['profile.saveSettings'] })
+    const save = settings.getByRole('button', { name: messages['profile.saveChanges'] })
+    const cancel = settings.locator('.profile-footer').getByRole('button', { name: messages['profile.cancelChanges'] })
 
     await ui.openProfile()
     const edits = [
@@ -183,15 +193,28 @@ try {
 
     await ui.openSettings()
     await ui.openProfile()
+    await name.fill('Cancelled name')
+    await bio.fill('Cancelled bio')
+    await showFollowers.check()
+    await username.fill('cancel_preserves_address')
+    await cancel.click()
+    assert.equal(await name.inputValue(), 'Saved name')
+    assert.equal(await bio.inputValue(), originalDetails.biography)
+    assert.equal(await showFollowers.isChecked(), false)
+    assert.equal(await username.inputValue(), 'cancel_preserves_address')
+    assert.equal(await save.isVisible(), false)
+    assert.deepEqual(ui.writes, [])
+    await username.fill(originalDetails.username)
+
     failures.add('/api/profile/name')
     await name.fill('  New name  ')
-    await saveName.click()
-    await settings.getByRole('alert').getByText(messages['profile.nameError']).waitFor()
+    await save.click()
+    await settings.getByRole('alert').getByText(messages['profile.nameSaveError']).waitFor()
     await close.click()
     await keep.click()
     assert.equal(await name.inputValue(), '  New name  ')
-    await saveName.click()
-    await settings.getByRole('status').getByText(messages['profile.nameSaved']).waitFor()
+    await save.click()
+    await settings.getByRole('status').getByText(messages['profile.saved']).waitFor()
     assert.equal(await name.inputValue(), 'New name')
 
     failures.add('/api/profile/collection')
@@ -204,15 +227,20 @@ try {
     await settings.locator('.collection-setting input:enabled').waitFor()
 
     failures.add('/api/profile/details')
+    await name.fill('Partially saved name')
     await bio.fill('  New bio  ')
-    await saveDetails.click()
+    await save.click()
     await settings.getByRole('alert').getByText(messages['profile.saveError']).waitFor()
+    assert.deepEqual(ui.writes.slice(-2), ['/api/profile/name', '/api/profile/details'])
     await close.click()
     await keep.click()
     assert.equal(await bio.inputValue(), '  New bio  ')
     await username.fill('new_address')
-    await saveDetails.click()
+    const beforeRetry = ui.writes.length
+    await save.click()
     await settings.getByRole('status').getByText(messages['profile.saved'], { exact: true }).waitFor()
+    assert.deepEqual(ui.writes.slice(beforeRetry), ['/api/profile/details'])
+    assert.equal(await save.isVisible(), false)
     assert.equal(await bio.inputValue(), 'New bio')
     assert.equal(await username.inputValue(), 'new_address')
     await accountTab.click()
@@ -241,9 +269,33 @@ try {
     assert.equal(await confirmation.isVisible(), false)
     upload.resolve()
     await settings.getByRole('button', { name: messages['profile.removeAvatar'] }).waitFor()
+    await settings.locator('.profile-photo').getByRole('status').getByText(messages['profile.avatarSaved']).waitFor()
     await close.click()
     await ui.waitClosed()
     await ui.context.close()
   }
-  console.log('Settings tabs and discard passed in 15 locale and viewport combinations, including Google linking, save failures and independent edits.')
+
+  for (const width of [390, 844]) {
+    const { context, page, settings, bio, messages, openProfile } = await setup('ro', width)
+    await openProfile()
+    await bio.fill('A draft at the bottom of the visible area')
+    const scroll = settings.locator('.profile-scroll')
+    const footer = settings.locator('.profile-footer')
+    await page.evaluate(() => {
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 360 })
+      Object.defineProperty(visualViewport, 'offsetTop', { configurable: true, value: 16 })
+      visualViewport.dispatchEvent(new Event('resize'))
+    })
+    const dialog = await settings.boundingBox()
+    assert.ok(dialog.y >= 16 && dialog.y + dialog.height <= 376, 'The dialog fits in the reduced visual viewport')
+    const area = await scroll.boundingBox(), field = await bio.boundingBox(), actions = await footer.boundingBox()
+    assert.ok(field.y >= area.y && field.y + field.height <= actions.y, 'The focused field fits above the actions with the keyboard open')
+    const lastControl = settings.getByRole('link', { name: messages['profile.following'] })
+    await lastControl.focus()
+    const last = await lastControl.boundingBox()
+    assert.ok(last.y >= area.y && last.y + last.height <= actions.y, 'The last control can scroll into view above the actions')
+    assert.equal(await scroll.evaluate(el => el.scrollWidth > el.clientWidth), false)
+    await context.close()
+  }
+  console.log('Settings layout and drafts passed in 15 locale and viewport combinations, including partial saves, independent photo upload and a reduced visual viewport.')
 } finally { await browser.close() }
