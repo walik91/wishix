@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch, watchEffect } from 'vue'
 import { t } from '../i18n.js'
 import { trackEvent } from '../analytics.js'
 import { useSession } from '../composables/useSession.js'
+import { useUnsavedWish } from '../composables/useUnsavedWish.js'
 import { createWish } from '../api/wishes.js'
 import { useWishImport, validImportLink } from '../composables/useWishImport.js'
 import UiButton from '../components/ui/UiButton.vue'
@@ -13,6 +14,7 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import TextField from '../components/ui/TextField.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
 import WishImageInput from '../components/wishes/WishImageInput.vue'
+import WishDiscardDialog from '../components/wishes/WishDiscardDialog.vue'
 import ListCheckboxes from '../components/lists/ListCheckboxes.vue'
 import { listLists } from '../api/lists.js'
 
@@ -42,6 +44,7 @@ const detailsOpen = ref(false)
 const listPickerOpen = ref(false)
 const availableLists = ref([]), selectedLists = ref([]), listsLoading = ref(true), listsError = ref(false)
 const contextList = ref(new URLSearchParams(window.location.search).get('list') || '')
+const initialList = ref('')
 const contextMissing = computed(() => !!contextList.value && !listsLoading.value && !listsError.value && !availableLists.value.some(list => list.id === contextList.value))
 const waitingForList = computed(() => !!contextList.value && (listsLoading.value || listsError.value || contextMissing.value))
 const destination = computed(() => [
@@ -54,13 +57,23 @@ async function loadLists() {
   listsLoading.value = true; listsError.value = false
   try {
     availableLists.value = (await listLists()).lists
-    if (!listsInitialized && contextList.value && availableLists.value.some(list => list.id === contextList.value)) selectedLists.value = [contextList.value]
-    else selectedLists.value = selectedLists.value.filter(id => availableLists.value.some(list => list.id === id))
+    if (!listsInitialized && contextList.value && availableLists.value.some(list => list.id === contextList.value)) {
+      initialList.value = contextList.value
+      selectedLists.value = [initialList.value]
+    } else selectedLists.value = selectedLists.value.filter(id => availableLists.value.some(list => list.id === id))
     listsInitialized = true
   } catch (error) { if (error.status === 401) window.location.replace('/login'); else listsError.value = true }
   finally { listsLoading.value = false }
 }
 watch([user, checking, unavailable], ([account, pending, failed]) => { if (account && !pending && !failed) loadLists() }, { immediate: true })
+const hasChanges = computed(() => {
+  if (!user.value) return false
+  const defaultList = availableLists.value.some(list => list.id === initialList.value) ? initialList.value : ''
+  const listsChanged = defaultList ? selectedLists.value.length !== 1 || selectedLists.value[0] !== defaultList : selectedLists.value.length > 0
+  return Boolean(title.value || description.value || price.value || currency.value || priority.value !== 'medium'
+    || image.value || links.value.some(link => link.value) || listsChanged)
+})
+const { leaveDestination, leave } = useUnsavedWish(hasChanges)
 const importNotice = ref(''), importNoticeSequence = ref(0)
 const { activeId: importingId, markDirty, cancel: cancelImport, run: importLink, firstLinkBlur } = useWishImport(links, { title, description, price, currency, image }, applied => {
   for (const field of applied) delete errors.value[field]
@@ -126,7 +139,7 @@ async function submit() {
     trackEvent('wish_created')
     saved.value = true
     const returnURL = selectedLists.value.includes(contextList.value) ? cancelURL.value : '/my/wishes'
-    window.location.assign(`${returnURL}?notice=wish-added`)
+    leave(`${returnURL}?notice=wish-added`)
   } catch (error) {
     if (error.status === 401) { window.location.replace('/login'); return }
     const fields = { wish_title_invalid: 'title', wish_description_invalid: 'description', wish_price_invalid: 'price', wish_priority_invalid: 'priority' }
@@ -224,6 +237,7 @@ async function submit() {
       <UiToast v-if="importNotice" :key="importNoticeSequence" :duration="importNotice === 'ok' ? 3000 : 6000" :variant="importNotice === 'ok' ? 'success' : 'info'" @dismiss="importNotice = ''">{{ t(`wishes.import.${importNotice}`) }}</UiToast>
     </template>
   </div>
+  <WishDiscardDialog :open="!!leaveDestination" @update:open="leaveDestination = ''" @discard="leave(leaveDestination)" />
 </template>
 
 <style scoped>

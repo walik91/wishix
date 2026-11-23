@@ -1,7 +1,8 @@
 <script setup>
-import { nextTick, ref, watch, watchEffect } from 'vue'
+import { computed, nextTick, ref, watch, watchEffect } from 'vue'
 import { t } from '../i18n.js'
 import { useSession } from '../composables/useSession.js'
+import { useUnsavedWish } from '../composables/useUnsavedWish.js'
 import { getWish, updateWish } from '../api/wishes.js'
 import { validImportLink } from '../composables/useWishImport.js'
 import UiButton from '../components/ui/UiButton.vue'
@@ -10,6 +11,7 @@ import UiSkeleton from '../components/ui/UiSkeleton.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import TextField from '../components/ui/TextField.vue'
 import AppIcon from '../components/ui/AppIcon.vue'
+import WishDiscardDialog from '../components/wishes/WishDiscardDialog.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 const { user, checking, unavailable, refresh } = useSession()
@@ -38,6 +40,14 @@ const form = ref(null)
 const loading = ref(true), loadError = ref(''), editVersion = ref('')
 const listID = new URLSearchParams(window.location.search).get('list') || ''
 const returnPath = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(listID) ? '/my/lists/' + listID : '/my/wishes'
+const initialFields = ref(null)
+const fields = computed(() => JSON.stringify([
+  title.value, description.value, price.value, currency.value, priority.value,
+  links.value.map(link => link.value).filter(Boolean),
+]))
+const hasChanges = computed(() => !!user.value && initialFields.value !== null && fields.value !== initialFields.value)
+const { leaveDestination, leave } = useUnsavedWish(hasChanges)
+
 async function loadWish() {
   loading.value = true; loadError.value = ''; failure.value = ''; errors.value = {}
   try {
@@ -47,6 +57,7 @@ async function loadWish() {
     legacyDescription.value = [...wish.description].length > 500
     currency.value = wish.currency; priority.value = wish.priority
     links.value = (wish.shop_links.length ? wish.shop_links : ['']).map(value => ({ id: nextLinkID++, value }))
+    initialFields.value = fields.value
   } catch (error) {
     if (error.status === 401) window.location.replace('/login')
     else loadError.value = error.code === 'wish_not_found' ? 'not_found' : 'load_failed'
@@ -103,7 +114,7 @@ async function submit() {
       edit_version: editVersion.value,
     })
     saved.value = true
-    window.location.assign(`${returnPath}?notice=wish-updated`)
+    leave(`${returnPath}?notice=wish-updated`)
   } catch (error) {
     if (error.status === 401) { window.location.replace('/login'); return }
     const fields = { wish_title_invalid: 'title', wish_description_invalid: 'description', wish_price_invalid: 'price', wish_priority_invalid: 'priority' }
@@ -159,6 +170,7 @@ async function submit() {
       </template>
     </template>
   </div>
+  <WishDiscardDialog :open="!!leaveDestination" @update:open="leaveDestination = ''" @discard="leave(leaveDestination)" />
 </template>
 
 <style scoped>
