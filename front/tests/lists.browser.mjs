@@ -63,11 +63,13 @@ try {
   const firstID = page.url().match(/\/my\/lists\/([a-f0-9-]{36})/)[1]
   const { list: second } = await call('POST', '/lists', { title: 'For later', visibility: 'private' }, 201)
   await page.locator('.list-toolbar').getByRole('link', { name: tx('my.addWish'), exact: true }).click()
+  await button(page, 'lists.wishLists')
   await page.locator('.list-check-row').first().waitFor()
   assert.equal(await page.locator(`input[type=checkbox][value="${firstID}"]`).isChecked(), true)
   await page.locator(`input[type=checkbox][value="${second.id}"]`).check()
   await page.locator('#wish-title').fill('Gift A')
   png = Buffer.from(await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 80; canvas.height = 40; canvas.getContext('2d').fillRect(0, 0, 80, 40); return canvas.toDataURL('image/png').split(',')[1] }), 'base64')
+  await button(page, 'wishes.addDetails')
   await page.locator('#wish-image').setInputFiles({ name: 'gift.png', mimeType: 'image/png', buffer: png })
   await page.locator('button[type=submit]').click(); await waitList(page)
   assert.ok(page.url().includes(firstID))
